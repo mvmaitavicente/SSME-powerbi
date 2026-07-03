@@ -1,0 +1,13 @@
+import { DataValue } from "../types";
+export declare function text(value: DataValue, fallback?: string): string;
+export declare function numberValue(value: DataValue): number | null;
+export declare function currency(value: DataValue): string;
+export declare function shortCurrency(value: DataValue): string;
+export declare function percent(value: DataValue): string;
+export declare function percentRatio(value: DataValue): number;
+export declare function decimal(value: DataValue, digits?: number): string;
+export declare function signedDecimal(value: DataValue): string;
+export declare function date(value: DataValue): string;
+export declare function createElement<K extends keyof HTMLElementTagNameMap>(tagName: K, className?: string, textContent?: string): HTMLElementTagNameMap[K];
+export declare function appendChildren(parent: HTMLElement, children: Array<HTMLElement | SVGElement>): void;
+export declare function svgElement<K extends keyof SVGElementTagNameMap>(tagName: K): SVGElementTagNameMap[K];

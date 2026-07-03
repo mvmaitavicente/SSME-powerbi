@@ -1,0 +1,810 @@
+.evm-visual-host {
+  display: block;
+  overflow: hidden;
+  font-family: "Segoe UI", Arial, sans-serif;
+  color: #00145C;
+}
+.evm-dashboard {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(58px, 64px) minmax(0, 1fr);
+  gap: 8px;
+  overflow: hidden;
+  background: #F7F9FC;
+  box-sizing: border-box;
+  padding: 6px;
+  height: 100%;
+  min-height: 0;
+}
+.evm-card {
+  background: #FFFFFF;
+  border: 1px solid #DDE3F0;
+  border-radius: 8px;
+  box-shadow: 0 1px 6px rgba(0, 27, 142, 0.08);
+}
+.evm-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 6px 5px;
+  background: #FFFFFF;
+  border: 1px solid #DDE3F0;
+  border-radius: 8px;
+}
+.evm-logo {
+  display: none;
+}
+.evm-menu,
+.evm-menu-footer {
+  display: grid;
+  gap: 6px;
+}
+.evm-menu-footer {
+  margin-top: auto;
+}
+.evm-menu-item {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: center;
+  justify-items: center;
+  min-height: 34px;
+  padding: 7px 4px;
+  border-radius: 6px;
+  color: #001B8E;
+  font-size: 11px;
+  font-weight: 700;
+}
+.evm-menu-item span:not(.evm-menu-icon) {
+  display: none;
+}
+.evm-menu-item.active {
+  color: #FFFFFF;
+  background: #001B8E;
+}
+.evm-menu-item.ghost {
+  border: 1px solid #DDE3F0;
+}
+.evm-menu-icon {
+  font-size: 17px;
+}
+.evm-main {
+  display: grid;
+  grid-template-rows: 90px 210px minmax(0, 1fr);
+  gap: 8px;
+  min-width: 780px;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+.evm-header {
+  display: grid;
+  grid-template-columns: 1fr minmax(180px, 22%) minmax(130px, 12%);
+  gap: 8px;
+  padding: 4px 12px;
+  align-items: center;
+  min-height: 0;
+  overflow: hidden;
+}
+.evm-project-title span,
+.evm-project-state span,
+.evm-project-dates span,
+.evm-performance-row span,
+.evm-key-cell span {
+  display: block;
+  color: #001B8E;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.evm-project-title h1 {
+  margin: 1px 0 6px;
+  font-size: clamp(22px, 1.5vw, 32px);
+  line-height: 1.12;
+  letter-spacing: 0;
+}
+.evm-header-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 12px;
+}
+.evm-project-state {
+  padding: 10px 10px;
+  border-radius: 7px;
+  background: #FFF4E8;
+  text-align: center;
+}
+.evm-project-state strong {
+  display: block;
+  margin-top: 4px;
+  color: #FF1E1E;
+  font-size: clamp(17px, 2vw, 24px);
+  text-transform: uppercase;
+}
+.evm-project-dates {
+  padding: 7px 10px;
+  text-align: center;
+  border-left: 1px solid #DDE3F0;
+}
+.evm-project-dates strong {
+  display: block;
+  margin: 3px 0 6px;
+  font-size: 13px;
+}
+.evm-project-dates small {
+  font-weight: 800;
+}
+.evm-gauge-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 6px;
+  min-height: 0;
+  height: 210px;
+  overflow: hidden;
+}
+.evm-gauge-card {
+  min-height: 0;
+  padding: 2px 4px;
+  overflow: hidden;
+  height: 100%;
+}
+.evm-section-title {
+  margin: 0;
+  color: #001B8E;
+  font-size: 18px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.evm-gauge-svg {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  display: block;
+  aspect-ratio: 320 / 190;
+}
+.evm-gauge-svg text,
+.evm-curve-svg text,
+.evm-timeline-svg text {
+  fill: #001B8E;
+  font-size: 11px;
+  font-weight: 800;
+}
+.evm-gauge-title {
+  fill: #001B8E;
+  font-size: 24px;
+  font-weight: 900;
+}
+.evm-gauge-help {
+  fill: none;
+  stroke: #6683E8;
+  stroke-width: 2;
+}
+.evm-gauge-help-text {
+  fill: #6683E8;
+  font-size: 13px;
+  font-weight: 900;
+}
+.backgroundArc path {
+  opacity: 1;
+}
+.redArc path,
+.orangeArc path,
+.greenArc path {
+  shape-rendering: geometricPrecision;
+}
+.needle path,
+.needle circle {
+  filter: none;
+}
+.evm-gauge-scale-label {
+  fill: #001B8E;
+  font-size: 14px;
+  font-weight: 900;
+}
+.evm-gauge-main-value {
+  fill: #001B8E;
+  font-size: 30px;
+  font-weight: 900;
+}
+.evm-gauge-status-bg {
+  fill: #EEF2FF;
+}
+.evm-gauge-status-bg.danger {
+  fill: #FFE1E1;
+}
+.evm-gauge-status-bg.warning {
+  fill: #FFF1D8;
+}
+.evm-gauge-status-bg.success {
+  fill: #DFF7E8;
+}
+.evm-gauge-status-text {
+  font-size: 12px;
+  font-weight: 900;
+}
+.evm-gauge-spark-area {
+  fill: #FF1E1E;
+  fill-opacity: 0.08;
+}
+.evm-gauge-spark-dot {
+  fill: #FF1E1E;
+  stroke: #FF1E1E;
+  stroke-width: 1;
+}
+.evm-gauge-variation-value {
+  font-size: 18px;
+  font-weight: 900;
+}
+.evm-gauge-variation-caption {
+  fill: #001B8E;
+  font-size: 10px;
+  font-weight: 900;
+}
+.backgroundArc,
+.redArc,
+.orangeArc,
+.greenArc {
+  transform-box: view-box;
+  transform-origin: 160px 96px;
+  transform: scale(1.15);
+}
+.sparkline {
+  transform-box: view-box;
+  transform-origin: 95px 174px;
+  transform: scaleY(1.2);
+}
+.evm-performance-row.alert strong {
+  color: #FF1E1E;
+}
+.evm-body-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 68fr) minmax(360px, 32fr);
+  gap: 8px;
+  align-items: stretch;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+.evm-left-column,
+.evm-right-column {
+  display: grid;
+  gap: 8px;
+  align-content: stretch;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+.evm-left-column {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+.evm-right-column {
+  grid-template-rows: 420px minmax(0, 1fr);
+}
+.evm-curve-card,
+.evm-performance-card,
+.evm-risk-card,
+.evm-milestone-card {
+  padding: 10px 12px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.evm-curve-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.evm-curve-card .evm-section-title {
+  font-size: 22px;
+  line-height: 1.05;
+  margin-bottom: 2px;
+}
+.evm-performance-card .evm-section-title,
+.evm-risk-card .evm-section-title {
+  font-size: 22px;
+  line-height: 1.05;
+}
+.evm-milestone-card {
+  min-height: 200px;
+  overflow: visible;
+}
+.evm-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px;
+  justify-content: center;
+  margin: 8px 0 12px;
+}
+.evm-legend-item {
+  color: #001B8E;
+  font-size: 15px;
+  font-weight: 800;
+}
+.evm-legend-item::before {
+  content: "";
+  display: inline-block;
+  width: 52px;
+  height: 4px;
+  margin-right: 8px;
+  vertical-align: middle;
+  background: #001B8E;
+}
+.evm-legend-item.ev::before {
+  background: #16A34A;
+}
+.evm-line.ev {
+  stroke: #16A34A;
+}
+.evm-dot.ev {
+  stroke: #16A34A;
+  fill: #16A34A;
+}
+.evm-legend-item.ac::before {
+  background: #FF1E1E;
+}
+.evm-line.ac {
+  stroke: #FF1E1E;
+}
+.evm-dot.ac {
+  stroke: #FF1E1E;
+  fill: #FF1E1E;
+}
+.evm-legend-item.eac::before {
+  background: #5B21B6;
+}
+.evm-line.eac {
+  stroke: #5B21B6;
+  stroke-dasharray: 5 4;
+}
+.evm-dot.eac {
+  stroke: #5B21B6;
+  fill: #5B21B6;
+}
+.evm-legend-item.eact::before {
+  background: #5B21B6;
+  border-top: 2px dashed #5B21B6;
+}
+.evm-legend-item.sac::before {
+  background: #667085;
+}
+.evm-line.sac {
+  stroke: #667085;
+  stroke-dasharray: 3 4;
+}
+.evm-dot.sac {
+  stroke: #667085;
+  fill: #667085;
+}
+.evm-line.pv {
+  stroke: #001B8E;
+}
+.evm-dot.pv {
+  stroke: #001B8E;
+  fill: #001B8E;
+}
+.evm-line {
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: none;
+  fill: none;
+}
+.evm-series-layer,
+.evm-series-layer path,
+.evm-series-layer circle {
+  filter: none;
+}
+.evm-series-layer path {
+  fill: none;
+}
+.evm-status-line {
+  stroke: #30343F;
+  stroke-width: 2;
+}
+.evm-curve-svg-wrap,
+.milestone-svg-wrap {
+  width: 100%;
+  overflow: visible;
+}
+.evm-curve-svg-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.evm-curve-svg {
+  width: 100%;
+  min-height: 0;
+  height: 100%;
+  display: block;
+}
+.evm-summary-grid,
+.evm-key-summary {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(70px, 1fr));
+  gap: 6px;
+  margin-top: 0;
+  flex: 0 0 70px;
+  min-height: 70px;
+}
+.evm-key-cell {
+  min-height: 52px;
+  padding: 9px 7px;
+  border: 1px solid #DDE3F0;
+  border-radius: 5px;
+  text-align: center;
+}
+.evm-key-cell span {
+  font-size: 13px;
+}
+.evm-key-cell strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 20px;
+}
+.evm-grid-line {
+  stroke: #DDE3F0;
+  stroke-width: 1;
+}
+.evm-axis-line {
+  stroke: #AAB5CC;
+  stroke-width: 1.2;
+}
+.evm-axis-tick {
+  stroke: #AAB5CC;
+  stroke-width: 1;
+}
+.evm-axis-label {
+  fill: #001B8E;
+  font-size: 18px;
+  font-weight: 800;
+}
+.evm-axis-title,
+.evm-status-label,
+.evm-target-label {
+  fill: #001B8E;
+  font-size: 22px;
+  font-weight: 900;
+}
+.evm-target-label {
+  font-size: 22px;
+}
+.evm-bac-line,
+.evm-sac-line-vertical,
+.evm-eac-time-line,
+.evm-es-line {
+  stroke: #667085;
+  stroke-width: 1.7;
+  stroke-dasharray: 4 4;
+}
+.evm-eac-cost-line,
+.evm-eac-time-line,
+.evm-eac-cost-guide {
+  stroke: #5B21B6;
+  stroke-width: 1.9;
+  stroke-dasharray: 5 5;
+}
+.evm-eac-cost-guide {
+  stroke-width: 1.4;
+}
+.evm-final-label-bg {
+  fill: #FFFFFF;
+  fill-opacity: 0.86;
+  stroke: #DDE3F0;
+  stroke-width: 0.6;
+}
+.evm-final-label {
+  font-size: 22px;
+  font-weight: 900;
+}
+.evm-final-label.ev {
+  fill: #16A34A;
+}
+.evm-final-label.ac {
+  fill: #FF1E1E;
+}
+.evm-final-label.pv {
+  fill: #1D4DFF;
+}
+.evm-eac-label {
+  fill: #5B21B6;
+  font-size: 22px;
+  font-weight: 900;
+}
+.evm-current-week-label {
+  fill: #FF9800;
+  font-size: 22px;
+  font-weight: 900;
+}
+.evm-es-label {
+  fill: #5B21B6;
+  font-size: 22px;
+  font-weight: 900;
+}
+.evm-vac-line {
+  stroke: #FF1E1E;
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+}
+.evm-vac-label {
+  fill: #FF1E1E;
+  font-size: 22px;
+  font-weight: 900;
+}
+.evm-performance-card {
+  display: grid;
+  grid-template-rows: auto repeat(5, minmax(0, auto));
+  gap: 5px;
+  height: 100%;
+  min-height: 0;
+  align-content: start;
+  overflow: hidden;
+}
+.evm-risk-card {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.evm-performance-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(108px, 0.72fr);
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid #E8EDF6;
+  border-radius: 6px;
+}
+.evm-performance-row.single {
+  grid-template-columns: 1fr;
+}
+.evm-performance-row span {
+  font-size: 14px;
+}
+.evm-performance-row .performance-label {
+  white-space: normal;
+  line-height: 1.15;
+}
+.evm-performance-row strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 17px;
+  line-height: 1.12;
+}
+.evm-progress-block {
+  display: grid;
+  grid-template-columns: minmax(74px, 55%) 38px;
+  gap: 6px;
+  align-items: center;
+}
+.evm-progress-block span {
+  grid-column: 1 / -1;
+}
+.evm-progress {
+  max-width: 120px;
+  height: 7px;
+  overflow: hidden;
+  background: #E4E7EC;
+  border-radius: 999px;
+}
+.evm-progress i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #FF1E1E, #1C55FF);
+  border-radius: inherit;
+}
+.evm-risk-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 7px 0 8px;
+}
+.evm-risk-mini {
+  padding: 9px 6px;
+  border-radius: 6px;
+  text-align: center;
+  background: #EEF2FF;
+}
+.evm-risk-mini strong {
+  display: block;
+  font-size: 24px;
+}
+.evm-risk-mini span {
+  color: #001B8E;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.evm-risk-mini.low {
+  background: #DEF7E8;
+  color: #16A34A;
+}
+.evm-risk-mini.medium {
+  background: #FFF0D6;
+  color: #FF9800;
+}
+.evm-risk-mini.high {
+  background: #FFE1E1;
+  color: #FF1E1E;
+}
+.evm-risk-mini.total {
+  background: #EEF2FF;
+  color: #001B8E;
+}
+.evm-risk-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+  align-self: stretch;
+}
+.evm-risk-table th,
+.evm-risk-table td {
+  padding: 7px 6px;
+  border-bottom: 1px solid #E8EDF6;
+  text-align: left;
+}
+.evm-risk-table th {
+  color: #001B8E;
+  font-size: 10px;
+}
+.evm-risk-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: #001B8E;
+}
+.evm-risk-dot.low {
+  background: #16A34A;
+}
+.evm-risk-dot.medium {
+  background: #FF9800;
+}
+.evm-risk-dot.high {
+  background: #FF1E1E;
+}
+.evm-timeline-svg {
+  width: 100%;
+  min-height: 190px;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+.evm-timeline-base {
+  stroke: #001B8E;
+  stroke-width: 3;
+}
+.evm-timeline-arrow {
+  fill: #001B8E;
+}
+.evm-milestone-dot {
+  fill: #FFFFFF;
+  stroke: #001B8E;
+  stroke-width: 4;
+}
+.evm-milestone-dot.done {
+  fill: #16A34A;
+  stroke: #16A34A;
+}
+.evm-milestone-dot.active {
+  fill: #FFFFFF;
+  stroke: #FF9800;
+}
+.evm-milestone-dot.late {
+  fill: #FFFFFF;
+  stroke: #FF1E1E;
+}
+.evm-milestone-dot.pending {
+  fill: #FFFFFF;
+  stroke: #1D4DFF;
+}
+.evm-milestone-tick {
+  stroke: #001B8E;
+  stroke-width: 2;
+}
+.evm-milestone-tick.done {
+  stroke: #16A34A;
+}
+.evm-milestone-tick.active {
+  stroke: #FF9800;
+}
+.evm-milestone-tick.late {
+  stroke: #FF1E1E;
+}
+.evm-milestone-tick.pending {
+  stroke: #1D4DFF;
+}
+.evm-milestone-icon {
+  fill: none;
+  stroke: #FFFFFF;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.evm-milestone-alert {
+  fill: #FF1E1E;
+  font-size: 22px;
+  font-weight: 900;
+}
+.evm-milestone-inner.active {
+  fill: #FF9800;
+}
+.evm-milestone-inner.pending {
+  fill: #1D4DFF;
+}
+.evm-milestone-name,
+.evm-milestone-state,
+.evm-milestone-date-text {
+  font-size: 10px;
+  font-weight: 900;
+}
+.evm-milestone-name {
+  fill: #001B8E;
+}
+.evm-milestone-name.done,
+.evm-milestone-state.done {
+  fill: #148A3A;
+}
+.evm-milestone-name.active,
+.evm-milestone-state.active {
+  fill: #F97316;
+}
+.evm-milestone-name.late,
+.evm-milestone-state.late {
+  fill: #FF1E1E;
+}
+.evm-milestone-name.pending,
+.evm-milestone-state.pending {
+  fill: #001B8E;
+}
+.evm-milestone-date-bg.done {
+  fill: #148A3A;
+}
+.evm-milestone-date-bg.active {
+  fill: #F97316;
+}
+.evm-milestone-date-bg.late {
+  fill: #D71920;
+}
+.evm-milestone-date-bg.pending {
+  fill: #1D4DFF;
+}
+.evm-milestone-date-text {
+  fill: #FFFFFF;
+  font-size: 9px;
+}
+.evm-empty-svg {
+  fill: #667085;
+  font-size: 13px;
+  font-weight: 700;
+}
+.evm-empty {
+  grid-column: 1 / -1;
+  padding: 12px;
+  color: #667085;
+  text-align: center;
+}
+.evm-no-data {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  padding: 10px 12px;
+  border: 1px solid #DDE3F0;
+  border-radius: 6px;
+  background: #FFFFFF;
+  color: #667085;
+  font-size: 12px;
+}
+@media (max-width: 980px) {
+  .evm-dashboard {
+    grid-template-columns: 1fr;
+  }
+  .evm-sidebar {
+    display: none;
+  }
+  .evm-main {
+    min-width: 700px;
+  }
+}
+

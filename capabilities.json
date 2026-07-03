@@ -1,0 +1,588 @@
+{
+    "dataRoles": [
+        {
+            "displayName": "Proyecto | NombreIntervencion",
+            "name": "proyectoNombreIntervencion",
+            "kind": "Grouping"
+        },
+        {
+            "displayName": "Proyecto | CUI",
+            "name": "proyectoCui",
+            "kind": "Grouping"
+        },
+        {
+            "displayName": "Proyecto | Region",
+            "name": "proyectoRegion",
+            "kind": "Grouping"
+        },
+        {
+            "displayName": "Proyecto | UnidadGerencial",
+            "name": "proyectoUnidadGerencial",
+            "kind": "Grouping"
+        },
+        {
+            "displayName": "Proyecto | Estado",
+            "name": "proyectoEstado",
+            "kind": "Grouping"
+        },
+        {
+            "displayName": "Proyecto | FechaEstado",
+            "name": "proyectoFechaEstado",
+            "kind": "Grouping"
+        },
+        {
+            "displayName": "Proyecto | SemanaActual",
+            "name": "proyectoSemanaActual",
+            "kind": "Grouping"
+        },
+        {
+            "displayName": "Curva S | SemanaProyecto",
+            "name": "curvaSemanaProyecto",
+            "kind": "Grouping"
+        },
+        {
+            "displayName": "Curva S | BAC",
+            "name": "curvaBAC",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Curva S | PV",
+            "name": "curvaPV",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Curva S | EV",
+            "name": "curvaEV",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Curva S | AC",
+            "name": "curvaAC",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Curva S | SAC",
+            "name": "curvaSAC",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Curva S | AT",
+            "name": "curvaAT",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Curva S | ES",
+            "name": "curvaES",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "EAC(c)",
+            "name": "curvaEACC",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Curva S | EAC (t)",
+            "name": "curvaEACT",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Curva S | VAC (c)",
+            "name": "curvaVACC",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Curva S | VAC (t)",
+            "name": "curvaVACT",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Curva S | SPI (t)",
+            "name": "curvaSPIT",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Curva S | TSPI (t)",
+            "name": "curvaTSPIT",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "CPI",
+            "name": "gaugeCPI",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "SPI (w)",
+            "name": "gaugeSPIW",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "TCPI",
+            "name": "gaugeTCPI",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "TSPI (w)",
+            "name": "gaugeTSPIW",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Gauges | CPIEstado",
+            "name": "gaugeCPIEstado",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Gauges | SPIEstado",
+            "name": "gaugeSPIEstado",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Gauges | TCPIEstado",
+            "name": "gaugeTCPIEstado",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Gauges | TSPIEstado",
+            "name": "gaugeTSPIEstado",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Gauges | CPIVariacion",
+            "name": "gaugeCPIVariacion",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Gauges | SPIVariacion",
+            "name": "gaugeSPIVariacion",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Gauges | TCPIVariacion",
+            "name": "gaugeTCPIVariacion",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Gauges | TSPIVariacion",
+            "name": "gaugeTSPIVariacion",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Desempeno | PlazoConsumidoPct",
+            "name": "desempenoPlazoConsumido",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Desempeno | PlazoRestante",
+            "name": "desempenoPlazoRestante",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Desempeno | PlazoProgramadoTotal",
+            "name": "desempenoPlazoProgramadoTotal",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Desempeno | PlazoProyectado",
+            "name": "desempenoPlazoProyectado",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Desempeno | RetrasoProyectado",
+            "name": "desempenoRetrasoProyectado",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Desempeno | TerminoProyectado",
+            "name": "desempenoTerminoProyectado",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Desempeno | PresupuestoConsumidoPct",
+            "name": "desempenoPresupuestoConsumido",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Desempeno | PresupuestoRestante",
+            "name": "desempenoPresupuestoRestante",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Desempeno | PresupuestoProgramado",
+            "name": "desempenoPresupuestoProgramado",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Desempeno | CostoEstimadoTermino",
+            "name": "desempenoCostoEstimadoTerminoEAC",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Desempeno | SobreCostoProyectado",
+            "name": "desempenoSobreCostoProyectadoVAC",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Desempeno | SobreCostoProyectadoPct",
+            "name": "desempenoPorcentajeSobreCosto",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Riesgos | Nivel",
+            "name": "riesgoNivel",
+            "kind": "Grouping"
+        },
+        {
+            "displayName": "Riesgos | Cantidad",
+            "name": "riesgoCantidad",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Riesgos | Porcentaje",
+            "name": "riesgoPorcentaje",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Riesgos | ImpactoPlazo",
+            "name": "riesgoImpactoPlazo",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Riesgos | ImpactoCosto",
+            "name": "riesgoImpactoCosto",
+            "kind": "Measure"
+        },
+        {
+            "displayName": "Hitos | Orden",
+            "name": "hitoOrden",
+            "kind": "Grouping"
+        },
+        {
+            "displayName": "Hitos | Nombre",
+            "name": "hitoNombre",
+            "kind": "Grouping"
+        },
+        {
+            "displayName": "Hitos | FechaPlan",
+            "name": "hitoFechaPlan",
+            "kind": "Grouping"
+        },
+        {
+            "displayName": "Hitos | FechaReal",
+            "name": "hitoFechaReal",
+            "kind": "Grouping"
+        },
+        {
+            "displayName": "Hitos | Estado",
+            "name": "hitoEstado",
+            "kind": "Grouping"
+        }
+    ],
+    "objects": {
+        "general": {
+            "properties": {
+                "showShadow": {
+                    "type": {
+                        "bool": true
+                    }
+                },
+                "fontSize": {
+                    "type": {
+                        "formatting": {
+                            "fontSize": true
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "dataViewMappings": [
+        {
+            "table": {
+                "rows": {
+                    "select": [
+                        {
+                            "bind": {
+                                "to": "proyectoNombreIntervencion"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "proyectoCui"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "proyectoRegion"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "proyectoUnidadGerencial"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "proyectoEstado"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "proyectoFechaEstado"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "proyectoSemanaActual"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "curvaSemanaProyecto"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "curvaBAC"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "curvaPV"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "curvaEV"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "curvaAC"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "curvaSAC"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "curvaAT"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "curvaES"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "curvaEACC"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "curvaEACT"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "curvaVACC"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "curvaVACT"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "curvaSPIT"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "curvaTSPIT"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "gaugeCPI"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "gaugeSPIW"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "gaugeTCPI"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "gaugeTSPIW"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "gaugeCPIEstado"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "gaugeSPIEstado"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "gaugeTCPIEstado"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "gaugeTSPIEstado"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "gaugeCPIVariacion"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "gaugeSPIVariacion"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "gaugeTCPIVariacion"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "gaugeTSPIVariacion"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "desempenoPlazoConsumido"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "desempenoPlazoRestante"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "desempenoPlazoProgramadoTotal"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "desempenoPlazoProyectado"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "desempenoRetrasoProyectado"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "desempenoTerminoProyectado"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "desempenoPresupuestoConsumido"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "desempenoPresupuestoRestante"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "desempenoPresupuestoProgramado"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "desempenoCostoEstimadoTerminoEAC"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "desempenoSobreCostoProyectadoVAC"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "desempenoPorcentajeSobreCosto"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "riesgoNivel"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "riesgoCantidad"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "riesgoPorcentaje"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "riesgoImpactoPlazo"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "riesgoImpactoCosto"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "hitoOrden"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "hitoNombre"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "hitoFechaPlan"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "hitoFechaReal"
+                            }
+                        },
+                        {
+                            "bind": {
+                                "to": "hitoEstado"
+                            }
+                        }
+                    ],
+                    "dataReductionAlgorithm": {
+                        "top": {
+                            "count": 1000
+                        }
+                    }
+                }
+            }
+        }
+    ],
+    "privileges": []
+}
