@@ -69,8 +69,8 @@
 }
 .evm-main {
   display: grid;
-  grid-template-rows: 90px 210px minmax(0, 1fr);
-  gap: 8px;
+  grid-template-rows: 88px 345px minmax(0, 1fr);
+  gap: 10px;
   min-width: 780px;
   min-height: 0;
   height: 100%;
@@ -136,17 +136,21 @@
 }
 .evm-gauge-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(150px, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
   min-height: 0;
-  height: 210px;
+  height: 345px;
   overflow: hidden;
 }
 .evm-gauge-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   min-height: 0;
-  padding: 2px 4px;
+  padding: 20px 24px;
   overflow: hidden;
   height: 100%;
+  border-radius: 14px;
 }
 .evm-section-title {
   margin: 0;
@@ -157,21 +161,26 @@
 }
 .evm-gauge-svg {
   width: 100%;
+  max-width: 380px;
   height: 100%;
   max-height: 100%;
   display: block;
-  aspect-ratio: 320 / 190;
+  margin: 0 auto;
 }
-.evm-gauge-svg text,
-.evm-curve-svg text,
 .evm-timeline-svg text {
   fill: #001B8E;
   font-size: 11px;
   font-weight: 800;
 }
-.evm-gauge-title {
+.evm-curve-svg text {
   fill: #001B8E;
-  font-size: 24px;
+}
+.evm-gauge-svg text {
+  fill: #001B8E;
+}
+.evm-gauge-svg .evm-gauge-title {
+  fill: #001B8E;
+  font-size: 22px;
   font-weight: 900;
 }
 .evm-gauge-help {
@@ -179,10 +188,10 @@
   stroke: #6683E8;
   stroke-width: 2;
 }
-.evm-gauge-help-text {
+.evm-gauge-svg .evm-gauge-help-text {
   fill: #6683E8;
-  font-size: 13px;
-  font-weight: 900;
+  font-size: 14px;
+  font-weight: 800;
 }
 .backgroundArc path {
   opacity: 1;
@@ -196,14 +205,14 @@
 .needle circle {
   filter: none;
 }
-.evm-gauge-scale-label {
+.evm-gauge-svg .evm-gauge-scale-label {
   fill: #001B8E;
-  font-size: 14px;
-  font-weight: 900;
+  font-size: 15px;
+  font-weight: 700;
 }
-.evm-gauge-main-value {
+.evm-gauge-svg .evm-gauge-main-value {
   fill: #001B8E;
-  font-size: 30px;
+  font-size: 42px;
   font-weight: 900;
 }
 .evm-gauge-status-bg {
@@ -218,9 +227,9 @@
 .evm-gauge-status-bg.success {
   fill: #DFF7E8;
 }
-.evm-gauge-status-text {
-  font-size: 12px;
-  font-weight: 900;
+.evm-gauge-svg .evm-gauge-status-text {
+  font-size: 16px;
+  font-weight: 800;
 }
 .evm-gauge-spark-area {
   fill: #FF1E1E;
@@ -231,35 +240,22 @@
   stroke: #FF1E1E;
   stroke-width: 1;
 }
-.evm-gauge-variation-value {
-  font-size: 18px;
+.evm-gauge-svg .evm-gauge-variation-value {
+  font-size: 24px;
   font-weight: 900;
 }
-.evm-gauge-variation-caption {
+.evm-gauge-svg .evm-gauge-variation-caption {
   fill: #001B8E;
-  font-size: 10px;
-  font-weight: 900;
-}
-.backgroundArc,
-.redArc,
-.orangeArc,
-.greenArc {
-  transform-box: view-box;
-  transform-origin: 160px 96px;
-  transform: scale(1.15);
-}
-.sparkline {
-  transform-box: view-box;
-  transform-origin: 95px 174px;
-  transform: scaleY(1.2);
+  font-size: 15px;
+  font-weight: 700;
 }
 .evm-performance-row.alert strong {
   color: #FF1E1E;
 }
 .evm-body-grid {
   display: grid;
-  grid-template-columns: minmax(0, 68fr) minmax(360px, 32fr);
-  gap: 8px;
+  grid-template-columns: minmax(0, 70fr) minmax(360px, 30fr);
+  gap: 10px;
   align-items: stretch;
   min-height: 0;
   height: 100%;
@@ -278,7 +274,8 @@
   grid-template-rows: minmax(0, 1fr) auto;
 }
 .evm-right-column {
-  grid-template-rows: 420px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
 }
 .evm-curve-card,
 .evm-performance-card,
@@ -291,6 +288,7 @@
 .evm-curve-card {
   display: flex;
   flex-direction: column;
+  gap: 12px;
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -298,7 +296,7 @@
 .evm-curve-card .evm-section-title {
   font-size: 22px;
   line-height: 1.05;
-  margin-bottom: 2px;
+  margin-bottom: 0;
 }
 .evm-performance-card .evm-section-title,
 .evm-risk-card .evm-section-title {
@@ -383,6 +381,19 @@
   stroke: #001B8E;
   fill: #001B8E;
 }
+.evm-dot-overlap {
+  stroke: #FFFFFF;
+  stroke-width: 2.2;
+}
+.evm-dot-overlap.ev {
+  fill: #16A34A;
+}
+.evm-dot-overlap.ac {
+  fill: #FF1E1E;
+}
+.evm-dot-overlap.pv {
+  fill: #1D4DFF;
+}
 .evm-line {
   stroke-width: 2.5;
   stroke-linecap: round;
@@ -410,6 +421,7 @@
 .evm-curve-svg-wrap {
   flex: 1 1 auto;
   min-height: 0;
+  margin-bottom: 2px;
 }
 .evm-curve-svg {
   width: 100%;
@@ -423,68 +435,84 @@
   grid-template-columns: repeat(10, minmax(70px, 1fr));
   gap: 6px;
   margin-top: 0;
-  flex: 0 0 70px;
-  min-height: 70px;
+  flex: 0 0 90px;
+  min-height: 90px;
 }
 .evm-key-cell {
-  min-height: 52px;
-  padding: 9px 7px;
+  min-height: 72px;
+  padding: 13px 8px;
   border: 1px solid #DDE3F0;
   border-radius: 5px;
   text-align: center;
 }
 .evm-key-cell span {
-  font-size: 13px;
+  font-size: 16px;
 }
 .evm-key-cell strong {
   display: block;
-  margin-top: 4px;
+  margin-top: 6px;
   font-size: 20px;
+}
+.evm-key-cell-blue span,
+.evm-key-cell-blue strong {
+  color: #1D4DFF;
+}
+.evm-key-cell-green span,
+.evm-key-cell-green strong {
+  color: #16A34A;
+}
+.evm-key-cell-red span,
+.evm-key-cell-red strong {
+  color: #FF1E1E;
 }
 .evm-grid-line {
   stroke: #DDE3F0;
-  stroke-width: 1;
+  stroke-width: 1.3;
 }
 .evm-axis-line {
   stroke: #AAB5CC;
-  stroke-width: 1.2;
+  stroke-width: 1.6;
 }
 .evm-axis-tick {
   stroke: #AAB5CC;
-  stroke-width: 1;
+  stroke-width: 1.4;
 }
-.evm-axis-label {
+.evm-curve-svg .evm-axis-label {
   fill: #001B8E;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 800;
 }
-.evm-axis-title,
-.evm-status-label,
-.evm-target-label {
+.evm-curve-svg .evm-axis-title,
+.evm-curve-svg .evm-status-label,
+.evm-curve-svg .evm-target-label {
   fill: #001B8E;
-  font-size: 22px;
+  font-size: 16px;
   font-weight: 900;
 }
-.evm-target-label {
-  font-size: 22px;
+.evm-curve-svg .evm-target-label {
+  font-size: 16px;
 }
 .evm-bac-line,
 .evm-sac-line-vertical,
 .evm-eac-time-line,
 .evm-es-line {
   stroke: #667085;
-  stroke-width: 1.7;
+  stroke-width: 2.2;
   stroke-dasharray: 4 4;
+}
+.evm-at-line {
+  stroke: #98A2B3;
+  stroke-width: 2.2;
 }
 .evm-eac-cost-line,
 .evm-eac-time-line,
 .evm-eac-cost-guide {
   stroke: #5B21B6;
-  stroke-width: 1.9;
+  stroke-width: 2.4;
   stroke-dasharray: 5 5;
 }
 .evm-eac-cost-guide {
-  stroke-width: 1.4;
+  stroke-width: 1.8;
 }
 .evm-final-label-bg {
   fill: #FFFFFF;
@@ -492,8 +520,8 @@
   stroke: #DDE3F0;
   stroke-width: 0.6;
 }
-.evm-final-label {
-  font-size: 22px;
+.evm-curve-svg .evm-final-label {
+  font-size: 16px;
   font-weight: 900;
 }
 .evm-final-label.ev {
@@ -505,84 +533,149 @@
 .evm-final-label.pv {
   fill: #1D4DFF;
 }
-.evm-eac-label {
+.evm-callout-line {
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.evm-callout-line.ev {
+  stroke: #16A34A;
+}
+.evm-callout-line.ac {
+  stroke: #FF1E1E;
+}
+.evm-callout-line.pv {
+  stroke: #1D4DFF;
+}
+.evm-callout-label-bg {
+  fill: #FFFFFF;
+  fill-opacity: 0.94;
+  stroke: #DDE3F0;
+  stroke-width: 0.7;
+}
+.evm-curve-svg .evm-eac-label {
   fill: #5B21B6;
-  font-size: 22px;
+  font-size: 16px;
   font-weight: 900;
 }
-.evm-current-week-label {
+.evm-curve-svg .evm-current-week-label {
   fill: #FF9800;
-  font-size: 22px;
+  font-size: 16px;
   font-weight: 900;
 }
-.evm-es-label {
+.evm-curve-svg .evm-timeline-group-label {
+  font-size: 16px;
+  font-weight: 900;
+}
+.evm-curve-svg .evm-es-label {
   fill: #5B21B6;
-  font-size: 22px;
+  font-size: 16px;
   font-weight: 900;
 }
 .evm-vac-line {
   stroke: #FF1E1E;
-  stroke-width: 2;
+  stroke-width: 2.6;
   stroke-dasharray: 5 4;
 }
-.evm-vac-label {
+.evm-vac-arrowhead {
   fill: #FF1E1E;
-  font-size: 22px;
+  stroke: none;
+}
+.evm-curve-svg .evm-vac-label {
+  fill: #FF1E1E;
+  font-size: 16px;
   font-weight: 900;
 }
 .evm-performance-card {
   display: grid;
-  grid-template-rows: auto repeat(5, minmax(0, auto));
-  gap: 5px;
+  grid-template-rows: auto repeat(6, minmax(0, 1fr));
+  gap: 14px;
   height: 100%;
   min-height: 0;
-  align-content: start;
+  align-content: stretch;
   overflow: hidden;
+  padding: 14px 14px 16px;
 }
 .evm-risk-card {
-  display: grid;
+  display: none;
   grid-template-rows: auto auto 1fr;
+  gap: 0;
   height: 100%;
   min-height: 0;
   overflow: hidden;
 }
 .evm-performance-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(108px, 0.72fr);
+  grid-template-columns: 40px minmax(0, 1fr) minmax(140px, 0.76fr);
   align-items: center;
-  gap: 6px;
-  padding: 5px 8px;
+  gap: 7px;
+  padding: 13px 9px;
   border: 1px solid #E8EDF6;
   border-radius: 6px;
 }
 .evm-performance-row.single {
-  grid-template-columns: 1fr;
+  grid-template-columns: 40px 1fr;
+}
+.evm-performance-main {
+  grid-column: 2 / -1;
+}
+.evm-performance-icon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  align-self: center;
+  justify-self: center;
+}
+.evm-performance-icon svg {
+  width: 28px;
+  height: 28px;
+  display: block;
 }
 .evm-performance-row span {
-  font-size: 14px;
+  font-size: 16px;
 }
 .evm-performance-row .performance-label {
   white-space: normal;
-  line-height: 1.15;
+  line-height: 1.2;
+}
+.evm-performance-row > div:last-child .performance-label {
+  white-space: nowrap;
+}
+.evm-performance-row.single > div:last-child .performance-label {
+  white-space: normal;
+}
+.evm-performance-row .performance-label.two-line,
+.evm-performance-row > div:last-child .performance-label.two-line {
+  white-space: normal;
 }
 .evm-performance-row strong {
   display: block;
-  margin-top: 4px;
-  font-size: 17px;
-  line-height: 1.12;
+  margin-top: 6px;
+  font-size: 18px;
+  line-height: 1.14;
 }
 .evm-progress-block {
   display: grid;
-  grid-template-columns: minmax(74px, 55%) 38px;
+  grid-template-columns: 130px 36px;
   gap: 6px;
   align-items: center;
+  justify-content: start;
+  width: 172px;
+  max-width: 100%;
 }
 .evm-progress-block span {
   grid-column: 1 / -1;
 }
+.evm-progress-block strong {
+  margin-top: -2px;
+  line-height: 1;
+  justify-self: start;
+}
 .evm-progress {
-  max-width: 120px;
-  height: 7px;
+  width: 130px;
+  max-width: 130px;
+  height: 8px;
   overflow: hidden;
   background: #E4E7EC;
   border-radius: 999px;
@@ -590,42 +683,50 @@
 .evm-progress i {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, #FF1E1E, #1C55FF);
+  background: #1D4DFF;
   border-radius: inherit;
+}
+.evm-progress.clock i {
+  background: #1D4DFF;
+}
+.evm-progress.money i {
+  background: #FF7A00;
 }
 .evm-risk-summary {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  margin: 7px 0 8px;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  margin: 12px 0 14px;
 }
 .evm-risk-mini {
-  padding: 9px 6px;
+  min-height: 76px;
+  padding: 15px 10px;
   border-radius: 6px;
   text-align: center;
   background: #EEF2FF;
 }
 .evm-risk-mini strong {
   display: block;
-  font-size: 24px;
+  font-size: 38px;
+  line-height: 1.05;
 }
 .evm-risk-mini span {
   color: #001B8E;
-  font-size: 11px;
-  font-weight: 900;
+  font-size: 15px;
+  font-weight: 800;
   text-transform: uppercase;
 }
 .evm-risk-mini.low {
   background: #DEF7E8;
-  color: #16A34A;
+  color: #0F7A34;
 }
 .evm-risk-mini.medium {
   background: #FFF0D6;
-  color: #FF9800;
+  color: #B86500;
 }
 .evm-risk-mini.high {
   background: #FFE1E1;
-  color: #FF1E1E;
+  color: #D71920;
 }
 .evm-risk-mini.total {
   background: #EEF2FF;
@@ -634,18 +735,22 @@
 .evm-risk-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 11.5px;
+  font-family: "Segoe UI", Arial, sans-serif;
+  font-size: 17px;
   align-self: stretch;
 }
 .evm-risk-table th,
 .evm-risk-table td {
-  padding: 7px 6px;
+  padding: 17px 12px;
   border-bottom: 1px solid #E8EDF6;
   text-align: left;
 }
 .evm-risk-table th {
   color: #001B8E;
-  font-size: 10px;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-transform: uppercase;
 }
 .evm-risk-dot {
   display: inline-block;

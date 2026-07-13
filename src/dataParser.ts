@@ -359,10 +359,12 @@ function pickCurrentGaugeSnapshot(row: FieldValueMap): CurrentSnapshot {
 
 function buildGaugeHistory(rows: FieldValueMap[], at: DataValue): GaugeHistory {
     const currentWeek = toNumber(at);
+    const historyStartWeek = currentWeek === null ? null : Math.max(0, currentWeek - 5);
     const orderedRows = rows
         .map((row, index) => ({ row, index, week: toNumber(row.SemanaProyecto) }))
         .filter((item) => hasAny(item.row, gaugeFields))
         .filter((item) => currentWeek === null || item.week === null || item.week <= currentWeek)
+        .filter((item) => historyStartWeek === null || item.week === null || item.week >= historyStartWeek)
         .sort((a, b) => {
             const left = a.week ?? Number.MAX_SAFE_INTEGER;
             const right = b.week ?? Number.MAX_SAFE_INTEGER;
