@@ -17,6 +17,14 @@ interface GaugeLayout {
     badgeH: number;
 }
 
+interface GaugeSegment {
+    start: number;
+    end: number;
+    color: string;
+}
+
+const gaugeRangeBlue = "#168BFF";
+
 export function renderGaugeGrid(gauges: GaugeData[], palette: VisualPalette, onHistoryOpen?: (key: GaugeMetricKey) => void): HTMLElement {
     const grid = createElement("section", "evm-gauge-grid");
     gauges.forEach((metric) => grid.appendChild(renderGauge(metric, palette, onHistoryOpen)));
@@ -72,7 +80,7 @@ function renderHistoryCard(data: GaugeData, onHistoryOpen?: (key: GaugeMetricKey
     historyCard.appendChild(renderHistorySparkline(data));
     historyCard.appendChild(renderHistoryVariation(data));
     historyCard.appendChild(createElement("span", "gauge-history-card-action", "Ver histórico"));
-    historyCard.style.setProperty("--gauge-color", gaugeColor(metricKey));
+    historyCard.style.setProperty("--gauge-color", gaugeRangeColor(data));
 
     historyCard.setAttribute("role", "button");
     historyCard.setAttribute("tabindex", "0");
@@ -141,7 +149,7 @@ function renderHistoryVariation(data: GaugeData): HTMLElement {
     value.appendChild(createElement("i", undefined, variation === null ? "–" : variation >= 0 ? "↗" : "↘"));
     value.appendChild(document.createTextNode(variation === null ? "—" : signedDecimal(variation)));
     wrapper.appendChild(value);
-    wrapper.appendChild(createElement("span", "gauge-history-variation-label", "VS SEM ANT"));
+    wrapper.appendChild(createElement("span", "gauge-history-variation-label", "vs semana anterior"));
     return wrapper;
 }
 
@@ -155,18 +163,18 @@ function gaugeMetricKey(key: GaugeData["key"]): GaugeMetricKey {
     return key;
 }
 
-function gaugeColor(key: GaugeMetricKey): string {
-    if (key === "CPI") {
-        return "#F97316";
-    }
-    if (key === "SPI (w)") {
-        return "#2563EB";
-    }
-    if (key === "TCPI") {
-        return "#16A34A";
-    }
-    return "#DC2626";
-}
+const mainGaugeRangePalette: VisualPalette = {
+    blue: "#001B8E",
+    red: "#FF1E1E",
+    orange: "#FF9800",
+    green: "#16A34A",
+    purple: "#5B21B6",
+    background: "#F7F9FC",
+    card: "#FFFFFF",
+    text: "#00145C",
+    muted: "#667085",
+    border: "#DDE3F0"
+};
 
 function gaugeLayout(width: number, height: number): GaugeLayout {
     const topPad = Math.max(28, height * 0.1);
@@ -197,14 +205,36 @@ function drawGauge(svg: SVGSVGElement, data: GaugeData, palette: VisualPalette, 
     svg.setAttribute("viewBox", `0 0 ${layout.width} ${layout.height}`);
     drawTitle(svg, data.title, layout);
     appendGroup(svg, "backgroundArc", (group) => drawArc(group, -90, 90, "#EEF2F7", layout.stroke + 2, layout));
-    appendGroup(svg, "redArc", (group) => drawArc(group, -90, -58, palette.red, layout.stroke, layout));
-    appendGroup(svg, "orangeArc", (group) => drawArc(group, -58, 24, palette.orange, layout.stroke, layout));
-    appendGroup(svg, "greenArc", (group) => drawArc(group, 24, 90, palette.green, layout.stroke, layout));
-    appendGroup(svg, "arcSeparators", (group) => drawArcSeparators(group, layout));
+    appendGroup(svg, "rangeArcs", (group) => drawGaugeSegments(group, data, palette, layout));
+    appendGroup(svg, "arcSeparators", (group) => drawArcSeparators(group, data, palette, layout));
     appendGroup(svg, "labels", (group) => drawLabels(group, data, layout));
     appendGroup(svg, "needle", (group) => drawNeedle(group, data, palette.blue, layout));
     appendGroup(svg, "value", (group) => drawValue(group, data, layout));
-    appendGroup(svg, "status", (group) => drawStatus(group, data, palette, layout));
+    appendGroup(svg, "status", (group) => drawStatus(group, data, layout));
+}
+
+function drawGaugeSegments(group: SVGGElement, data: GaugeData, palette: VisualPalette, layout: GaugeLayout): void {
+    gaugeSegments(data, palette).forEach((segment) => {
+        drawArc(group, segmentValueToAngle(data, segment.start), segmentValueToAngle(data, segment.end), segment.color, layout.stroke, layout);
+    });
+}
+
+function gaugeSegments(data: GaugeData, palette: VisualPalette): GaugeSegment[] {
+    if (data.key === "CPI" || data.key === "SPIW") {
+        return [
+            { start: 0, end: 0.9, color: palette.red },
+            { start: 0.9, end: 1, color: palette.orange },
+            { start: 1, end: 1.2, color: palette.green },
+            { start: 1.2, end: 1.5, color: gaugeRangeBlue }
+        ];
+    }
+
+    return [
+        { start: 0, end: 0.9, color: gaugeRangeBlue },
+        { start: 0.9, end: 1.01, color: palette.green },
+        { start: 1.01, end: 1.11, color: palette.orange },
+        { start: 1.11, end: 1.5, color: palette.red }
+    ];
 }
 
 function drawTitle(svg: SVGSVGElement, title: string, layout: GaugeLayout): void {
@@ -239,8 +269,8 @@ function drawArc(group: SVGGElement, startAngle: number, endAngle: number, color
     group.appendChild(path);
 }
 
-function drawArcSeparators(group: SVGGElement, layout: GaugeLayout): void {
-    [-58, 0, 24].forEach((angle) => {
+function drawArcSeparators(group: SVGGElement, data: GaugeData, palette: VisualPalette, layout: GaugeLayout): void {
+    gaugeSegments(data, palette).slice(1).map((segment) => segmentValueToAngle(data, segment.start)).forEach((angle) => {
         const inner = pointOnGaugeRadius(angle, layout, layout.radius - layout.stroke * 0.62);
         const outer = pointOnGaugeRadius(angle, layout, layout.radius + layout.stroke * 0.62);
         const line = svgElement("line");
@@ -255,11 +285,35 @@ function drawArcSeparators(group: SVGGElement, layout: GaugeLayout): void {
     });
 }
 
+function segmentValueToAngle(data: GaugeData, value: number): number {
+    if ((data.key === "CPI" || data.key === "SPIW") && value <= 1) {
+        if (value <= 0.9) {
+            return -90 + (value / 0.9) * 72;
+        }
+        return -18 + ((value - 0.9) / 0.1) * 18;
+    }
+    if (data.key === "TCPI" || data.key === "TSPIW") {
+        if (value <= 0.9) {
+            return -90 + (value / 0.9) * 72;
+        }
+        if (value <= 1.01) {
+            return -18 + ((value - 0.9) / 0.11) * 18;
+        }
+        if (value <= 1.11) {
+            return ((value - 1.01) / 0.1) * 18;
+        }
+        return 18 + ((value - 1.11) / 0.39) * 72;
+    }
+    return valueToAngle(value, data.min, data.max, data.target);
+}
+
 function drawNeedle(group: SVGGElement, data: GaugeData, color: string, layout: GaugeLayout): void {
-    if (numberValue(data.value) === null) {
+    const value = numberValue(data.value);
+    if (value === null) {
         return;
     }
-    const angle = valueToAngle(data.value, data.min, data.max, data.target);
+    const clamped = Math.max(data.min, Math.min(data.max, value));
+    const angle = segmentValueToAngle(data, clamped);
     group.setAttribute("transform", `rotate(${angle} ${layout.centerX} ${layout.centerY})`);
 
     const halfWidth = Math.max(5.4, layout.radius * 0.058);
@@ -286,11 +340,11 @@ function drawValue(group: SVGGElement, data: GaugeData, layout: GaugeLayout): vo
     group.appendChild(svgText(displayDecimal(data.value), layout.centerX, layout.valueY, "middle", "evm-gauge-main-value"));
 }
 
-function drawStatus(group: SVGGElement, data: GaugeData, palette: VisualPalette, layout: GaugeLayout): void {
+function drawStatus(group: SVGGElement, data: GaugeData, layout: GaugeLayout): void {
     const status = numberValue(data.value) === null ? "SIN DATO" : text(data.status, "Sin estado").toUpperCase();
-    const className = statusClass(status);
-    const badgeW = Math.max(142, layout.width * 0.27);
-    const badgeH = layout.badgeH;
+    const className = gaugeRangeClass(data);
+    const badgeW = Math.max(96, Math.min(148, status.length * 10.8 + 30));
+    const badgeH = Math.min(30, layout.badgeH);
     const badge = svgElement("rect");
     badge.setAttribute("x", String(layout.centerX - badgeW / 2));
     badge.setAttribute("y", String(layout.statusY - badgeH / 2));
@@ -300,8 +354,7 @@ function drawStatus(group: SVGGElement, data: GaugeData, palette: VisualPalette,
     badge.setAttribute("class", `evm-gauge-status-bg ${className}`);
     group.appendChild(badge);
 
-    const label = svgText(status, layout.centerX, layout.statusY + 5.5, "middle", `evm-gauge-status-text ${className}`);
-    label.setAttribute("fill", statusColor(className, palette));
+    const label = svgText(status, layout.centerX, layout.statusY + 6, "middle", `evm-gauge-status-text ${className}`);
     group.appendChild(label);
 }
 
@@ -339,6 +392,32 @@ function displayDecimal(value: DataValue): string {
     return numberValue(value) === null ? "\u2014" : decimal(value);
 }
 
+function gaugeRangeColor(data: GaugeData): string {
+    const value = numberValue(data.value);
+    if (value === null) {
+        return mainGaugeRangePalette.blue;
+    }
+    const segment = gaugeSegments(data, mainGaugeRangePalette).find((item) => value >= item.start && value <= item.end);
+    return segment?.color ?? mainGaugeRangePalette.blue;
+}
+
+function gaugeRangeClass(data: GaugeData): string {
+    const color = gaugeRangeColor(data);
+    if (color === gaugeRangeBlue) {
+        return "blue";
+    }
+    if (color === mainGaugeRangePalette.green) {
+        return "success";
+    }
+    if (color === mainGaugeRangePalette.orange) {
+        return "warning";
+    }
+    if (color === mainGaugeRangePalette.red) {
+        return "danger";
+    }
+    return "neutral";
+}
+
 function svgText(label: string, x: number, y: number, anchor: "start" | "middle" | "end", className: string): SVGTextElement {
     const node = svgElement("text");
     node.setAttribute("x", String(x));
@@ -354,7 +433,16 @@ function formatScale(value: number): string {
 }
 
 function statusClass(status?: string): string {
-    const value = (status ?? "").toLowerCase();
+    const value = (status ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (value.includes("estable")) {
+        return "success";
+    }
+    if (value.includes("en riesgo") || value.includes("riesgo")) {
+        return "warning";
+    }
+    if (value.includes("critico")) {
+        return "danger";
+    }
     if (value.includes("crit") || value.includes("alto")) {
         return "danger";
     }
@@ -367,12 +455,3 @@ function statusClass(status?: string): string {
     return "neutral";
 }
 
-function statusColor(className: string, palette: VisualPalette): string {
-    if (className === "success") {
-        return palette.green;
-    }
-    if (className === "warning" || className === "danger") {
-        return palette.red;
-    }
-    return palette.blue;
-}

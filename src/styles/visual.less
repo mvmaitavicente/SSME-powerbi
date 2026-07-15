@@ -81,8 +81,8 @@
 
 .evm-main {
     display: grid;
-    grid-template-rows: 88px 345px minmax(0, 1fr);
-    gap: 10px;
+    grid-template-rows: 98px 349px minmax(0, 1fr);
+    gap: 18px;
     min-width: 780px;
     min-height: 0;
     height: 100%;
@@ -91,7 +91,7 @@
 
 .evm-header {
     display: grid;
-    grid-template-columns: 1fr minmax(180px, 22%) minmax(130px, 12%);
+    grid-template-columns: minmax(0, 1fr) 520px minmax(130px, 12%);
     gap: 8px;
     padding: 4px 12px;
     align-items: center;
@@ -99,7 +99,6 @@
     overflow: hidden;
 }
 
-.evm-project-title span,
 .evm-project-state span,
 .evm-project-dates span,
 .evm-performance-row span,
@@ -112,32 +111,154 @@
 }
 
 .evm-project-title h1 {
-    margin: 1px 0 6px;
-    font-size: clamp(22px, 1.5vw, 32px);
+    margin: 0 0 6px;
+    font-size: clamp(20px, 1.35vw, 28px);
     line-height: 1.12;
     letter-spacing: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.evm-project-title h1 span {
+    color: #001B8E;
+    font-weight: 900;
+    text-transform: uppercase;
 }
 
 .evm-header-meta {
     display: flex;
-    flex-wrap: wrap;
-    gap: 6px 16px;
-    font-size: 12px;
+    flex-wrap: nowrap;
+    gap: 0 18px;
+    min-width: 0;
+    overflow: hidden;
+    color: #00145C;
+    font-size: 17px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.evm-header-meta-item {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.evm-header-meta b {
+    color: #001B8E;
+    font-weight: 950;
 }
 
 .evm-project-state {
-    padding: 10px 10px;
-    border-radius: 7px;
-    background: #FFF4E8;
-    text-align: center;
+    display: grid;
+    grid-template-columns: 58px minmax(145px, 0.9fr) minmax(210px, 1.1fr);
+    align-items: center;
+    min-height: 68px;
+    column-gap: 12px;
+    padding: 8px 18px 8px 14px;
+    border-radius: 8px;
+    color: #FFFFFF;
+    overflow: hidden;
+}
+
+.evm-project-state.stable {
+    background: #08A045;
+}
+
+.evm-project-state.risk {
+    background: #FFB000;
+}
+
+.evm-project-state.critical {
+    background: #E60000;
+}
+
+.evm-project-state.neutral {
+    background: #001B8E;
+}
+
+.evm-project-state-icon {
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 48px;
+    border-right: 2px solid rgba(255, 255, 255, 0.55);
+}
+
+.evm-project-state-icon span {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #FFFFFF;
+    color: currentColor;
+    font-size: 28px;
+    font-weight: 950;
+    line-height: 1;
+}
+
+.evm-project-state.risk .evm-project-state-icon span,
+.evm-project-state.critical .evm-project-state-icon span {
+    clip-path: polygon(50% 8%, 94% 88%, 6% 88%);
+    border-radius: 0;
+    padding-top: 7px;
+}
+
+.evm-project-state.stable .evm-project-state-icon span {
+    color: #08A045;
+}
+
+.evm-project-state.risk .evm-project-state-icon span {
+    color: #FFB000;
+}
+
+.evm-project-state.critical .evm-project-state-icon span {
+    color: #E60000;
+}
+
+.evm-project-state-copy {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+    height: 100%;
+    padding-left: 0;
+}
+
+.evm-project-state .evm-project-state-copy span {
+    color: #FFFFFF;
+    font-size: 14px;
+    font-weight: 900;
+    line-height: 1;
+    text-transform: uppercase;
 }
 
 .evm-project-state strong {
     display: block;
-    margin-top: 4px;
-    color: #FF1E1E;
-    font-size: clamp(17px, 2vw, 24px);
+    margin-top: 3px;
+    color: #FFFFFF;
+    font-size: clamp(22px, 2.2vw, 31px);
+    line-height: 1;
     text-transform: uppercase;
+}
+
+.evm-project-state-message {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: stretch;
+    min-width: 0;
+    height: 100%;
+    padding: 0 10px 0 18px;
+    border-left: 2px solid rgba(255, 255, 255, 0.55);
+    color: #FFFFFF;
+    font-size: 16px;
+    font-weight: 850;
+    line-height: 1.12;
+    text-align: center;
+    overflow: hidden;
 }
 
 .evm-project-dates {
@@ -146,13 +267,18 @@
     border-left: 1px solid #DDE3F0;
 }
 
+.evm-project-dates span {
+    font-size: 16px;
+}
+
 .evm-project-dates strong {
     display: block;
     margin: 3px 0 6px;
-    font-size: 13px;
+    font-size: 16px;
 }
 
 .evm-project-dates small {
+    font-size: 15px;
     font-weight: 800;
 }
 
@@ -161,7 +287,7 @@
     grid-template-columns: repeat(4, 1fr);
     gap: 12px;
     min-height: 0;
-    height: 345px;
+    height: 100%;
     overflow: hidden;
 }
 
@@ -174,6 +300,7 @@
     padding: 20px 24px;
     overflow: hidden;
     height: 100%;
+    box-sizing: border-box;
     border-radius: 14px;
 }
 
@@ -181,7 +308,7 @@
     position: absolute;
     left: 10px;
     right: 14px;
-    bottom: 42px;
+    bottom: 8px;
     display: grid;
     grid-template-columns: 176px 110px;
     justify-content: center;
@@ -321,10 +448,10 @@
     align-items: center;
     justify-content: center;
     justify-self: end;
-    width: 110px;
+    width: 142px;
     padding: 0 0 1px;
     box-sizing: border-box;
-    transform: translateX(80px);
+    transform: translateX(64px);
 }
 
 .gauge-history-variation-value {
@@ -379,10 +506,11 @@
 .evm-gauge-svg {
     width: 100%;
     max-width: 380px;
-    height: 100%;
-    max-height: 100%;
+    height: calc(100% + 40px);
+    max-height: none;
     display: block;
     margin: 0 auto;
+    transform: translateY(18px);
 }
 
 .evm-timeline-svg text {
@@ -445,24 +573,49 @@
 }
 
 .evm-gauge-status-bg {
-    fill: #EEF2FF;
+    fill: #EEF4FF;
 }
 
 .evm-gauge-status-bg.danger {
-    fill: #FFE1E1;
+    fill: #FFE4EA;
 }
 
 .evm-gauge-status-bg.warning {
-    fill: #FFF1D8;
+    fill: #FFF2DF;
 }
 
 .evm-gauge-status-bg.success {
-    fill: #DFF7E8;
+    fill: #E0F8EA;
+}
+
+.evm-gauge-status-bg.blue {
+    fill: #E7F2FF;
 }
 
 .evm-gauge-svg .evm-gauge-status-text {
-    font-size: 16px;
-    font-weight: 800;
+    font-size: 18px;
+    font-weight: 950;
+    letter-spacing: 0;
+}
+
+.evm-gauge-svg .evm-gauge-status-text.danger {
+    fill: #FF1E1E;
+}
+
+.evm-gauge-svg .evm-gauge-status-text.warning {
+    fill: #FF9800;
+}
+
+.evm-gauge-svg .evm-gauge-status-text.success {
+    fill: #16A34A;
+}
+
+.evm-gauge-svg .evm-gauge-status-text.blue {
+    fill: #168BFF;
+}
+
+.evm-gauge-svg .evm-gauge-status-text.neutral {
+    fill: #001B8E;
 }
 
 .evm-gauge-spark-area {
@@ -545,24 +698,33 @@
     position: absolute;
     top: 50%;
     z-index: 6;
-    width: 34px;
-    height: 52px;
+    width: 44px;
+    height: 64px;
     display: grid;
     place-items: center;
     border: 1px solid rgba(203, 213, 225, 0.95);
-    border-radius: 10px;
+    border-radius: 12px;
     background: rgba(255, 255, 255, 0.94);
     color: #001B8E;
     cursor: pointer;
-    font-size: 34px;
+    font-size: 42px;
     font-weight: 900;
     line-height: 1;
+    opacity: 0;
+    pointer-events: none;
     box-shadow: 0 8px 18px rgba(15, 23, 42, 0.16);
     transform: translateY(-50%);
     transition:
         background-color 160ms ease,
+        opacity 160ms ease,
         transform 160ms ease,
         box-shadow 160ms ease;
+}
+
+.evm-body-carousel:hover .evm-carousel-button,
+.evm-body-carousel:focus-within .evm-carousel-button {
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .evm-carousel-button:hover,
@@ -570,29 +732,51 @@
     background: #FFFFFF;
     box-shadow: 0 10px 24px rgba(15, 23, 42, 0.22);
     outline: none;
+    transform: translateY(-50%) scale(1.04);
+}
+
+.evm-carousel-button::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    top: 50%;
+    width: max-content;
+    max-width: 180px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    background: #001B8E;
+    color: #FFFFFF;
+    font-size: 12px;
+    font-weight: 850;
+    line-height: 1.15;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-50%);
+    transition: opacity 140ms ease;
+}
+
+.evm-carousel-button:hover::after,
+.evm-carousel-button:focus-visible::after {
+    opacity: 1;
 }
 
 .evm-carousel-button--prev {
-    left: 8px;
+    left: 12px;
+}
+
+.evm-carousel-button--prev::after {
+    left: calc(100% + 10px);
 }
 
 .evm-carousel-button--next {
-    right: 8px;
+    right: 12px;
+}
+
+.evm-carousel-button--next::after {
+    right: calc(100% + 10px);
 }
 
 .evm-carousel-dots {
-    position: absolute;
-    left: 50%;
-    bottom: 8px;
-    z-index: 7;
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    padding: 5px 8px;
-    border: 1px solid rgba(203, 213, 225, 0.8);
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.86);
-    transform: translateX(-50%);
+    display: none;
 }
 
 .evm-carousel-dot {
@@ -629,6 +813,18 @@
     gap: 0;
 }
 
+.evm-body-carousel-page--evm .evm-left-column,
+.evm-body-carousel-page--evm .evm-right-column {
+    grid-template-rows: minmax(0, 1fr);
+    gap: 0;
+}
+
+.evm-body-carousel-page--evm .evm-curve-card,
+.evm-body-carousel-page--evm .evm-performance-card {
+    height: 100%;
+    min-height: 0;
+}
+
 .evm-curve-card,
 .evm-performance-card,
 .evm-risk-card,
@@ -655,6 +851,11 @@
 
 .evm-performance-card .evm-section-title,
 .evm-risk-card .evm-section-title {
+    font-size: 22px;
+    line-height: 1.05;
+}
+
+.evm-milestone-card .evm-section-title {
     font-size: 22px;
     line-height: 1.05;
 }
@@ -828,13 +1029,13 @@
     grid-template-columns: repeat(10, minmax(70px, 1fr));
     gap: 6px;
     margin-top: 0;
-    flex: 0 0 90px;
-    min-height: 90px;
+    flex: 0 0 78px;
+    min-height: 78px;
 }
 
 .evm-key-cell {
-    min-height: 72px;
-    padding: 13px 8px;
+    min-height: 62px;
+    padding: 9px 8px;
     border: 1px solid #DDE3F0;
     border-radius: 5px;
     text-align: center;
@@ -846,7 +1047,7 @@
 
 .evm-key-cell strong {
     display: block;
-    margin-top: 6px;
+    margin-top: 4px;
     font-size: 20px;
 }
 
@@ -1016,22 +1217,23 @@
 .evm-performance-card {
     display: grid;
     grid-template-rows: auto repeat(6, minmax(0, 1fr));
-    gap: 14px;
+    gap: 10px;
     height: 100%;
     min-height: 0;
     align-content: stretch;
     overflow: hidden;
-    padding: 14px 14px 16px;
+    padding: 12px 14px 14px;
 }
 
 .evm-risk-card {
     display: none;
-    grid-template-rows: auto auto minmax(0, 1fr);
-    gap: 12px;
+    grid-template-rows: auto auto auto auto;
+    align-content: start;
+    gap: 28px;
     height: 100%;
     min-height: 0;
     overflow: hidden;
-    padding: 16px 18px 18px;
+    padding: 10px 12px;
 }
 
 .evm-body-carousel-page .evm-risk-card {
@@ -1056,7 +1258,7 @@
     grid-template-columns: 40px minmax(0, 1fr) minmax(140px, 0.76fr);
     align-items: center;
     gap: 7px;
-    padding: 13px 9px;
+    padding: 9px 9px;
     border: 1px solid #E8EDF6;
     border-radius: 6px;
 }
@@ -1160,85 +1362,114 @@
 .evm-risk-summary {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px;
-    margin: 2px 0 6px;
+    gap: 12px;
+    justify-self: center;
+    width: calc(100% - 46px);
+    margin: 4px 0 0;
 }
 
 .evm-risk-mini {
-    min-height: 72px;
+    min-height: 74px;
     display: grid;
     align-content: center;
     padding: 10px 8px;
     border-radius: 8px;
     text-align: center;
     background: #EEF2FF;
+    border: 1px solid transparent;
+    box-shadow: 0 1px 5px rgba(0, 27, 142, 0.06);
 }
 
 .evm-risk-mini strong {
     display: block;
-    font-size: 31px;
+    font-size: 35px;
     line-height: 1.05;
 }
 
 .evm-risk-mini span {
-    color: #001B8E;
-    font-size: 14px;
+    color: currentColor;
+    font-size: 18px;
     font-weight: 800;
     text-transform: uppercase;
 }
 
 .evm-risk-mini.low {
     background: #E7F7EC;
+    border-color: rgba(15, 122, 52, 0.12);
     color: #0F7A34;
 }
 
 .evm-risk-mini.medium {
     background: #FFF4DF;
+    border-color: rgba(184, 101, 0, 0.12);
     color: #B86500;
 }
 
 .evm-risk-mini.high {
     background: #FDE7EA;
+    border-color: rgba(215, 25, 32, 0.12);
     color: #D71920;
 }
 
 .evm-risk-mini.total {
     background: #EEF2FF;
+    border-color: rgba(0, 27, 142, 0.12);
     color: #001B8E;
 }
 
 .evm-risk-table {
-    width: 100%;
+    width: calc(100% - 46px);
+    justify-self: center;
     border-collapse: separate;
     border-spacing: 0;
     font-family: "Segoe UI", Arial, sans-serif;
-    font-size: 15px;
-    align-self: stretch;
-    border: 1.5px solid #C7D1E4;
-    border-radius: 12px;
+    font-size: 18px;
+    align-self: start;
+    border: 1px solid #DDE3F0;
+    border-radius: 10px;
     overflow: hidden;
+    box-shadow: 0 1px 5px rgba(0, 27, 142, 0.06);
 }
 
 .evm-risk-table th,
 .evm-risk-table td {
-    padding: 15px 12px;
-    border-right: 1.5px solid #D5DDED;
-    border-bottom: 1.5px solid #D5DDED;
+    border-right: 1px solid #E2E8F4;
+    border-bottom: 1px solid #E2E8F4;
     text-align: center;
     color: #00145C;
-    font-weight: 800;
+    font-weight: 650;
+    line-height: 1.15;
 }
 
 .evm-risk-table th:first-child,
 .evm-risk-table td:first-child {
-    text-align: left;
+    text-align: center;
 }
 
 .evm-risk-table th {
+    background: #F8FAFF;
+    box-shadow: inset 0 -1px 0 rgba(0, 27, 142, 0.08);
     color: #001B8E;
-    font-size: 14px;
+    font-size: 18px;
     font-weight: 900;
     line-height: 1.2;
+    padding: 13px 12px;
+}
+
+.evm-risk-table th span {
+    display: block;
+}
+
+.evm-risk-table td {
+    padding: 30px 14px;
+}
+
+.evm-risk-table tbody tr:not(.evm-risk-total-row) td {
+    background: #FFFFFF;
+}
+
+.evm-risk-table tbody tr:not(.evm-risk-total-row):nth-child(even) td {
+    background: #FCFDFF;
 }
 
 .evm-risk-table tr:last-child td {
@@ -1251,13 +1482,13 @@
 }
 
 .evm-risk-total-row td {
-    background: #F1F5FF;
+    background: #EEF2FF;
     color: #001B8E;
     font-weight: 950;
 }
 
 .evm-risk-level {
-    font-weight: 950;
+    font-weight: 850;
 }
 
 .evm-risk-level.low {
@@ -1274,13 +1505,13 @@
 
 .evm-risk-dot {
     display: inline-block;
-    width: 15px;
-    height: 15px;
+    width: 14px;
+    height: 14px;
     margin-right: 9px;
     border-radius: 50%;
     background: #001B8E;
     vertical-align: -3px;
-    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.18);
+    box-shadow: 0 2px 5px rgba(15, 23, 42, 0.12);
 }
 
 .evm-risk-dot.low {
@@ -1295,30 +1526,206 @@
     background: #FF1E1E;
 }
 
+.evm-risk-legend {
+    display: block;
+    justify-self: center;
+    width: calc(100% - 46px);
+    box-sizing: border-box;
+    padding: 8px 14px 10px;
+    border: 1px solid #DDE3F0;
+    border-radius: 8px;
+    background: #FFFFFF;
+    color: #001B8E;
+    box-shadow: 0 1px 5px rgba(0, 27, 142, 0.06);
+}
+
+.evm-risk-legend-title {
+    margin-bottom: 8px;
+    color: #001B8E;
+    font-size: 16px;
+    font-weight: 950;
+    line-height: 1;
+    text-transform: uppercase;
+}
+
+.evm-risk-legend-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    width: min(100%, 760px);
+    margin: 0 auto;
+    align-items: center;
+}
+
+.evm-risk-legend-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    padding: 5px 12px;
+    line-height: 1.2;
+    font-size: 18px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.evm-risk-legend-item.low {
+    color: #0F7A34;
+}
+
+.evm-risk-legend-item.medium {
+    color: #B86500;
+}
+
+.evm-risk-legend-item.high {
+    color: #D71920;
+}
+
+.evm-risk-legend .evm-risk-dot {
+    flex: 0 0 auto;
+    width: 14px;
+    height: 14px;
+    margin-right: 9px;
+    vertical-align: 0;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
+}
+
 .evm-timeline-svg {
     width: 100%;
     height: 100%;
-    min-height: 260px;
+    min-height: 300px;
     display: block;
     overflow: visible;
 }
 
-.evm-timeline-base {
+.evm-timeline-segment {
     fill: none;
     stroke: #001B8E;
-    stroke-width: 3;
+    stroke-width: 4;
     stroke-linecap: round;
-    stroke-linejoin: round;
 }
 
-.evm-timeline-arrow {
+.evm-timeline-segment.done {
+    stroke: #16A34A;
+}
+
+.evm-timeline-segment.active {
+    stroke: #FF7A00;
+}
+
+.evm-timeline-segment.late {
+    stroke: #FF1E1E;
+}
+
+.evm-timeline-segment.pending {
+    stroke: #0B63F6;
+}
+
+.evm-milestone-row-container {
+    fill: #FFFFFF;
+    stroke: #DDE3F0;
+    stroke-width: 1;
+    filter: drop-shadow(0 1px 5px rgba(0, 27, 142, 0.07));
+}
+
+.evm-milestone-row-container.done {
+    stroke: rgba(22, 163, 74, 0.28);
+    filter: drop-shadow(0 1px 5px rgba(0, 27, 142, 0.06));
+}
+
+.evm-milestone-row-container.pending {
+    stroke: rgba(11, 99, 246, 0.28);
+    filter: drop-shadow(0 1px 5px rgba(0, 27, 142, 0.07));
+}
+
+.evm-milestone-row-container.active {
+    stroke: rgba(255, 122, 0, 0.28);
+    filter: drop-shadow(0 1px 5px rgba(0, 27, 142, 0.06));
+}
+
+.evm-milestone-row-container.late {
+    stroke: rgba(255, 30, 30, 0.28);
+    filter: drop-shadow(0 1px 5px rgba(0, 27, 142, 0.06));
+}
+
+.evm-milestone-order-bg {
+    fill: #FFFFFF;
+    stroke: #001B8E;
+    stroke-width: 2;
+}
+
+.evm-milestone-order-bg.done {
+    stroke: #16A34A;
+}
+
+.evm-milestone-order-bg.active {
+    stroke: #FF7A00;
+}
+
+.evm-milestone-order-bg.late {
+    stroke: #FF1E1E;
+}
+
+.evm-milestone-order-bg.pending {
+    stroke: #0B63F6;
+}
+
+.evm-timeline-svg .evm-milestone-order-text {
     fill: #001B8E;
+    font-size: 16px;
+    font-weight: 950;
+}
+
+.evm-timeline-svg .evm-milestone-order-text.done {
+    fill: #16A34A;
+}
+
+.evm-timeline-svg .evm-milestone-order-text.active {
+    fill: #FF7A00;
+}
+
+.evm-timeline-svg .evm-milestone-order-text.late {
+    fill: #FF1E1E;
+}
+
+.evm-timeline-svg .evm-milestone-order-text.pending {
+    fill: #0B63F6;
+}
+
+.evm-milestone-connector {
+    stroke: #001B8E;
+    stroke-width: 1.5;
+    stroke-dasharray: 4 4;
+    stroke-linecap: round;
+}
+
+.evm-milestone-connector.done {
+    stroke: #16A34A;
+}
+
+.evm-milestone-connector.active {
+    stroke: #FF7A00;
+}
+
+.evm-milestone-connector.late {
+    stroke: #FF1E1E;
+}
+
+.evm-milestone-connector.pending {
+    stroke: #0B63F6;
+}
+
+.evm-milestone-halo {
+    fill: #FFFFFF;
+    stroke: #E2E8F0;
+    stroke-width: 3;
+    filter: drop-shadow(0 2px 4px rgba(15, 23, 42, 0.14));
 }
 
 .evm-milestone-dot {
     fill: #FFFFFF;
     stroke: #001B8E;
-    stroke-width: 4;
+    stroke-width: 6;
 }
 
 .evm-milestone-dot.done {
@@ -1328,7 +1735,7 @@
 
 .evm-milestone-dot.active {
     fill: #FFFFFF;
-    stroke: #FF9800;
+    stroke: #FF7A00;
 }
 
 .evm-milestone-dot.late {
@@ -1338,28 +1745,27 @@
 
 .evm-milestone-dot.pending {
     fill: #FFFFFF;
-    stroke: #1D4DFF;
+    stroke: #0B63F6;
 }
 
-.evm-milestone-tick {
-    stroke: #001B8E;
-    stroke-width: 2;
+.evm-milestone-small-dot {
+    fill: #001B8E;
 }
 
-.evm-milestone-tick.done {
-    stroke: #16A34A;
+.evm-milestone-small-dot.done {
+    fill: #16A34A;
 }
 
-.evm-milestone-tick.active {
-    stroke: #FF9800;
+.evm-milestone-small-dot.active {
+    fill: #FF7A00;
 }
 
-.evm-milestone-tick.late {
-    stroke: #FF1E1E;
+.evm-milestone-small-dot.late {
+    fill: #FF1E1E;
 }
 
-.evm-milestone-tick.pending {
-    stroke: #1D4DFF;
+.evm-milestone-small-dot.pending {
+    fill: #0B63F6;
 }
 
 .evm-milestone-icon {
@@ -1372,22 +1778,21 @@
 
 .evm-milestone-alert {
     fill: #FF1E1E;
-    font-size: 22px;
+    font-size: 24px;
     font-weight: 900;
 }
 
-.evm-milestone-inner.active {
-    fill: #FF9800;
-}
-
-.evm-milestone-inner.pending {
-    fill: #1D4DFF;
+.evm-milestone-triangle {
+    fill: #FFFFFF;
+    stroke: #FF1E1E;
+    stroke-width: 4;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 2px 4px rgba(15, 23, 42, 0.12));
 }
 
 .evm-milestone-name,
-.evm-milestone-state,
 .evm-milestone-date-text {
-    font-size: 10px;
+    font-size: 14px;
     font-weight: 900;
 }
 
@@ -1402,7 +1807,7 @@
 
 .evm-milestone-name.active,
 .evm-milestone-state.active {
-    fill: #F97316;
+    fill: #FF7A00;
 }
 
 .evm-milestone-name.late,
@@ -1420,7 +1825,7 @@
 }
 
 .evm-milestone-date-bg.active {
-    fill: #F97316;
+    fill: #FF7A00;
 }
 
 .evm-milestone-date-bg.late {
@@ -1428,26 +1833,58 @@
 }
 
 .evm-milestone-date-bg.pending {
-    fill: #1D4DFF;
+    fill: #0B63F6;
 }
 
-.evm-milestone-date-text {
+.evm-milestone-name-date-connector {
+    stroke: #001B8E;
+    stroke-width: 2;
+    stroke-dasharray: 4 4;
+    stroke-linecap: round;
+}
+
+.evm-milestone-name-date-connector.done {
+    stroke: #16A34A;
+}
+
+.evm-milestone-name-date-connector.active {
+    stroke: #FF7A00;
+}
+
+.evm-milestone-name-date-connector.late {
+    stroke: #FF1E1E;
+}
+
+.evm-milestone-name-date-connector.pending {
+    stroke: #0B63F6;
+}
+
+.evm-timeline-svg .evm-milestone-date-text {
     fill: #FFFFFF;
-    font-size: 11px;
+    font-size: 11.5px;
     font-weight: 950;
 }
 
 .evm-milestone-legend {
     flex: 0 0 auto;
-    width: 100%;
-    padding: 10px 12px 2px;
-    border-top: 1px solid #E2E8F4;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    column-gap: 18px;
+    width: calc(100% - 46px);
+    margin: auto auto 16px;
+    padding: 9px 14px;
+    border: 1px solid #DDE3F0;
+    border-radius: 8px;
+    background: #FFFFFF;
+    box-shadow: 0 1px 5px rgba(0, 27, 142, 0.06);
+    box-sizing: border-box;
 }
 
 .evm-milestone-legend-title {
-    margin-bottom: 8px;
+    margin-bottom: 0;
     color: #001B8E;
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 950;
     letter-spacing: 0;
     text-transform: uppercase;
@@ -1456,16 +1893,19 @@
 .evm-milestone-legend-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 0;
+    gap: 12px;
+    width: 100%;
+    margin: 0;
+    align-items: center;
 }
 
 .evm-milestone-legend-item {
-    display: grid;
-    grid-template-columns: 30px minmax(0, 1fr);
-    gap: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     min-width: 0;
-    padding: 0 14px;
-    border-right: 1px solid #DDE4F0;
+    padding: 5px 12px;
+    border-right: 1px solid rgba(221, 228, 240, 0.9);
 }
 
 .evm-milestone-legend-item:first-child {
@@ -1479,11 +1919,14 @@
 
 .evm-milestone-legend-icon {
     position: relative;
+    display: inline-block;
+    flex: 0 0 auto;
     width: 24px;
     height: 24px;
+    margin-right: 9px;
     border-radius: 50%;
-    align-self: start;
     box-sizing: border-box;
+    vertical-align: middle;
 }
 
 .evm-milestone-legend-icon.done {
@@ -1493,17 +1936,17 @@
 .evm-milestone-legend-icon.done::after {
     content: "";
     position: absolute;
-    left: 6px;
-    top: 5px;
+    left: 7px;
+    top: 6px;
     width: 10px;
     height: 6px;
-    border-left: 3px solid #FFFFFF;
-    border-bottom: 3px solid #FFFFFF;
+    border-left: 3.5px solid #FFFFFF;
+    border-bottom: 3.5px solid #FFFFFF;
     transform: rotate(-45deg);
 }
 
 .evm-milestone-legend-icon.active {
-    border: 4px solid #FF9800;
+    border: 4px solid #FF7A00;
     background: #FFFFFF;
 }
 
@@ -1515,19 +1958,19 @@
 .evm-milestone-legend-icon.late::before {
     content: "";
     position: absolute;
-    left: 2px;
-    top: 1px;
-    width: 19px;
-    height: 19px;
-    border-left: 4px solid #FF1E1E;
-    border-bottom: 4px solid #FF1E1E;
+    left: 3px;
+    top: 2px;
+    width: 18px;
+    height: 18px;
+    border-left: 3.5px solid #FF1E1E;
+    border-bottom: 3.5px solid #FF1E1E;
     transform: rotate(135deg) skew(-8deg, -8deg);
 }
 
 .evm-milestone-legend-icon.late::after {
     content: "!";
     position: absolute;
-    left: 9px;
+    left: 10px;
     top: 3px;
     color: #FF1E1E;
     font-size: 15px;
@@ -1535,7 +1978,7 @@
 }
 
 .evm-milestone-legend-icon.pending {
-    border: 4px solid #1D4DFF;
+    border: 4px solid #0B63F6;
     background: #FFFFFF;
 }
 
@@ -1544,16 +1987,19 @@
 }
 
 .evm-milestone-legend-copy strong,
-.evm-milestone-legend-copy span {
+.evm-milestone-legend-copy > span {
     display: block;
-    line-height: 1.2;
+    line-height: 1.25;
 }
 
 .evm-milestone-legend-copy strong {
-    margin-bottom: 6px;
-    font-size: 12px;
-    font-weight: 950;
-    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.2;
     white-space: nowrap;
 }
 
@@ -1562,7 +2008,7 @@
 }
 
 .evm-milestone-legend-copy strong.active {
-    color: #FF9800;
+    color: #FF7A00;
 }
 
 .evm-milestone-legend-copy strong.late {
@@ -1570,13 +2016,14 @@
 }
 
 .evm-milestone-legend-copy strong.pending {
-    color: #1D4DFF;
+    color: #0B63F6;
 }
 
-.evm-milestone-legend-copy span {
+.evm-milestone-legend-copy > span {
     color: #00145C;
-    font-size: 11px;
-    font-weight: 750;
+    padding-left: 38px;
+    font-size: 14px;
+    font-weight: 650;
 }
 
 .evm-empty-svg {

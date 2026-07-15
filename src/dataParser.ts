@@ -310,7 +310,11 @@ function parseDashboardJsonRow(row: powerbi.DataViewTableRow, idIndex: number, j
                 CPI: toNullableNumber(item.CPI),
                 "SPI (w)": toNullableNumber(firstKnownValue(item, "SPI (w)", "SPI (W)", "SPIw", "SPIW")),
                 TCPI: toNullableNumber(item.TCPI),
-                "TSPI (w)": toNullableNumber(firstKnownValue(item, "TSPI (w)", "TSPI (W)", "TSPIw", "TSPIW"))
+                "TSPI (w)": toNullableNumber(firstKnownValue(item, "TSPI (w)", "TSPI (W)", "TSPIw", "TSPIW")),
+                CPIEstado: textValue(firstKnownValue(item, "CPIestado", "CPIEstado", "CPI Estado")),
+                SPIEstado: textValue(firstKnownValue(item, "SPIestado", "SPIEstado", "SPI Estado", "SPI (w) Estado")),
+                TCPIEstado: textValue(firstKnownValue(item, "TCPIestado", "TCPIEstado", "TCPI Estado")),
+                TSPIEstado: textValue(firstKnownValue(item, "TSPIestado", "TSPIEstado", "TSPI Estado", "TSPI (w) Estado"))
             }))
             .sort((a, b) => a.Semana - b.Semana);
 
@@ -368,6 +372,8 @@ function normalizeProjectData(project: ProjectData | null): ProjectData | null {
         Provincia: textValue(project.Provincia),
         Distrito: textValue(project.Distrito),
         UnidadGerencial: textValue(project.UnidadGerencial),
+        EstadoProyecto: textValue(project.EstadoProyecto),
+        MensajeEjecutivo: textValue(project.MensajeEjecutivo),
         FechaEstado: nullableText(project.FechaEstado),
         SemanaActual: textOrNumberValue(project.SemanaActual)
     };
@@ -446,7 +452,11 @@ function buildJsonHeader(project: ProjectData | null): ProjectHeader {
         NombreIntervencion: project?.NombreIntervencion,
         CUI: project?.Cui === null || project?.Cui === undefined ? undefined : String(project.Cui),
         Region: project?.Region,
+        Provincia: project?.Provincia,
+        Distrito: project?.Distrito,
         UnidadGerencial: project?.UnidadGerencial,
+        EstadoProyecto: project?.EstadoProyecto,
+        MensajeEjecutivo: project?.MensajeEjecutivo,
         FechaEstado: project?.FechaEstado,
         SemanaActual: project?.SemanaActual
     };
@@ -479,10 +489,14 @@ function buildJsonCurrentSnapshot(project: ProjectData | null, currentRow: Curve
         VACC: vacC,
         VACT: vacT,
         CPI: currentGaugeRow?.CPI ?? null,
+        CPIEstado: currentGaugeRow?.CPIEstado,
         SPI: currentGaugeRow?.["SPI (w)"] ?? null,
+        SPIEstado: currentGaugeRow?.SPIEstado,
         SPIT: spiT,
         TCPI: currentGaugeRow?.TCPI ?? null,
+        TCPIEstado: currentGaugeRow?.TCPIEstado,
         TSPI: currentGaugeRow?.["TSPI (w)"] ?? null,
+        TSPIEstado: currentGaugeRow?.TSPIEstado,
         TSPIT: tspiT,
         PlazoConsumidoPct: ratio(currentRow?.AT ?? null, currentRow?.SAC ?? null),
         PlazoRestanteSemanas: difference(currentRow?.SAC ?? null, currentRow?.AT ?? null),
@@ -544,6 +558,7 @@ function getCurrentGaugeRow(gauges: GaugeHistoryRow[]): GaugeHistoryRow | null {
 }
 
 function buildJsonGauges(gauges: GaugeHistoryRow[]): GaugeData[] {
+    const current = getCurrentGaugeRow(gauges);
     const history: GaugeHistory = {
         CPI: gauges.map((row) => row.CPI).filter((value): value is number => value !== null),
         SPIW: gauges.map((row) => row["SPI (w)"]).filter((value): value is number => value !== null),
@@ -552,10 +567,10 @@ function buildJsonGauges(gauges: GaugeHistoryRow[]): GaugeData[] {
     };
 
     return [
-        gauge("CPI", lastValue(history.CPI), undefined, calculateGaugeVariation(history.CPI), history.CPI),
-        gauge("SPIW", lastValue(history.SPIW), undefined, calculateGaugeVariation(history.SPIW), history.SPIW),
-        gauge("TCPI", lastValue(history.TCPI), undefined, calculateGaugeVariation(history.TCPI), history.TCPI),
-        gauge("TSPIW", lastValue(history.TSPIW), undefined, calculateGaugeVariation(history.TSPIW), history.TSPIW)
+        gauge("CPI", lastValue(history.CPI), current?.CPIEstado, calculateGaugeVariation(history.CPI), history.CPI),
+        gauge("SPIW", lastValue(history.SPIW), current?.SPIEstado, calculateGaugeVariation(history.SPIW), history.SPIW),
+        gauge("TCPI", lastValue(history.TCPI), current?.TCPIEstado, calculateGaugeVariation(history.TCPI), history.TCPI),
+        gauge("TSPIW", lastValue(history.TSPIW), current?.TSPIEstado, calculateGaugeVariation(history.TSPIW), history.TSPIW)
     ];
 }
 

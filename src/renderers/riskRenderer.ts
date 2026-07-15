@@ -29,7 +29,17 @@ export function renderRisks(risks: RiskItem[]): HTMLElement {
     const table = createElement("table", "evm-risk-table");
     const head = document.createElement("thead");
     const headRow = document.createElement("tr");
-    ["Nivel de Riesgo", "Cantidad", "% del Total", "Impacto en Plazo", "Impacto en Costo"].forEach((label) => headRow.appendChild(createElement("th", undefined, label)));
+    [
+        ["Nivel de", "Riesgo"],
+        ["Cantidad"],
+        ["% del", "Total"],
+        ["Impacto en", "Plazo"],
+        ["Impacto en", "Costo"]
+    ].forEach((lines) => {
+        const header = document.createElement("th");
+        lines.forEach((line) => header.appendChild(createElement("span", undefined, line)));
+        headRow.appendChild(header);
+    });
     head.appendChild(headRow);
     const body = document.createElement("tbody");
     orderedRisks.forEach((risk) => {
@@ -37,7 +47,7 @@ export function renderRisks(risks: RiskItem[]): HTMLElement {
         const riskLevelClass = riskClass(risk.NivelRiesgo);
         const level = createElement("td", `evm-risk-level ${riskLevelClass}`);
         level.appendChild(createElement("span", `evm-risk-dot ${riskLevelClass}`));
-        level.appendChild(document.createTextNode(text(risk.NivelRiesgo)));
+        level.appendChild(document.createTextNode(riskLevelLabel(risk.NivelRiesgo)));
         row.appendChild(level);
         row.appendChild(createElement("td", undefined, integer(risk.CantidadRiesgos)));
         row.appendChild(createElement("td", undefined, percent(risk.PorcentajeRiesgos)));
@@ -60,7 +70,26 @@ export function renderRisks(risks: RiskItem[]): HTMLElement {
 
     card.appendChild(cards);
     card.appendChild(table);
+    card.appendChild(renderRiskLegend());
     return card;
+}
+
+function renderRiskLegend(): HTMLElement {
+    const legend = createElement("div", "evm-risk-legend");
+    legend.appendChild(createElement("div", "evm-risk-legend-title", "Leyenda"));
+    const grid = createElement("div", "evm-risk-legend-grid");
+    [
+        ["low", "Impacto menor"],
+        ["medium", "Impacto moderado"],
+        ["high", "Impacto significativo"]
+    ].forEach(([className, label]) => {
+        const item = createElement("span", `evm-risk-legend-item ${className}`);
+        item.appendChild(createElement("i", `evm-risk-dot ${className}`));
+        item.appendChild(document.createTextNode(label));
+        grid.appendChild(item);
+    });
+    legend.appendChild(grid);
+    return legend;
 }
 
 function orderRisks(risks: RiskItem[]): RiskItem[] {
@@ -100,6 +129,20 @@ function riskSummaryLabel(level?: string): string {
         return "Altos";
     }
     return "Totales";
+}
+
+function riskLevelLabel(level?: string): string {
+    const itemClass = riskClass(level);
+    if (itemClass === "low") {
+        return "Bajo";
+    }
+    if (itemClass === "medium") {
+        return "Medio";
+    }
+    if (itemClass === "high") {
+        return "Alto";
+    }
+    return text(level);
 }
 
 function integer(value: DataValue): string {

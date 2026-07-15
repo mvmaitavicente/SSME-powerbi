@@ -31,17 +31,29 @@ export function renderHeader(header: ProjectHeader): HTMLElement {
     const wrapper = createElement("section", "evm-header evm-card");
 
     const project = createElement("div", "evm-project-title");
-    project.appendChild(createElement("span", undefined, "Proyecto"));
-    project.appendChild(createElement("h1", undefined, text(header.NombreIntervencion, "Proyecto sin nombre")));
+    const title = createElement("h1");
+    title.appendChild(createElement("span", undefined, "Proyecto:"));
+    title.appendChild(document.createTextNode(` ${text(header.NombreIntervencion, "Proyecto sin nombre")}`));
+    project.appendChild(title);
     const meta = createElement("div", "evm-header-meta");
+    appendMeta(meta, "Unidad:", text(header.UnidadGerencial));
     appendMeta(meta, "CUI:", text(header.CUI));
     appendMeta(meta, "Region:", text(header.Region));
-    appendMeta(meta, "Unidad:", text(header.UnidadGerencial));
+    appendMeta(meta, "Provincia:", text(header.Provincia));
+    appendMeta(meta, "Distrito:", text(header.Distrito));
     project.appendChild(meta);
 
-    const state = createElement("div", "evm-project-state");
-    state.appendChild(createElement("span", undefined, "Estado del Proyecto"));
-    state.appendChild(createElement("strong", undefined, text(header.EstadoProyecto, "Sin estado")));
+    const stateClass = projectStateClass(header.EstadoProyecto);
+    const state = createElement("div", `evm-project-state ${stateClass}`);
+    const stateIcon = createElement("div", "evm-project-state-icon");
+    stateIcon.appendChild(createElement("span", undefined, stateClass === "stable" ? "✓" : "!"));
+    const stateCopy = createElement("div", "evm-project-state-copy");
+    stateCopy.appendChild(createElement("span", undefined, "Estado del Proyecto"));
+    stateCopy.appendChild(createElement("strong", undefined, text(header.EstadoProyecto, "Sin estado")));
+    const stateMessage = createElement("small", "evm-project-state-message", text(header.MensajeEjecutivo, ""));
+    state.appendChild(stateIcon);
+    state.appendChild(stateCopy);
+    state.appendChild(stateMessage);
 
     const dates = createElement("div", "evm-project-dates");
     dates.appendChild(createElement("span", undefined, "Fecha de Estado"));
@@ -55,6 +67,22 @@ export function renderHeader(header: ProjectHeader): HTMLElement {
 }
 
 function appendMeta(parent: HTMLElement, label: string, value: string): void {
-    parent.appendChild(createElement("b", undefined, label));
-    parent.appendChild(document.createTextNode(` ${value}`));
+    const item = createElement("span", "evm-header-meta-item");
+    item.appendChild(createElement("b", undefined, label));
+    item.appendChild(document.createTextNode(` ${value}`));
+    parent.appendChild(item);
+}
+
+function projectStateClass(status?: string): string {
+    const value = (status ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (value.includes("estable")) {
+        return "stable";
+    }
+    if (value.includes("riesgo")) {
+        return "risk";
+    }
+    if (value.includes("critico") || value.includes("critic")) {
+        return "critical";
+    }
+    return "neutral";
 }

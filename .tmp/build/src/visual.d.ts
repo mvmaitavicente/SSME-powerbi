@@ -23,6 +23,7 @@ export declare class Visual implements IVisual {
     private renderCarouselDots;
     private updateCarouselPages;
     private updateCarouselDots;
+    private updateCarouselButtons;
     private openGaugeHistoryModal;
     private closeGaugeHistoryModal;
     private renderGaugeHistoryModal;

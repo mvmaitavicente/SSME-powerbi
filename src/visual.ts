@@ -151,7 +151,7 @@ export class Visual implements IVisual {
         carousel.appendChild(viewport);
         carousel.appendChild(previous);
         carousel.appendChild(next);
-        carousel.appendChild(this.renderCarouselDots(pages));
+        this.updateCarouselButtons(carousel);
         return carousel;
     }
 
@@ -197,11 +197,24 @@ export class Visual implements IVisual {
         if (dots instanceof HTMLElement) {
             this.updateCarouselDots(dots);
         }
+        const carousel = pages[0]?.parentElement?.parentElement;
+        if (carousel instanceof HTMLElement) {
+            this.updateCarouselButtons(carousel);
+        }
     }
 
     private updateCarouselDots(dots: HTMLElement): void {
         Array.from(dots.children).forEach((dot, index) => {
             dot.classList.toggle("active", index === this.bodyCarouselIndex);
+        });
+    }
+
+    private updateCarouselButtons(carousel: HTMLElement): void {
+        const tooltip = this.bodyCarouselIndex === 0 ? "Ver Hitos & Riesgos" : "Volver a Desempeno";
+        carousel.querySelectorAll(".evm-carousel-button").forEach((button) => {
+            button.setAttribute("aria-label", tooltip);
+            button.setAttribute("title", tooltip);
+            button.setAttribute("data-tooltip", tooltip);
         });
     }
 

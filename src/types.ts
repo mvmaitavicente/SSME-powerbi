@@ -10,8 +10,11 @@ export interface ProjectHeader {
     NombreIntervencion?: string;
     CUI?: string;
     Region?: string;
+    Provincia?: string;
+    Distrito?: string;
     UnidadGerencial?: string;
     EstadoProyecto?: string;
+    MensajeEjecutivo?: string;
     FechaInicioPlan?: DataValue;
     FechaFinPlan?: DataValue;
     FechaEstado?: DataValue;
@@ -202,6 +205,8 @@ export interface ProjectData extends Record<string, unknown> {
     Provincia: string;
     Distrito: string;
     UnidadGerencial: string;
+    EstadoProyecto?: string;
+    MensajeEjecutivo?: string;
     FechaEstado: string | null;
     SemanaActual: string | number | null;
 }
@@ -229,6 +234,10 @@ export interface GaugeHistoryRow extends Record<string, unknown> {
     "SPI (w)": number | null;
     TCPI: number | null;
     "TSPI (w)": number | null;
+    CPIEstado?: string;
+    SPIEstado?: string;
+    TCPIEstado?: string;
+    TSPIEstado?: string;
 }
 
 export type GaugeMetricKey = "CPI" | "SPI (w)" | "TCPI" | "TSPI (w)";
