@@ -54,7 +54,7 @@ export interface CurveReferences {
     TSPIT?: DataValue;
     FechaEstado?: DataValue;
 }
-export interface CurveData {
+export interface RenderCurveData {
     history: CurveHistoryPoint[];
     current: CurveHistoryPoint;
     references: CurveReferences;
@@ -103,6 +103,7 @@ export interface MilestoneItem {
     FechaHitoPlan?: DataValue;
     FechaHitoReal?: DataValue;
     EstadoHito?: string;
+    SemaforoHito?: string;
 }
 export interface CurrentSnapshot extends ProjectHeader, PerformanceData {
     SemanaProyecto?: DataValue;
@@ -139,7 +140,7 @@ export interface CurrentSnapshot extends ProjectHeader, PerformanceData {
 export interface ParsedProjectData {
     header: ProjectHeader;
     current: CurrentSnapshot;
-    curve: CurveData;
+    curve: RenderCurveData;
     risks: RiskItem[];
     milestones: MilestoneItem[];
 }
@@ -159,4 +160,69 @@ export interface VisualPalette {
     text: string;
     muted: string;
     border: string;
+}
+export interface JsonTablePayload {
+    header: string[];
+    rowCount: number;
+    data: unknown[][];
+}
+export interface DashboardJsonPayload {
+    project: JsonTablePayload;
+    gauges: JsonTablePayload;
+    curve: JsonTablePayload;
+    milestone?: JsonTablePayload;
+    milestones?: JsonTablePayload;
+    risks?: JsonTablePayload;
+}
+export interface ProjectData extends Record<string, unknown> {
+    IdIntervencion: string;
+    NombreIntervencion: string;
+    Cui: string | number | null;
+    Region: string;
+    Provincia: string;
+    Distrito: string;
+    UnidadGerencial: string;
+    FechaEstado: string | null;
+    SemanaActual: string | number | null;
+}
+export interface CurveData extends Record<string, unknown> {
+    Semana: number;
+    BAC: number | null;
+    SAC: number | null;
+    ES: number | null;
+    AT: number | null;
+    PV: number | null;
+    EV: number | null;
+    AC: number | null;
+    "SPI (t)": number | null;
+    "TSPI (t)": number | null;
+    "EAC (c)": number | null;
+    "EAC (t)": number | null;
+    "VAC (c)": number | null;
+    "VAC (t)": number | null;
+}
+export interface GaugeHistoryRow extends Record<string, unknown> {
+    Semana: number;
+    CPI: number | null;
+    "SPI (w)": number | null;
+    TCPI: number | null;
+    "TSPI (w)": number | null;
+}
+export type GaugeMetricKey = "CPI" | "SPI (w)" | "TCPI" | "TSPI (w)";
+export interface GaugeChartPoint {
+    week: number;
+    value: number;
+}
+export interface GaugeChartSeries {
+    key: GaugeMetricKey;
+    label: string;
+    points: GaugeChartPoint[];
+}
+export interface ParsedDashboardData {
+    idIntervencion: string;
+    project: ProjectData | null;
+    gauges: GaugeHistoryRow[];
+    curve: CurveData[];
+    risks: RiskItem[];
+    milestones: MilestoneItem[];
 }

@@ -1,7 +1,7 @@
 "use strict";
 
 import powerbi from "powerbi-visuals-api";
-import { CurrentSnapshot, CurveData, CurveHistoryPoint, CurveReferences, DashboardData, DataValue, FieldValueMap, GaugeData, GaugeHistory, MilestoneItem, PerformanceData, ProjectHeader, RiskItem } from "./types";
+import { CurrentSnapshot, CurveData, CurveHistoryPoint, CurveReferences, DashboardData, DashboardJsonPayload, DataValue, FieldValueMap, GaugeData, GaugeHistory, GaugeHistoryRow, JsonTablePayload, MilestoneItem, ParsedDashboardData, PerformanceData, ProjectData, ProjectHeader, RenderCurveData, RiskItem } from "./types";
 
 type DataViewTable = powerbi.DataViewTable;
 type DataViewMetadataColumn = powerbi.DataViewMetadataColumn;
@@ -129,6 +129,31 @@ const roleFieldMap: { [roleName: string]: string } = {
 };
 
 export function parseDashboardData(dataView?: powerbi.DataView): DashboardData {
+    const jsonDashboard = parseDashboardJsonData(dataView);
+    if (jsonDashboard?.project && jsonDashboard.gauges.length && jsonDashboard.curve.length) {
+        console.debug("Dashboard JSON parseado", {
+            idIntervencion: jsonDashboard.idIntervencion,
+            project: jsonDashboard.project,
+            gaugeRows: jsonDashboard.gauges.length,
+            curveRows: jsonDashboard.curve.length,
+            currentCurveRow: getCurrentCurveRow(jsonDashboard.curve)
+        });
+        console.log(jsonDashboard.project);
+        console.log(jsonDashboard.gauges);
+        console.log(jsonDashboard.curve);
+        console.log("Gauge History CPI", jsonDashboard.gauges.map((row) => row.CPI).filter((value): value is number => value !== null));
+        console.log("Gauge History SPI", jsonDashboard.gauges.map((row) => row["SPI (w)"]).filter((value): value is number => value !== null));
+        console.log("Gauge History TCPI", jsonDashboard.gauges.map((row) => row.TCPI).filter((value): value is number => value !== null));
+        console.log("Gauge History TSPI", jsonDashboard.gauges.map((row) => row["TSPI (w)"]).filter((value): value is number => value !== null));
+        console.log("Current Curve", getCurrentCurveRow(jsonDashboard.curve));
+        return adaptJsonDashboardData(jsonDashboard);
+    }
+
+    // Fallback temporal: eliminar este bloque cuando JSON Dashboard quede validado en Power BI.
+    return parseLegacyDashboardData(dataView);
+}
+
+function parseLegacyDashboardData(dataView?: powerbi.DataView): DashboardData {
     const rows = mapRows(dataView?.table);
     const curveHistory = mergeCurveHistoryRows(
         rows
@@ -137,7 +162,7 @@ export function parseDashboardData(dataView?: powerbi.DataView): DashboardData {
     );
     const curveReferences = buildCurveReferences(rows);
     const currentCurvePoint = selectCurrentCurvePoint(curveHistory, curveReferences.AT);
-    const curve: CurveData = {
+    const curve: RenderCurveData = {
         history: curveHistory,
         current: currentCurvePoint ?? {},
         references: curveReferences
@@ -167,6 +192,441 @@ export function parseDashboardData(dataView?: powerbi.DataView): DashboardData {
         milestones,
         hasData: rows.length > 0
     };
+}
+
+function normalizeJsonHeader(header: string): string {
+    const trimmed = header.trim();
+    const bracketMatch = trimmed.match(/\[([^\]]+)\]\s*$/);
+
+    if (bracketMatch?.[1]) {
+        return bracketMatch[1].trim();
+    }
+
+    return trimmed
+        .replace(/^['"]|['"]$/g, "")
+        .trim();
+}
+
+function jsonTableToObjects<T extends Record<string, unknown>>(table: JsonTablePayload): T[] {
+    if (!table || !Array.isArray(table.header) || !Array.isArray(table.data)) {
+        return [];
+    }
+
+    const keys = table.header.map((header) => normalizeJsonHeader(String(header)));
+
+    return table.data.map((row) => {
+        const result: Record<string, unknown> = {};
+
+        keys.forEach((key, index) => {
+            result[key] = row[index] ?? null;
+        });
+
+        return result as T;
+    });
+}
+
+function getRoleIndex(dataView: powerbi.DataView, roleName: string): number {
+    const columns = dataView.table?.columns ?? [];
+    return columns.findIndex((column) => column.roles?.[roleName] === true);
+}
+
+export function parseDashboardJsonData(dataView?: powerbi.DataView): ParsedDashboardData | null {
+    const table = dataView?.table;
+
+    if (!dataView || !table || table.rows.length === 0) {
+        return null;
+    }
+
+    const idIndex = getRoleIndex(dataView, "idIntervencion");
+    const jsonIndex = getRoleIndex(dataView, "jsonDashboard");
+
+    if (idIndex < 0 || jsonIndex < 0) {
+        return null;
+    }
+
+    if (table.rows.length > 1) {
+        console.warn("Se recibieron varias intervenciones. El visual utilizará la primera fila válida.");
+    }
+
+    for (const row of table.rows) {
+        const parsed = parseDashboardJsonRow(row, idIndex, jsonIndex);
+        if (parsed) {
+            return parsed;
+        }
+    }
+
+    return null;
+}
+
+function parseDashboardJsonRow(row: powerbi.DataViewTableRow, idIndex: number, jsonIndex: number): ParsedDashboardData | null {
+    const idIntervencion = String(row[idIndex] ?? "").trim();
+    const rawJson = row[jsonIndex];
+
+    if (!idIntervencion || typeof rawJson !== "string" || rawJson.trim() === "") {
+        return null;
+    }
+
+    try {
+        const payload = JSON.parse(rawJson) as DashboardJsonPayload;
+
+        if (!payload.project || !payload.gauges || !payload.curve) {
+            console.warn("El JSON Dashboard no contiene project, gauges o curve.");
+            return null;
+        }
+
+        const projectRows = jsonTableToObjects<ProjectData>(payload.project);
+        const gaugeRows = jsonTableToObjects<GaugeHistoryRow>(payload.gauges);
+        const curveRows = jsonTableToObjects<CurveData>(payload.curve);
+        const riskRows = payload.risks ? jsonTableToObjects<Record<string, unknown>>(payload.risks) : [];
+        const milestoneRows = payload.milestone || payload.milestones
+            ? jsonTableToObjects<Record<string, unknown>>((payload.milestone || payload.milestones) as JsonTablePayload)
+            : [];
+
+        if (payload.project.rowCount !== payload.project.data.length) {
+            console.warn("JSON project: rowCount no coincide con data.length.");
+        }
+
+        if (payload.gauges.rowCount !== payload.gauges.data.length) {
+            console.warn("JSON gauges: rowCount no coincide con data.length.");
+        }
+
+        if (payload.curve.rowCount !== payload.curve.data.length) {
+            console.warn("JSON curve: rowCount no coincide con data.length.");
+        }
+
+        if (payload.risks && payload.risks.rowCount !== payload.risks.data.length) {
+            console.warn("JSON risks: rowCount no coincide con data.length.");
+        }
+
+        const milestonePayload = payload.milestone || payload.milestones;
+        if (milestonePayload && milestonePayload.rowCount !== milestonePayload.data.length) {
+            console.warn("JSON milestone: rowCount no coincide con data.length.");
+        }
+
+        const normalizedGauges = gaugeRows
+            .map((item) => ({
+                ...item,
+                Semana: toFiniteNumber(item.Semana, 0),
+                CPI: toNullableNumber(item.CPI),
+                "SPI (w)": toNullableNumber(firstKnownValue(item, "SPI (w)", "SPI (W)", "SPIw", "SPIW")),
+                TCPI: toNullableNumber(item.TCPI),
+                "TSPI (w)": toNullableNumber(firstKnownValue(item, "TSPI (w)", "TSPI (W)", "TSPIw", "TSPIW"))
+            }))
+            .sort((a, b) => a.Semana - b.Semana);
+
+        const normalizedCurve = curveRows
+            .map((item) => ({
+                ...item,
+                Semana: toFiniteNumber(item.Semana, 0),
+                BAC: toNullableNumber(item.BAC),
+                SAC: toNullableNumber(item.SAC),
+                ES: toNullableNumber(item.ES),
+                AT: toNullableNumber(item.AT),
+                PV: toNullableNumber(item.PV),
+                EV: toNullableNumber(item.EV),
+                AC: toNullableNumber(item.AC),
+                "SPI (t)": toNullableNumber(item["SPI (t)"]),
+                "TSPI (t)": toNullableNumber(item["TSPI (t)"]),
+                "EAC (c)": toNullableNumber(item["EAC (c)"]),
+                "EAC (t)": toNullableNumber(item["EAC (t)"]),
+                "VAC (c)": toNullableNumber(item["VAC (c)"]),
+                "VAC (t)": toNullableNumber(item["VAC (t)"])
+            }))
+            .sort((a, b) => a.Semana - b.Semana);
+
+        const normalizedRisks = riskRows.map(normalizeJsonRisk).filter((item) => hasAny(item as FieldValueMap, riskFields));
+        const normalizedMilestones = milestoneRows
+            .map(normalizeJsonMilestone)
+            .filter((item) => hasAny(item as FieldValueMap, milestoneFields))
+            .sort((a, b) => (toNullableNumber(a.OrdenHito) ?? 0) - (toNullableNumber(b.OrdenHito) ?? 0));
+
+        return {
+            idIntervencion,
+            project: normalizeProjectData(projectRows[0] ?? null),
+            gauges: normalizedGauges,
+            curve: normalizedCurve,
+            risks: normalizedRisks,
+            milestones: normalizedMilestones
+        };
+    } catch (error) {
+        console.error("No se pudo interpretar JSON Dashboard.", error);
+        return null;
+    }
+}
+
+function normalizeProjectData(project: ProjectData | null): ProjectData | null {
+    if (!project) {
+        return null;
+    }
+
+    return {
+        ...project,
+        IdIntervencion: textValue(project.IdIntervencion),
+        NombreIntervencion: textValue(project.NombreIntervencion),
+        Cui: textOrNumberValue(project.Cui),
+        Region: textValue(project.Region),
+        Provincia: textValue(project.Provincia),
+        Distrito: textValue(project.Distrito),
+        UnidadGerencial: textValue(project.UnidadGerencial),
+        FechaEstado: nullableText(project.FechaEstado),
+        SemanaActual: textOrNumberValue(project.SemanaActual)
+    };
+}
+
+function adaptJsonDashboardData(parsed: ParsedDashboardData): DashboardData {
+    const currentRow = getCurrentCurveRow(parsed.curve);
+    const currentGaugeRow = getCurrentGaugeRow(parsed.gauges);
+    const project = parsed.project;
+    const current: CurrentSnapshot = buildJsonCurrentSnapshot(project, currentRow, currentGaugeRow);
+    const curve: RenderCurveData = {
+        history: parsed.curve.map((row) => ({
+            SemanaProyecto: row.Semana,
+            PV: row.PV,
+            EV: row.EV,
+            AC: row.AC
+        })),
+        current: currentRow
+            ? {
+                SemanaProyecto: currentRow.Semana,
+                PV: currentRow.PV,
+                EV: currentRow.EV,
+                AC: currentRow.AC
+            }
+            : {},
+        references: {
+            BAC: currentRow?.BAC,
+            SAC: currentRow?.SAC,
+            AT: currentRow?.AT,
+            ES: currentRow?.ES,
+            EACC: currentRow?.["EAC (c)"],
+            EACT: currentRow?.["EAC (t)"],
+            VACC: currentRow?.["VAC (c)"],
+            VACT: currentRow?.["VAC (t)"],
+            SPIT: currentRow?.["SPI (t)"],
+            TSPIT: currentRow?.["TSPI (t)"],
+            FechaEstado: project?.FechaEstado
+        }
+    };
+
+    return {
+        header: buildJsonHeader(project),
+        current,
+        gauges: buildJsonGauges(parsed.gauges),
+        curve,
+        performance: buildJsonPerformance(currentRow),
+        risks: parsed.risks,
+        milestones: parsed.milestones,
+        hasData: parsed.project !== null && parsed.gauges.length > 0 && parsed.curve.length > 0
+    };
+}
+
+function normalizeJsonRisk(row: Record<string, unknown>): RiskItem {
+    return {
+        NivelRiesgo: textValue(firstKnownValue(row, "NivelRiesgo")),
+        CantidadRiesgos: toNullableNumber(firstKnownValue(row, "CantidadRiesgos", "Cantidad")),
+        PorcentajeRiesgos: toNullableNumber(firstKnownValue(row, "PorcentajeRiesgos", "PorcentajeRiesgo", "% Total Riesgo")),
+        ImpactoPlazoSemanas: toNullableNumber(firstKnownValue(row, "ImpactoPlazoSemanas", "ImpactoPlazo", "Impacto en plazo")),
+        ImpactoCosto: toNullableNumber(firstKnownValue(row, "ImpactoCosto", "ImpactoCostoSoles", "Impacto en costo"))
+    };
+}
+
+function normalizeJsonMilestone(row: Record<string, unknown>): MilestoneItem {
+    return {
+        OrdenHito: toNullableNumber(firstKnownValue(row, "OrdenHito", "Orden")),
+        NombreHito: textValue(firstKnownValue(row, "NombreHito")),
+        FechaHitoPlan: textOrNumberValue(firstKnownValue(row, "FechaHitoPlan", "FechaHito")),
+        FechaHitoReal: textOrNumberValue(firstKnownValue(row, "FechaHitoReal")),
+        EstadoHito: textValue(firstKnownValue(row, "EstadoHito", "SemaforoHito")),
+        SemaforoHito: textValue(firstKnownValue(row, "SemaforoHito"))
+    };
+}
+
+function buildJsonHeader(project: ProjectData | null): ProjectHeader {
+    return {
+        NombreIntervencion: project?.NombreIntervencion,
+        CUI: project?.Cui === null || project?.Cui === undefined ? undefined : String(project.Cui),
+        Region: project?.Region,
+        UnidadGerencial: project?.UnidadGerencial,
+        FechaEstado: project?.FechaEstado,
+        SemanaActual: project?.SemanaActual
+    };
+}
+
+function buildJsonCurrentSnapshot(project: ProjectData | null, currentRow: CurveData | null, currentGaugeRow: GaugeHistoryRow | null): CurrentSnapshot {
+    const bac = currentRow?.BAC ?? null;
+    const pv = currentRow?.PV ?? null;
+    const ev = currentRow?.EV ?? null;
+    const ac = currentRow?.AC ?? null;
+    const spiT = currentRow?.["SPI (t)"] ?? null;
+    const tspiT = currentRow?.["TSPI (t)"] ?? null;
+    const eacC = currentRow?.["EAC (c)"] ?? null;
+    const eacT = currentRow?.["EAC (t)"] ?? null;
+    const vacC = currentRow?.["VAC (c)"] ?? null;
+    const vacT = currentRow?.["VAC (t)"] ?? null;
+
+    return {
+        ...buildJsonHeader(project),
+        SemanaProyecto: currentRow?.Semana,
+        PV: pv,
+        EV: ev,
+        AC: ac,
+        BAC: bac,
+        SAC: currentRow?.SAC ?? null,
+        AT: currentRow?.AT ?? null,
+        ES: currentRow?.ES ?? null,
+        EACC: eacC,
+        EACT: eacT,
+        VACC: vacC,
+        VACT: vacT,
+        CPI: currentGaugeRow?.CPI ?? null,
+        SPI: currentGaugeRow?.["SPI (w)"] ?? null,
+        SPIT: spiT,
+        TCPI: currentGaugeRow?.TCPI ?? null,
+        TSPI: currentGaugeRow?.["TSPI (w)"] ?? null,
+        TSPIT: tspiT,
+        PlazoConsumidoPct: ratio(currentRow?.AT ?? null, currentRow?.SAC ?? null),
+        PlazoRestanteSemanas: difference(currentRow?.SAC ?? null, currentRow?.AT ?? null),
+        PlazoProgramadoTotalSemanas: currentRow?.SAC ?? null,
+        PlazoProyectadoSemanas: eacT,
+        RetrasoProyectadoSemanas: vacT,
+        PresupuestoConsumidoPct: ratio(ac, bac),
+        PresupuestoRestante: difference(bac, ac),
+        PresupuestoProgramadoBAC: bac,
+        CostoEstimadoTerminoEAC: eacC,
+        SobreCostoProyectadoVAC: vacC,
+        SobreCostoProyectadoPct: ratio(vacC, bac)
+    };
+}
+
+function buildJsonPerformance(currentRow: CurveData | null): PerformanceData {
+    const bac = currentRow?.BAC ?? null;
+    const ac = currentRow?.AC ?? null;
+    const eacC = currentRow?.["EAC (c)"] ?? null;
+    const eacT = currentRow?.["EAC (t)"] ?? null;
+    const vacC = currentRow?.["VAC (c)"] ?? null;
+    const vacT = currentRow?.["VAC (t)"] ?? null;
+
+    return {
+        PlazoConsumidoPct: ratio(currentRow?.AT ?? null, currentRow?.SAC ?? null),
+        PlazoRestanteSemanas: difference(currentRow?.SAC ?? null, currentRow?.AT ?? null),
+        PlazoProgramadoTotalSemanas: currentRow?.SAC ?? null,
+        PlazoProyectadoSemanas: eacT,
+        RetrasoProyectadoSemanas: vacT,
+        PresupuestoConsumidoPct: ratio(ac, bac),
+        PresupuestoRestante: difference(bac, ac),
+        PresupuestoProgramadoBAC: bac,
+        CostoEstimadoTerminoEAC: eacC,
+        SobreCostoProyectadoVAC: vacC,
+        SobreCostoProyectadoPct: ratio(vacC, bac)
+    };
+}
+
+function getCurrentCurveRow(curve: CurveData[]): CurveData | null {
+    if (curve.length === 0) {
+        return null;
+    }
+
+    const at = curve.map((row) => row.AT).find((value) => value !== null) ?? null;
+
+    if (at !== null) {
+        const currentRow = curve.find((row) => row.Semana === at);
+
+        if (currentRow) {
+            return currentRow;
+        }
+    }
+
+    return curve[curve.length - 1] ?? null;
+}
+
+function getCurrentGaugeRow(gauges: GaugeHistoryRow[]): GaugeHistoryRow | null {
+    return gauges[gauges.length - 1] ?? null;
+}
+
+function buildJsonGauges(gauges: GaugeHistoryRow[]): GaugeData[] {
+    const history: GaugeHistory = {
+        CPI: gauges.map((row) => row.CPI).filter((value): value is number => value !== null),
+        SPIW: gauges.map((row) => row["SPI (w)"]).filter((value): value is number => value !== null),
+        TCPI: gauges.map((row) => row.TCPI).filter((value): value is number => value !== null),
+        TSPIW: gauges.map((row) => row["TSPI (w)"]).filter((value): value is number => value !== null)
+    };
+
+    return [
+        gauge("CPI", lastValue(history.CPI), undefined, calculateGaugeVariation(history.CPI), history.CPI),
+        gauge("SPIW", lastValue(history.SPIW), undefined, calculateGaugeVariation(history.SPIW), history.SPIW),
+        gauge("TCPI", lastValue(history.TCPI), undefined, calculateGaugeVariation(history.TCPI), history.TCPI),
+        gauge("TSPIW", lastValue(history.TSPIW), undefined, calculateGaugeVariation(history.TSPIW), history.TSPIW)
+    ];
+}
+
+function lastValue(values: number[]): number | null {
+    return values[values.length - 1] ?? null;
+}
+
+function calculateGaugeVariation(values: number[]): number | null {
+    if (values.length < 2) {
+        return null;
+    }
+
+    return values[values.length - 1] - values[values.length - 2];
+}
+
+function toNullableNumber(value: unknown): number | null {
+    if (value === null || value === undefined || value === "") {
+        return null;
+    }
+
+    const parsed = Number(value);
+
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toFiniteNumber(value: unknown, fallback: number): number {
+    const parsed = Number(value);
+
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function textValue(value: unknown): string {
+    return value === null || value === undefined ? "" : String(value);
+}
+
+function nullableText(value: unknown): string | null {
+    return value === null || value === undefined || value === "" ? null : String(value);
+}
+
+function textOrNumberValue(value: unknown): string | number | null {
+    if (value === null || value === undefined || value === "") {
+        return null;
+    }
+
+    return typeof value === "number" || typeof value === "string" ? value : String(value);
+}
+
+function firstKnownValue(source: Record<string, unknown>, ...keys: string[]): unknown {
+    for (const key of keys) {
+        if (source[key] !== undefined) {
+            return source[key];
+        }
+    }
+
+    return null;
+}
+
+function ratio(numerator: number | null, denominator: number | null): number | null {
+    if (numerator === null || denominator === null || denominator === 0) {
+        return null;
+    }
+
+    return numerator / denominator;
+}
+
+function difference(left: number | null, right: number | null): number | null {
+    if (left === null || right === null) {
+        return null;
+    }
+
+    return left - right;
 }
 
 function mapRows(table?: DataViewTable): FieldValueMap[] {

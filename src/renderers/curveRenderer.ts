@@ -1,6 +1,6 @@
 "use strict";
 
-import { CurveData, CurveHistoryPoint, CurveReferences, DataValue, VisualPalette } from "../types";
+import { CurveHistoryPoint, CurveReferences, DataValue, RenderCurveData, VisualPalette } from "../types";
 import { createElement, decimal, numberValue, svgElement, text } from "../utils/format";
 
 type SeriesKey = "PV" | "EV" | "AC";
@@ -67,7 +67,7 @@ const series: Array<{ key: SeriesKey; label: string; className: string }> = [
     { key: "AC", label: "AC (Costo Actual)", className: "ac" }
 ];
 
-export function renderCurve(curve: CurveData, palette: VisualPalette): HTMLElement {
+export function renderCurve(curve: RenderCurveData, palette: VisualPalette): HTMLElement {
     const card = createElement("section", "evm-card evm-curve-card");
     const title = createElement("div", "evm-section-title", "Curva S - Desempeno del Proyecto (EVM)");
     const wrap = createElement("div", "evm-curve-svg-wrap");
@@ -125,7 +125,7 @@ function curveLayout(rawWidth: number, rawHeight: number): CurveLayout {
     };
 }
 
-function drawCurve(svg: SVGSVGElement, curve: CurveData, palette: VisualPalette): void {
+function drawCurve(svg: SVGSVGElement, curve: RenderCurveData, palette: VisualPalette): void {
     const points = curve.history;
     const references = curve.references;
     const currentPoint = curve.current;
@@ -805,7 +805,7 @@ function addTextBackground(svg: SVGSVGElement, textElement: SVGTextElement, clas
     svg.insertBefore(background, textElement);
 }
 
-function renderCurveSummary(curve: CurveData): HTMLElement {
+function renderCurveSummary(curve: RenderCurveData): HTMLElement {
     const row = createElement("div", "evm-summary-grid");
     const currentPoint = curve.current;
     const references = curve.references;

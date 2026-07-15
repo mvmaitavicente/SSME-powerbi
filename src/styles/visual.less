@@ -166,6 +166,7 @@
 }
 
 .evm-gauge-card {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -174,6 +175,197 @@
     overflow: hidden;
     height: 100%;
     border-radius: 14px;
+}
+
+.gauge-history-card {
+    position: absolute;
+    left: 10px;
+    right: 14px;
+    bottom: 42px;
+    display: grid;
+    grid-template-columns: 176px 110px;
+    justify-content: center;
+    align-items: center;
+    gap: 0;
+    min-height: 54px;
+    padding: 1px 0 0;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));
+    box-shadow: none;
+    box-sizing: border-box;
+    cursor: pointer;
+    z-index: 2;
+    transition:
+        transform 180ms ease,
+        box-shadow 180ms ease,
+        border-color 180ms ease,
+        background-color 180ms ease;
+}
+
+.gauge-history-card:hover,
+.gauge-history-card:focus-visible {
+    transform: translateY(-2px);
+    border-color: rgba(219, 228, 240, 0.9);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 251, 255, 0.94));
+    box-shadow:
+        0 8px 18px rgba(15, 23, 42, 0.12),
+        0 0 0 2px color-mix(in srgb, var(--gauge-color, #1D4DFF) 16%, transparent);
+    outline: none;
+}
+
+.gauge-history-card-action {
+    position: absolute;
+    right: 8px;
+    top: -11px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    border-radius: 999px;
+    background: var(--gauge-color, #1D4DFF);
+    color: #FFFFFF;
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 1;
+    opacity: 0;
+    transform: translateY(3px);
+    pointer-events: none;
+    box-shadow: 0 5px 12px rgba(15, 23, 42, 0.18);
+    transition:
+        opacity 160ms ease,
+        transform 160ms ease;
+}
+
+.gauge-history-card-action::before {
+    content: "↗";
+    color: #FFFFFF;
+    font-size: 9px;
+}
+
+.gauge-history-card:hover .gauge-history-card-action,
+.gauge-history-card:focus-visible .gauge-history-card-action {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.gauge-history-sparkline {
+    justify-self: start;
+    width: 188px;
+    max-width: 100%;
+    min-width: 0;
+    height: 50px;
+    transform: translateX(-12px);
+}
+
+.gauge-history-sparkline svg {
+    width: 100%;
+    height: 50px;
+    display: block;
+    overflow: visible;
+}
+
+.gauge-history-spark-area {
+    fill: var(--gauge-color, #FF1E1E);
+    fill-opacity: 0.04;
+}
+
+.gauge-history-spark-line {
+    fill: none;
+    stroke: var(--gauge-color, #FF1E1E);
+    stroke-width: 4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 1;
+    transition:
+        opacity 160ms ease,
+        stroke-width 160ms ease;
+}
+
+.gauge-history-spark-point {
+    fill: var(--gauge-color, #FF1E1E);
+    stroke: var(--gauge-color, #FF1E1E);
+    stroke-width: 0;
+    vector-effect: non-scaling-stroke;
+    transition:
+        r 160ms ease,
+        stroke-width 160ms ease;
+}
+
+.gauge-history-last-point {
+    stroke-width: 0;
+}
+
+.gauge-history-card:hover .gauge-history-spark-line,
+.gauge-history-card:focus-visible .gauge-history-spark-line {
+    stroke-width: 4;
+    opacity: 1;
+}
+
+.gauge-history-card:hover .gauge-history-spark-point,
+.gauge-history-card:focus-visible .gauge-history-spark-point {
+    stroke-width: 0;
+}
+
+.gauge-history-card:hover .gauge-history-last-point,
+.gauge-history-card:focus-visible .gauge-history-last-point {
+    r: 6.6px;
+}
+
+.gauge-history-variation {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    justify-self: end;
+    width: 110px;
+    padding: 0 0 1px;
+    box-sizing: border-box;
+    transform: translateX(80px);
+}
+
+.gauge-history-variation-value {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    color: var(--gauge-color, #FF1E1E);
+    font-size: 23px;
+    font-weight: 900;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.gauge-history-variation-value i {
+    font-style: normal;
+    font-size: 23px;
+}
+
+.gauge-history-variation-label {
+    margin-top: 3px;
+    padding-right: 0;
+    color: #001B8E;
+    font-size: 15px;
+    font-weight: 900;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.gauge-history-card--disabled {
+    display: grid;
+    place-items: center;
+    cursor: default;
+    color: #667085;
+    font-size: 11px;
+    font-weight: 800;
+    pointer-events: none;
+}
+
+.gauge-history-card--disabled .gauge-history-card-action {
+    display: none;
 }
 
 .evm-section-title {
@@ -309,6 +501,115 @@
     overflow: hidden;
 }
 
+.evm-body-carousel {
+    position: relative;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+}
+
+.evm-body-carousel-viewport {
+    position: relative;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+}
+
+.evm-body-carousel-page {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 70fr) minmax(360px, 30fr);
+    gap: 10px;
+    align-items: stretch;
+    min-height: 0;
+    height: 100%;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateX(18px);
+    pointer-events: none;
+    transition:
+        opacity 180ms ease,
+        transform 220ms ease,
+        visibility 180ms ease;
+}
+
+.evm-body-carousel-page.active {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(0);
+    pointer-events: auto;
+}
+
+.evm-carousel-button {
+    position: absolute;
+    top: 50%;
+    z-index: 6;
+    width: 34px;
+    height: 52px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(203, 213, 225, 0.95);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.94);
+    color: #001B8E;
+    cursor: pointer;
+    font-size: 34px;
+    font-weight: 900;
+    line-height: 1;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.16);
+    transform: translateY(-50%);
+    transition:
+        background-color 160ms ease,
+        transform 160ms ease,
+        box-shadow 160ms ease;
+}
+
+.evm-carousel-button:hover,
+.evm-carousel-button:focus-visible {
+    background: #FFFFFF;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.22);
+    outline: none;
+}
+
+.evm-carousel-button--prev {
+    left: 8px;
+}
+
+.evm-carousel-button--next {
+    right: 8px;
+}
+
+.evm-carousel-dots {
+    position: absolute;
+    left: 50%;
+    bottom: 8px;
+    z-index: 7;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 8px;
+    border: 1px solid rgba(203, 213, 225, 0.8);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.86);
+    transform: translateX(-50%);
+}
+
+.evm-carousel-dot {
+    width: 8px;
+    height: 8px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: #CBD5E1;
+    cursor: pointer;
+}
+
+.evm-carousel-dot.active {
+    width: 22px;
+    background: #001B8E;
+}
+
 .evm-left-column,
 .evm-right-column {
     display: grid;
@@ -359,6 +660,8 @@
 }
 
 .evm-milestone-card {
+    display: flex;
+    flex-direction: column;
     min-height: 200px;
     overflow: visible;
 }
@@ -499,6 +802,11 @@
 .milestone-svg-wrap {
     width: 100%;
     overflow: visible;
+}
+
+.milestone-svg-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 .evm-curve-svg-wrap {
@@ -718,10 +1026,28 @@
 
 .evm-risk-card {
     display: none;
-    grid-template-rows: auto auto 1fr;
-    gap: 0;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    gap: 12px;
     height: 100%;
     min-height: 0;
+    overflow: hidden;
+    padding: 16px 18px 18px;
+}
+
+.evm-body-carousel-page .evm-risk-card {
+    display: grid;
+}
+
+.evm-body-carousel-page--risk .evm-left-column {
+    grid-template-rows: minmax(0, 1fr);
+}
+
+.evm-body-carousel-page--risk {
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+}
+
+.evm-body-carousel-page--risk .evm-milestone-card {
+    height: 100%;
     overflow: hidden;
 }
 
@@ -833,44 +1159,46 @@
 
 .evm-risk-summary {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 10px;
-    margin: 12px 0 14px;
+    margin: 2px 0 6px;
 }
 
 .evm-risk-mini {
-    min-height: 76px;
-    padding: 15px 10px;
-    border-radius: 6px;
+    min-height: 72px;
+    display: grid;
+    align-content: center;
+    padding: 10px 8px;
+    border-radius: 8px;
     text-align: center;
     background: #EEF2FF;
 }
 
 .evm-risk-mini strong {
     display: block;
-    font-size: 38px;
+    font-size: 31px;
     line-height: 1.05;
 }
 
 .evm-risk-mini span {
     color: #001B8E;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 800;
     text-transform: uppercase;
 }
 
 .evm-risk-mini.low {
-    background: #DEF7E8;
+    background: #E7F7EC;
     color: #0F7A34;
 }
 
 .evm-risk-mini.medium {
-    background: #FFF0D6;
+    background: #FFF4DF;
     color: #B86500;
 }
 
 .evm-risk-mini.high {
-    background: #FFE1E1;
+    background: #FDE7EA;
     color: #D71920;
 }
 
@@ -881,34 +1209,78 @@
 
 .evm-risk-table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     font-family: "Segoe UI", Arial, sans-serif;
-    font-size: 17px;
+    font-size: 15px;
     align-self: stretch;
+    border: 1.5px solid #C7D1E4;
+    border-radius: 12px;
+    overflow: hidden;
 }
 
 .evm-risk-table th,
 .evm-risk-table td {
-    padding: 17px 12px;
-    border-bottom: 1px solid #E8EDF6;
+    padding: 15px 12px;
+    border-right: 1.5px solid #D5DDED;
+    border-bottom: 1.5px solid #D5DDED;
+    text-align: center;
+    color: #00145C;
+    font-weight: 800;
+}
+
+.evm-risk-table th:first-child,
+.evm-risk-table td:first-child {
     text-align: left;
 }
 
 .evm-risk-table th {
     color: #001B8E;
-    font-size: 15px;
-    font-weight: 800;
+    font-size: 14px;
+    font-weight: 900;
     line-height: 1.2;
-    text-transform: uppercase;
+}
+
+.evm-risk-table tr:last-child td {
+    border-bottom: 0;
+}
+
+.evm-risk-table th:last-child,
+.evm-risk-table td:last-child {
+    border-right: 0;
+}
+
+.evm-risk-total-row td {
+    background: #F1F5FF;
+    color: #001B8E;
+    font-weight: 950;
+}
+
+.evm-risk-level {
+    font-weight: 950;
+}
+
+.evm-risk-level.low {
+    color: #16A34A;
+}
+
+.evm-risk-level.medium {
+    color: #FF9800;
+}
+
+.evm-risk-level.high {
+    color: #FF1E1E;
 }
 
 .evm-risk-dot {
     display: inline-block;
-    width: 9px;
-    height: 9px;
-    margin-right: 6px;
+    width: 15px;
+    height: 15px;
+    margin-right: 9px;
     border-radius: 50%;
     background: #001B8E;
+    vertical-align: -3px;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.18);
 }
 
 .evm-risk-dot.low {
@@ -925,15 +1297,18 @@
 
 .evm-timeline-svg {
     width: 100%;
-    min-height: 190px;
-    height: auto;
+    height: 100%;
+    min-height: 260px;
     display: block;
     overflow: visible;
 }
 
 .evm-timeline-base {
+    fill: none;
     stroke: #001B8E;
     stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 .evm-timeline-arrow {
@@ -1058,7 +1433,150 @@
 
 .evm-milestone-date-text {
     fill: #FFFFFF;
-    font-size: 9px;
+    font-size: 11px;
+    font-weight: 950;
+}
+
+.evm-milestone-legend {
+    flex: 0 0 auto;
+    width: 100%;
+    padding: 10px 12px 2px;
+    border-top: 1px solid #E2E8F4;
+}
+
+.evm-milestone-legend-title {
+    margin-bottom: 8px;
+    color: #001B8E;
+    font-size: 14px;
+    font-weight: 950;
+    letter-spacing: 0;
+    text-transform: uppercase;
+}
+
+.evm-milestone-legend-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0;
+}
+
+.evm-milestone-legend-item {
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr);
+    gap: 8px;
+    min-width: 0;
+    padding: 0 14px;
+    border-right: 1px solid #DDE4F0;
+}
+
+.evm-milestone-legend-item:first-child {
+    padding-left: 0;
+}
+
+.evm-milestone-legend-item:last-child {
+    border-right: 0;
+    padding-right: 0;
+}
+
+.evm-milestone-legend-icon {
+    position: relative;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    align-self: start;
+    box-sizing: border-box;
+}
+
+.evm-milestone-legend-icon.done {
+    background: #16A34A;
+}
+
+.evm-milestone-legend-icon.done::after {
+    content: "";
+    position: absolute;
+    left: 6px;
+    top: 5px;
+    width: 10px;
+    height: 6px;
+    border-left: 3px solid #FFFFFF;
+    border-bottom: 3px solid #FFFFFF;
+    transform: rotate(-45deg);
+}
+
+.evm-milestone-legend-icon.active {
+    border: 4px solid #FF9800;
+    background: #FFFFFF;
+}
+
+.evm-milestone-legend-icon.late {
+    border-radius: 0;
+    background: transparent;
+}
+
+.evm-milestone-legend-icon.late::before {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: 1px;
+    width: 19px;
+    height: 19px;
+    border-left: 4px solid #FF1E1E;
+    border-bottom: 4px solid #FF1E1E;
+    transform: rotate(135deg) skew(-8deg, -8deg);
+}
+
+.evm-milestone-legend-icon.late::after {
+    content: "!";
+    position: absolute;
+    left: 9px;
+    top: 3px;
+    color: #FF1E1E;
+    font-size: 15px;
+    font-weight: 950;
+}
+
+.evm-milestone-legend-icon.pending {
+    border: 4px solid #1D4DFF;
+    background: #FFFFFF;
+}
+
+.evm-milestone-legend-copy {
+    min-width: 0;
+}
+
+.evm-milestone-legend-copy strong,
+.evm-milestone-legend-copy span {
+    display: block;
+    line-height: 1.2;
+}
+
+.evm-milestone-legend-copy strong {
+    margin-bottom: 6px;
+    font-size: 12px;
+    font-weight: 950;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.evm-milestone-legend-copy strong.done {
+    color: #16A34A;
+}
+
+.evm-milestone-legend-copy strong.active {
+    color: #FF9800;
+}
+
+.evm-milestone-legend-copy strong.late {
+    color: #FF1E1E;
+}
+
+.evm-milestone-legend-copy strong.pending {
+    color: #1D4DFF;
+}
+
+.evm-milestone-legend-copy span {
+    color: #00145C;
+    font-size: 11px;
+    font-weight: 750;
 }
 
 .evm-empty-svg {
@@ -1086,6 +1604,531 @@
     font-size: 12px;
 }
 
+.gauge-history-modal-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+    background: rgba(15, 23, 42, 0.58);
+    backdrop-filter: blur(5px);
+    box-sizing: border-box;
+    animation: gauge-modal-overlay-enter 180ms ease both;
+}
+
+.gauge-history-modal {
+    width: min(1480px, 98%);
+    height: min(900px, 94%);
+    min-width: 720px;
+    min-height: 500px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #FFFFFF;
+    border: 1px solid rgba(203, 213, 225, 0.92);
+    border-radius: 16px;
+    box-shadow:
+        0 32px 80px rgba(15, 23, 42, 0.28),
+        0 8px 24px rgba(15, 23, 42, 0.12);
+    animation: gauge-modal-enter 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.gauge-history-modal-header {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    border-bottom: 1px solid #E5EAF1;
+    background: linear-gradient(180deg, #FFFFFF, #FBFDFF);
+}
+
+.gauge-history-modal-icon {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    background: #EEF4FF;
+    color: #001B8E;
+    font-size: 20px;
+    font-weight: 900;
+}
+
+.gauge-history-modal-heading {
+    min-width: 0;
+}
+
+.gauge-history-modal-title {
+    margin: 0;
+    color: #0F2A6B;
+    font-size: 23px;
+    font-weight: 900;
+    line-height: 1.15;
+}
+
+.gauge-history-modal-subtitle {
+    margin: 5px 0 0;
+    color: #64748B;
+    font-size: 15px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gauge-history-modal-close {
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #DBE4F0;
+    border-radius: 9px;
+    background: #FFFFFF;
+    color: #334155;
+    cursor: pointer;
+    font-size: 32px;
+    font-weight: 800;
+    line-height: 1;
+    transition:
+        background-color 160ms ease,
+        border-color 160ms ease,
+        transform 160ms ease;
+}
+
+.gauge-history-modal-close:hover {
+    background: #F8FAFC;
+    border-color: #CBD5E1;
+    transform: scale(1.04);
+}
+
+.gauge-history-modal-body {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding: 8px 14px 12px;
+    overflow: hidden;
+}
+
+.gauge-history-chart-card {
+    min-height: 0;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 4px;
+    padding: 0 8px 0 0;
+    border: 0;
+    background: #FFFFFF;
+    box-shadow: none;
+}
+
+.gauge-history-bottom-legend {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 34px;
+    min-height: 32px;
+    padding: 0 0 2px;
+}
+
+.gauge-history-bottom-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    color: #001B8E;
+    font-size: 17px;
+    font-weight: 900;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.gauge-history-bottom-legend-item::before {
+    content: "";
+    width: 30px;
+    height: 5px;
+    border-radius: 999px;
+    background: var(--series-color);
+}
+
+.gauge-history-modal-chart {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+}
+
+.gauge-history-chart-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.gauge-history-axis,
+.gauge-history-grid {
+    stroke: #AAB5CC;
+    stroke-width: 1.8;
+}
+
+.gauge-history-grid {
+    stroke: #E2E8F0;
+    stroke-opacity: 0.85;
+}
+
+.gauge-history-axis-label,
+.gauge-history-axis-title {
+    fill: #64748B;
+    font-size: 18px;
+    font-weight: 800;
+}
+
+.gauge-history-axis-title {
+    fill: #001B8E;
+    font-size: 20px;
+    font-weight: 900;
+}
+
+.gauge-history-reference-line {
+    stroke: #667085;
+    stroke-width: 2.4;
+    stroke-dasharray: 8 7;
+}
+
+.gauge-history-reference-chip rect {
+    fill: #FFFFFF;
+    stroke: #DBE4F0;
+    stroke-width: 1.6;
+}
+
+.gauge-history-reference-chip text {
+    fill: #475569;
+    font-size: 15px;
+    font-weight: 900;
+}
+
+.gauge-history-line {
+    fill: none;
+    stroke-width: 4.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 1;
+    transition:
+        opacity 180ms ease,
+        stroke-width 160ms ease;
+}
+
+.gauge-history-line.selected {
+    stroke-width: 5.4;
+}
+
+.gauge-history-line.dimmed,
+.gauge-history-point.dimmed {
+    opacity: 0.55;
+}
+
+.gauge-history-line.hovered {
+    opacity: 1;
+    stroke-width: 6.2;
+}
+
+.gauge-history-point {
+    stroke: #FFFFFF;
+    stroke-width: 2.8;
+    transition:
+        opacity 180ms ease,
+        r 160ms ease;
+}
+
+.gauge-history-point.hovered {
+    r: 9.5px;
+    opacity: 1;
+}
+
+.gauge-history-hover-line {
+    stroke: #001B8E;
+    stroke-width: 2.2;
+    stroke-dasharray: 7 6;
+    opacity: 0.68;
+    pointer-events: none;
+}
+
+.gauge-history-hover-hitbox {
+    fill: transparent;
+    cursor: crosshair;
+    pointer-events: all;
+}
+
+.gauge-history-legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    margin: 0;
+}
+
+.gauge-history-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 10px;
+    border: 1px solid #DBE4F0;
+    border-radius: 999px;
+    background: #FFFFFF;
+    color: #334155;
+    font-size: 10px;
+    font-weight: 800;
+    cursor: pointer;
+    transition:
+        transform 150ms ease,
+        box-shadow 150ms ease,
+        opacity 150ms ease;
+}
+
+.gauge-history-legend-item::before {
+    content: "";
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+    background: var(--series-color);
+}
+
+.gauge-history-legend-item:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08);
+}
+
+.gauge-history-legend-item--inactive {
+    opacity: 0.42;
+}
+
+.gauge-history-side-panel {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 14px;
+    align-self: stretch;
+    min-height: 0;
+    padding: 16px 16px;
+    border: 1px solid #DBE4F0;
+    border-radius: 12px;
+    background: #EEF4FF;
+}
+
+.gauge-history-info-card,
+.gauge-history-update-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+}
+
+.gauge-history-info-card {
+    align-items: flex-start;
+    background: transparent;
+}
+
+.gauge-history-update-card {
+    background: transparent;
+    white-space: nowrap;
+}
+
+.gauge-history-update-card--compact {
+    justify-self: end;
+    align-self: end;
+    padding: 0 4px 0 0;
+}
+
+.gauge-history-info-card > span,
+.gauge-history-update-card > span {
+    flex: 0 0 auto;
+    width: 26px;
+    height: 26px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: #FFFFFF;
+    color: #001B8E;
+    font-size: 14px;
+    font-weight: 900;
+}
+
+.gauge-history-info-card p {
+    margin: 0;
+    color: #00145C;
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.32;
+}
+
+.gauge-history-update-card strong {
+    color: #001B8E;
+    font-size: 14px;
+}
+
+.gauge-history-definition-list {
+    display: grid;
+    gap: 16px;
+    align-content: start;
+    min-height: 0;
+}
+
+.gauge-history-definition-item {
+    display: grid;
+    grid-template-columns: 58px minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+}
+
+.gauge-history-definition-item::before {
+    content: "";
+    grid-column: 1;
+    width: 36px;
+    height: 5px;
+    margin-top: 10px;
+    border-radius: 999px;
+    background: var(--series-color);
+}
+
+.gauge-history-definition-item strong {
+    grid-column: 1;
+    grid-row: 1;
+    margin-left: 45px;
+    color: var(--series-color);
+    font-size: 15px;
+    font-weight: 900;
+}
+
+.gauge-history-definition-item p {
+    grid-column: 2;
+    grid-row: 1;
+    margin: 0;
+    color: #0F2A6B;
+    font-size: 13px;
+    font-weight: 650;
+    line-height: 1.28;
+}
+
+.gauge-history-tooltip {
+    position: absolute;
+    z-index: 2;
+    min-width: 390px;
+    display: grid;
+    gap: 10px;
+    padding: 18px 20px;
+    border: 1px solid rgba(203, 213, 225, 0.95);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.98);
+    color: #0F172A;
+    box-shadow:
+        0 18px 42px rgba(15, 23, 42, 0.22),
+        0 3px 10px rgba(15, 23, 42, 0.08);
+    font-size: 21px;
+    font-weight: 750;
+    line-height: 1.18;
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, calc(-100% - 12px));
+    transition: opacity 120ms ease;
+}
+
+.gauge-history-tooltip.visible {
+    opacity: 1;
+}
+
+.gauge-history-tooltip .title {
+    margin-bottom: 4px;
+    padding-bottom: 9px;
+    border-bottom: 1px solid #E2E8F0;
+    color: #001B8E;
+    font-size: 24px;
+    font-weight: 900;
+}
+
+.gauge-history-tooltip .metric-row {
+    display: grid;
+    grid-template-columns: 70px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    min-height: 42px;
+}
+
+.gauge-history-tooltip .metric-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #334155;
+    font-size: 20px;
+    font-weight: 900;
+}
+
+.gauge-history-tooltip .metric-name::before {
+    content: "";
+    width: 13px;
+    height: 13px;
+    border-radius: 999px;
+    background: var(--series-color);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--series-color) 16%, transparent);
+}
+
+.gauge-history-tooltip .metric-value {
+    color: #0F172A;
+    font-size: 24px;
+    font-weight: 950;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.gauge-history-tooltip .metric-delta {
+    min-width: 100px;
+    padding: 7px 11px;
+    border-radius: 999px;
+    font-size: 20px;
+    font-weight: 950;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.gauge-history-tooltip .metric-delta.positive {
+    background: #DCFCE7;
+    color: #15803D;
+}
+
+.gauge-history-tooltip .metric-delta.negative {
+    background: #FEE2E2;
+    color: #B91C1C;
+}
+
+.gauge-history-tooltip .metric-delta.neutral {
+    background: #E2E8F0;
+    color: #475569;
+}
+
+@keyframes gauge-modal-overlay-enter {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes gauge-modal-enter {
+    from {
+        opacity: 0;
+        transform: translateY(18px) scale(0.97);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
 @media (max-width: 980px) {
     .evm-dashboard {
         grid-template-columns: 1fr;
@@ -1097,5 +2140,44 @@
 
     .evm-main {
         min-width: 700px;
+    }
+
+    .gauge-history-modal {
+        width: calc(100% - 24px);
+        height: calc(100% - 24px);
+        min-width: 0;
+        min-height: 0;
+    }
+
+    .gauge-history-modal-body {
+        grid-template-columns: 1fr;
+        grid-template-rows: minmax(0, 1fr) auto;
+    }
+
+    .gauge-history-side-panel {
+        grid-template-rows: auto auto auto;
+    }
+}
+
+@media (max-height: 620px) {
+    .gauge-history-modal-overlay {
+        padding: 14px;
+    }
+
+    .gauge-history-modal-header {
+        padding: 12px 16px;
+    }
+
+    .gauge-history-modal-body {
+        padding: 12px 16px;
+    }
+
+    .gauge-history-modal-chart {
+        min-height: 260px;
+    }
+
+    .gauge-history-info-card p,
+    .gauge-history-update-card strong {
+        font-size: 10px;
     }
 }

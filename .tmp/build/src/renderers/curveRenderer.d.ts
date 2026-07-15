@@ -1,2 +1,2 @@
-import { CurveData, VisualPalette } from "../types";
-export declare function renderCurve(curve: CurveData, palette: VisualPalette): HTMLElement;
+import { RenderCurveData, VisualPalette } from "../types";
+export declare function renderCurve(curve: RenderCurveData, palette: VisualPalette): HTMLElement;

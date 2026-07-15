@@ -1,3 +1,4 @@
 import powerbi from "powerbi-visuals-api";
-import { DashboardData } from "./types";
+import { DashboardData, ParsedDashboardData } from "./types";
 export declare function parseDashboardData(dataView?: powerbi.DataView): DashboardData;
+export declare function parseDashboardJsonData(dataView?: powerbi.DataView): ParsedDashboardData | null;

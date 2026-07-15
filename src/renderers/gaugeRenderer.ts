@@ -1,6 +1,6 @@
 "use strict";
 
-import { DataValue, GaugeData, VisualPalette } from "../types";
+import { DataValue, GaugeData, GaugeMetricKey, VisualPalette } from "../types";
 import { createElement, decimal, numberValue, signedDecimal, svgElement, text } from "../utils/format";
 
 interface GaugeLayout {
@@ -15,17 +15,15 @@ interface GaugeLayout {
     valueY: number;
     statusY: number;
     badgeH: number;
-    sparkY: number;
-    sparkH: number;
 }
 
-export function renderGaugeGrid(gauges: GaugeData[], palette: VisualPalette): HTMLElement {
+export function renderGaugeGrid(gauges: GaugeData[], palette: VisualPalette, onHistoryOpen?: (key: GaugeMetricKey) => void): HTMLElement {
     const grid = createElement("section", "evm-gauge-grid");
-    gauges.forEach((metric) => grid.appendChild(renderGauge(metric, palette)));
+    gauges.forEach((metric) => grid.appendChild(renderGauge(metric, palette, onHistoryOpen)));
     return grid;
 }
 
-export function renderGauge(data: GaugeData, palette: VisualPalette): HTMLElement {
+export function renderGauge(data: GaugeData, palette: VisualPalette, onHistoryOpen?: (key: GaugeMetricKey) => void): HTMLElement {
     const card = createElement("article", "evm-card evm-gauge-card");
     card.title = `${data.title}: ${text(data.value)} | Estado: ${text(data.status)}`;
 
@@ -34,6 +32,7 @@ export function renderGauge(data: GaugeData, palette: VisualPalette): HTMLElemen
     svg.setAttribute("aria-label", `${data.title} ${displayDecimal(data.value)}`);
     svg.classList.add("evm-gauge-svg");
     card.appendChild(svg);
+    card.appendChild(renderHistoryCard(data, onHistoryOpen));
 
     const render = (): void => {
         const svgRect = svg.getBoundingClientRect();
@@ -58,9 +57,119 @@ export function renderGauge(data: GaugeData, palette: VisualPalette): HTMLElemen
     return card;
 }
 
+function renderHistoryCard(data: GaugeData, onHistoryOpen?: (key: GaugeMetricKey) => void): HTMLElement {
+    const historyCard = createElement("div", "gauge-history-card");
+    const metricKey = gaugeMetricKey(data.key);
+    const isDisabled = data.sparkline.length === 0 || !onHistoryOpen;
+
+    if (isDisabled) {
+        historyCard.classList.add("gauge-history-card--disabled");
+        historyCard.setAttribute("aria-label", `Histórico de ${data.title} sin datos`);
+        historyCard.textContent = "Sin datos";
+        return historyCard;
+    }
+
+    historyCard.appendChild(renderHistorySparkline(data));
+    historyCard.appendChild(renderHistoryVariation(data));
+    historyCard.appendChild(createElement("span", "gauge-history-card-action", "Ver histórico"));
+    historyCard.style.setProperty("--gauge-color", gaugeColor(metricKey));
+
+    historyCard.setAttribute("role", "button");
+    historyCard.setAttribute("tabindex", "0");
+    historyCard.setAttribute("aria-label", `Ver histórico de ${data.title}`);
+
+    historyCard.addEventListener("click", () => {
+        onHistoryOpen(metricKey);
+    });
+
+    historyCard.addEventListener("keydown", (event: KeyboardEvent) => {
+        if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onHistoryOpen(metricKey);
+        }
+    });
+
+    return historyCard;
+}
+
+function renderHistorySparkline(data: GaugeData): HTMLElement {
+    const wrapper = createElement("div", "gauge-history-sparkline");
+    const svg = svgElement("svg");
+    svg.setAttribute("viewBox", "0 0 260 50");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+
+    const points = data.sparkline;
+    const min = Math.min(...points);
+    const max = Math.max(...points);
+    const range = max - min;
+    const coordinates = points.map((value, index) => {
+        const x = points.length > 1 ? 2 + (index / (points.length - 1)) * 256 : 258;
+        const y = range === 0 ? 25 : 46 - ((value - min) / range) * 42;
+        return { x, y };
+    });
+    const area = svgElement("path");
+    const line = svgElement("path");
+    const commands = coordinates.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+    const first = coordinates[0];
+    const last = coordinates[coordinates.length - 1];
+    area.setAttribute("d", `${commands} L ${last.x} 49 L ${first.x} 49 Z`);
+    area.setAttribute("class", "gauge-history-spark-area");
+    line.setAttribute("d", commands);
+    line.setAttribute("class", "gauge-history-spark-line");
+    svg.appendChild(area);
+    svg.appendChild(line);
+
+    coordinates.forEach((point, index) => {
+        const dot = svgElement("circle");
+        const isLast = index === coordinates.length - 1;
+        dot.setAttribute("cx", String(point.x));
+        dot.setAttribute("cy", String(point.y));
+        dot.setAttribute("r", isLast ? "6.2" : "5.6");
+        dot.setAttribute("class", isLast ? "gauge-history-spark-point gauge-history-last-point" : "gauge-history-spark-point");
+        svg.appendChild(dot);
+    });
+
+    wrapper.appendChild(svg);
+    return wrapper;
+}
+
+function renderHistoryVariation(data: GaugeData): HTMLElement {
+    const wrapper = createElement("div", "gauge-history-variation");
+    const variation = numberValue(data.variation);
+    const value = createElement("span", `gauge-history-variation-value ${variation === null ? "neutral" : variation >= 0 ? "positive" : "negative"}`);
+    value.appendChild(createElement("i", undefined, variation === null ? "–" : variation >= 0 ? "↗" : "↘"));
+    value.appendChild(document.createTextNode(variation === null ? "—" : signedDecimal(variation)));
+    wrapper.appendChild(value);
+    wrapper.appendChild(createElement("span", "gauge-history-variation-label", "VS SEM ANT"));
+    return wrapper;
+}
+
+function gaugeMetricKey(key: GaugeData["key"]): GaugeMetricKey {
+    if (key === "SPIW") {
+        return "SPI (w)";
+    }
+    if (key === "TSPIW") {
+        return "TSPI (w)";
+    }
+    return key;
+}
+
+function gaugeColor(key: GaugeMetricKey): string {
+    if (key === "CPI") {
+        return "#F97316";
+    }
+    if (key === "SPI (w)") {
+        return "#2563EB";
+    }
+    if (key === "TCPI") {
+        return "#16A34A";
+    }
+    return "#DC2626";
+}
+
 function gaugeLayout(width: number, height: number): GaugeLayout {
     const topPad = Math.max(28, height * 0.1);
-    const bottomPad = Math.max(22, height * 0.075);
     const centerX = width / 2;
     const radius = Math.min(width * 0.31, height * 0.39, 118);
     const stroke = Math.max(18, Math.min(24, radius * 0.2));
@@ -68,8 +177,6 @@ function gaugeLayout(width: number, height: number): GaugeLayout {
     const valueY = centerY + 47;
     const badgeH = Math.max(30, Math.min(36, height * 0.11));
     const statusY = valueY + 39;
-    const sparkH = Math.max(28, Math.min(38, height * 0.13));
-    const sparkY = Math.min(height - bottomPad - sparkH, statusY + badgeH / 2 + 16);
     return {
         width,
         height,
@@ -81,9 +188,7 @@ function gaugeLayout(width: number, height: number): GaugeLayout {
         topPad,
         valueY,
         statusY,
-        badgeH,
-        sparkY,
-        sparkH
+        badgeH
     };
 }
 
@@ -100,8 +205,6 @@ function drawGauge(svg: SVGSVGElement, data: GaugeData, palette: VisualPalette, 
     appendGroup(svg, "needle", (group) => drawNeedle(group, data, palette.blue, layout));
     appendGroup(svg, "value", (group) => drawValue(group, data, layout));
     appendGroup(svg, "status", (group) => drawStatus(group, data, palette, layout));
-    appendGroup(svg, "sparkline", (group) => drawSparkline(group, data, palette, layout));
-    appendGroup(svg, "variation", (group) => drawVariation(group, data, palette, layout));
 }
 
 function drawTitle(svg: SVGSVGElement, title: string, layout: GaugeLayout): void {
@@ -200,80 +303,6 @@ function drawStatus(group: SVGGElement, data: GaugeData, palette: VisualPalette,
     const label = svgText(status, layout.centerX, layout.statusY + 5.5, "middle", `evm-gauge-status-text ${className}`);
     label.setAttribute("fill", statusColor(className, palette));
     group.appendChild(label);
-}
-
-function drawSparkline(group: SVGGElement, data: GaugeData, palette: VisualPalette, layout: GaugeLayout): void {
-    const box = {
-        x: Math.max(22, layout.width * 0.055),
-        y: layout.sparkY,
-        width: Math.max(170, layout.width * 0.54),
-        height: layout.sparkH
-    };
-    const points = data.sparkline;
-    if (!points.length) {
-        return;
-    }
-    const min = Math.min(...points);
-    const max = Math.max(...points);
-    const range = max - min;
-    const step = points.length > 1 ? box.width / (points.length - 1) : box.width;
-    const coordinates = points.map((item, index) => {
-        const x = points.length > 1 ? box.x + step * index : box.x + box.width;
-        const y = range === 0 ? box.y + box.height / 2 : box.y + box.height - ((item - min) / range) * box.height;
-        return { x, y, command: `${index === 0 ? "M" : "L"} ${x} ${y}` };
-    });
-    if (points.length === 1) {
-        coordinates.unshift({ x: box.x, y: box.y + box.height / 2, command: `M ${box.x} ${box.y + box.height / 2}` });
-    }
-
-    const area = svgElement("path");
-    const first = coordinates[0];
-    const last = coordinates[coordinates.length - 1];
-    area.setAttribute("d", `${coordinates.map((item) => item.command).join(" ")} L ${last.x} ${box.y + box.height} L ${first.x} ${box.y + box.height} Z`);
-    area.setAttribute("class", "evm-gauge-spark-area");
-    group.appendChild(area);
-
-    const line = svgElement("path");
-    line.setAttribute("d", coordinates.map((item) => item.command).join(" "));
-    line.setAttribute("fill", "none");
-    line.setAttribute("stroke", palette.red);
-    line.setAttribute("stroke-width", "2.7");
-    line.setAttribute("stroke-linecap", "round");
-    line.setAttribute("stroke-linejoin", "round");
-    group.appendChild(line);
-
-    coordinates.forEach((point) => {
-        const dot = svgElement("circle");
-        dot.setAttribute("cx", String(point.x));
-        dot.setAttribute("cy", String(point.y));
-        dot.setAttribute("r", "3.8");
-        dot.setAttribute("class", "evm-gauge-spark-dot");
-        group.appendChild(dot);
-    });
-}
-
-function drawVariation(group: SVGGElement, data: GaugeData, palette: VisualPalette, layout: GaugeLayout): void {
-    const variation = numberValue(data.variation);
-    const x = Math.min(layout.width - 60, layout.centerX + layout.width * 0.31);
-    const y = layout.sparkY + layout.sparkH * 0.52;
-    if (variation !== null) {
-        drawVariationArrow(group, variation >= 0, palette.red, x - 38, y);
-    }
-    const value = svgText(variation === null ? "\u2014" : signedDecimal(data.variation), x, y + 2, "middle", "evm-gauge-variation-value");
-    value.setAttribute("fill", palette.red);
-    group.appendChild(value);
-    group.appendChild(svgText("vs semana anterior", x - 4, y + 18, "middle", "evm-gauge-variation-caption"));
-}
-
-function drawVariationArrow(group: SVGGElement, isUp: boolean, color: string, x: number, y: number): void {
-    const path = svgElement("path");
-    path.setAttribute("d", isUp ? `M ${x} ${y + 8} L ${x + 15} ${y - 7} M ${x + 15} ${y - 7} L ${x + 15} ${y + 4} M ${x + 15} ${y - 7} L ${x + 4} ${y - 7}` : `M ${x} ${y - 7} L ${x + 15} ${y + 8} M ${x + 15} ${y + 8} L ${x + 15} ${y - 3} M ${x + 15} ${y + 8} L ${x + 4} ${y + 8}`);
-    path.setAttribute("fill", "none");
-    path.setAttribute("stroke", color);
-    path.setAttribute("stroke-width", "4");
-    path.setAttribute("stroke-linecap", "butt");
-    path.setAttribute("stroke-linejoin", "miter");
-    group.appendChild(path);
 }
 
 function arcPath(startAngle: number, endAngle: number, layout: GaugeLayout): string {
