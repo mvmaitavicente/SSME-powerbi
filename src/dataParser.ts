@@ -559,11 +559,12 @@ function getCurrentGaugeRow(gauges: GaugeHistoryRow[]): GaugeHistoryRow | null {
 
 function buildJsonGauges(gauges: GaugeHistoryRow[]): GaugeData[] {
     const current = getCurrentGaugeRow(gauges);
+    const sparkRows = windowJsonGaugeRows(gauges, current?.Semana ?? null);
     const history: GaugeHistory = {
-        CPI: gauges.map((row) => row.CPI).filter((value): value is number => value !== null),
-        SPIW: gauges.map((row) => row["SPI (w)"]).filter((value): value is number => value !== null),
-        TCPI: gauges.map((row) => row.TCPI).filter((value): value is number => value !== null),
-        TSPIW: gauges.map((row) => row["TSPI (w)"]).filter((value): value is number => value !== null)
+        CPI: sparkRows.map((row) => row.CPI).filter((value): value is number => value !== null),
+        SPIW: sparkRows.map((row) => row["SPI (w)"]).filter((value): value is number => value !== null),
+        TCPI: sparkRows.map((row) => row.TCPI).filter((value): value is number => value !== null),
+        TSPIW: sparkRows.map((row) => row["TSPI (w)"]).filter((value): value is number => value !== null)
     };
 
     return [
@@ -572,6 +573,15 @@ function buildJsonGauges(gauges: GaugeHistoryRow[]): GaugeData[] {
         gauge("TCPI", lastValue(history.TCPI), current?.TCPIEstado, calculateGaugeVariation(history.TCPI), history.TCPI),
         gauge("TSPIW", lastValue(history.TSPIW), current?.TSPIEstado, calculateGaugeVariation(history.TSPIW), history.TSPIW)
     ];
+}
+
+function windowJsonGaugeRows(gauges: GaugeHistoryRow[], currentWeek: number | null): GaugeHistoryRow[] {
+    if (currentWeek === null) {
+        return gauges;
+    }
+    const historyStartWeek = Math.max(0, currentWeek - 5);
+    const filtered = gauges.filter((row) => row.Semana <= currentWeek && row.Semana >= historyStartWeek);
+    return filtered.length ? filtered : gauges;
 }
 
 function lastValue(values: number[]): number | null {

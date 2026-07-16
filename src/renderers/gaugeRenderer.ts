@@ -230,8 +230,7 @@ function gaugeSegments(data: GaugeData, palette: VisualPalette): GaugeSegment[] 
     }
 
     return [
-        { start: 0, end: 0.9, color: gaugeRangeBlue },
-        { start: 0.9, end: 1.01, color: palette.green },
+        { start: 0, end: 1.01, color: palette.green },
         { start: 1.01, end: 1.11, color: palette.orange },
         { start: 1.11, end: 1.5, color: palette.red }
     ];

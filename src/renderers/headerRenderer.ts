@@ -47,13 +47,15 @@ export function renderHeader(header: ProjectHeader): HTMLElement {
     const state = createElement("div", `evm-project-state ${stateClass}`);
     const stateIcon = createElement("div", "evm-project-state-icon");
     stateIcon.appendChild(createElement("span", undefined, stateClass === "stable" ? "✓" : "!"));
+    const stateBody = createElement("div", "evm-project-state-body");
     const stateCopy = createElement("div", "evm-project-state-copy");
     stateCopy.appendChild(createElement("span", undefined, "Estado del Proyecto"));
     stateCopy.appendChild(createElement("strong", undefined, text(header.EstadoProyecto, "Sin estado")));
     const stateMessage = createElement("small", "evm-project-state-message", text(header.MensajeEjecutivo, ""));
     state.appendChild(stateIcon);
-    state.appendChild(stateCopy);
-    state.appendChild(stateMessage);
+    stateBody.appendChild(stateCopy);
+    stateBody.appendChild(stateMessage);
+    state.appendChild(stateBody);
 
     const dates = createElement("div", "evm-project-dates");
     dates.appendChild(createElement("span", undefined, "Fecha de Estado"));

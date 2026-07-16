@@ -92,7 +92,7 @@
 .evm-header {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 520px minmax(130px, 12%);
-    gap: 8px;
+    gap: 0;
     padding: 4px 12px;
     align-items: center;
     min-height: 0;
@@ -118,6 +118,11 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.evm-project-title {
+    min-width: 0;
+    padding-right: 16px;
 }
 
 .evm-project-title h1 span {
@@ -151,31 +156,49 @@
 }
 
 .evm-project-state {
+    position: relative;
     display: grid;
-    grid-template-columns: 58px minmax(145px, 0.9fr) minmax(210px, 1.1fr);
+    grid-template-columns: 58px minmax(0, 1fr);
     align-items: center;
     min-height: 68px;
     column-gap: 12px;
-    padding: 8px 18px 8px 14px;
-    border-radius: 8px;
-    color: #FFFFFF;
+    padding: 8px 18px 8px 18px;
+    border: 0;
+    border-left: 1px solid #DDE3F0;
+    border-radius: 0;
     overflow: hidden;
+    box-shadow: none;
 }
 
 .evm-project-state.stable {
-    background: #08A045;
+    background: transparent;
+    color: #0F7A34;
 }
 
 .evm-project-state.risk {
-    background: #FFB000;
+    background: transparent;
+    color: #B86500;
 }
 
 .evm-project-state.critical {
-    background: #E60000;
+    background: transparent;
+    color: #D71920;
+}
+
+.evm-project-state.critical::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 10px;
+    bottom: 10px;
+    width: 4px;
+    border-radius: 999px;
+    background: #D71920;
 }
 
 .evm-project-state.neutral {
-    background: #001B8E;
+    background: transparent;
+    color: #001B8E;
 }
 
 .evm-project-state-icon {
@@ -183,7 +206,27 @@
     place-items: center;
     width: 52px;
     height: 48px;
-    border-right: 2px solid rgba(255, 255, 255, 0.55);
+    border-right: 2px solid rgba(0, 27, 142, 0.12);
+}
+
+.evm-project-state.stable .evm-project-state-icon,
+.evm-project-state.stable .evm-project-state-message {
+    border-color: rgba(15, 122, 52, 0.2);
+}
+
+.evm-project-state.risk .evm-project-state-icon,
+.evm-project-state.risk .evm-project-state-message {
+    border-color: rgba(184, 101, 0, 0.22);
+}
+
+.evm-project-state.critical .evm-project-state-icon,
+.evm-project-state.critical .evm-project-state-message {
+    border-color: rgba(215, 25, 32, 0.2);
+}
+
+.evm-project-state.neutral .evm-project-state-icon,
+.evm-project-state.neutral .evm-project-state-message {
+    border-color: rgba(0, 27, 142, 0.18);
 }
 
 .evm-project-state-icon span {
@@ -207,15 +250,15 @@
 }
 
 .evm-project-state.stable .evm-project-state-icon span {
-    color: #08A045;
+    color: #0F7A34;
 }
 
 .evm-project-state.risk .evm-project-state-icon span {
-    color: #FFB000;
+    color: #B86500;
 }
 
 .evm-project-state.critical .evm-project-state-icon span {
-    color: #E60000;
+    color: #D71920;
 }
 
 .evm-project-state-copy {
@@ -227,8 +270,33 @@
     padding-left: 0;
 }
 
+.evm-project-state-body {
+    display: grid;
+    grid-template-columns: minmax(140px, 0.85fr) minmax(210px, 1.15fr);
+    align-items: center;
+    column-gap: 12px;
+    min-width: 0;
+    height: 100%;
+    padding: 0 10px;
+    border: 1px solid rgba(215, 25, 32, 0.16);
+    border-radius: 8px;
+    background: #FFFFFF;
+}
+
+.evm-project-state.stable .evm-project-state-body {
+    border-color: rgba(15, 122, 52, 0.14);
+}
+
+.evm-project-state.risk .evm-project-state-body {
+    border-color: rgba(184, 101, 0, 0.16);
+}
+
+.evm-project-state.neutral .evm-project-state-body {
+    border-color: rgba(0, 27, 142, 0.14);
+}
+
 .evm-project-state .evm-project-state-copy span {
-    color: #FFFFFF;
+    color: #00145C;
     font-size: 14px;
     font-weight: 900;
     line-height: 1;
@@ -238,7 +306,7 @@
 .evm-project-state strong {
     display: block;
     margin-top: 3px;
-    color: #FFFFFF;
+    color: currentColor;
     font-size: clamp(22px, 2.2vw, 31px);
     line-height: 1;
     text-transform: uppercase;
@@ -251,9 +319,9 @@
     align-self: stretch;
     min-width: 0;
     height: 100%;
-    padding: 0 10px 0 18px;
-    border-left: 2px solid rgba(255, 255, 255, 0.55);
-    color: #FFFFFF;
+    padding: 0 8px;
+    border-left: 0;
+    color: #00145C;
     font-size: 16px;
     font-weight: 850;
     line-height: 1.12;
@@ -262,7 +330,11 @@
 }
 
 .evm-project-dates {
-    padding: 7px 10px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 68px;
+    padding: 7px 10px 7px 16px;
     text-align: center;
     border-left: 1px solid #DDE3F0;
 }
