@@ -4,7 +4,7 @@ import powerbi from "powerbi-visuals-api";
 import { FormattingSettingsService } from "powerbi-visuals-utils-formattingmodel";
 import "./styles/visual.less";
 
-import { parseDashboardData, parseDashboardJsonData } from "./dataParser";
+import { adaptJsonDashboardData, parseDashboardJsonData } from "./dataParser";
 import { renderCurve } from "./renderers/curveRenderer";
 import { renderGaugeGrid } from "./renderers/gaugeRenderer";
 import { renderHeader, renderSidebar } from "./renderers/headerRenderer";
@@ -12,7 +12,8 @@ import { renderMilestones } from "./renderers/milestoneRenderer";
 import { renderPerformance } from "./renderers/performanceRenderer";
 import { renderRisks } from "./renderers/riskRenderer";
 import { VisualFormattingSettingsModel } from "./settings";
-import { GaugeChartPoint, GaugeChartSeries, GaugeHistoryRow, GaugeMetricKey, ParsedDashboardData, VisualPalette } from "./types";
+import { AggregateCurveData, AggregateGaugeData, DashboardData, DashboardLevel, DataValue, GaugeChartPoint, GaugeChartSeries, GaugeData, GaugeHistoryRow, GaugeMetricKey, NavigatorProject, ParsedDashboardData, SummaryData, UnitProjectSummaryData, UnitSummaryData, VisualPalette } from "./types";
+import { createElement, currency, date, decimal, numberValue, shortCurrency, text } from "./utils/format";
 import VisualConstructorOptions = powerbi.extensibility.visual.VisualConstructorOptions;
 import VisualUpdateOptions = powerbi.extensibility.visual.VisualUpdateOptions;
 import IVisual = powerbi.extensibility.visual.IVisual;
@@ -39,12 +40,37 @@ const gaugeMetricColors: Record<GaugeMetricKey, string> = {
 };
 
 export class Visual implements IVisual {
+    private readonly host: powerbi.extensibility.visual.IVisualHost;
     private readonly events: IVisualEventService;
     private readonly target: HTMLElement;
     private formattingSettings: VisualFormattingSettingsModel = new VisualFormattingSettingsModel();
     private readonly formattingSettingsService: FormattingSettingsService;
     private rootElement: HTMLElement | null = null;
     private currentDashboardData: ParsedDashboardData | null = null;
+    private filterPanelOpen: boolean = false;
+    private filterFocus: "unit" | "project" | null = null;
+    private readonly filterState: {
+        level: DashboardLevel;
+        selectedUnit: string | null;
+        selectedProjectId: string | null;
+        lastNavigableUnit: string | null;
+        lastNavigableProjectId: string | null;
+        region: string | null;
+        province: string | null;
+        district: string | null;
+        status: string | null;
+    } = {
+        level: "PRONIED",
+        selectedUnit: null,
+        selectedProjectId: null,
+        lastNavigableUnit: null,
+        lastNavigableProjectId: null,
+        region: null,
+        province: null,
+        district: null,
+        status: null
+    };
+    private readonly appliedFilterValues: { [propertyName: string]: string | null } = {};
     private isGaugeHistoryModalOpen: boolean = false;
     private bodyCarouselIndex: number = 0;
     private selectedGaugeKey: GaugeMetricKey | null = null;
@@ -56,6 +82,7 @@ export class Visual implements IVisual {
     };
 
     constructor(options: VisualConstructorOptions) {
+        this.host = options.host;
         this.events = options.host.eventService;
         this.target = options.element;
         this.formattingSettingsService = new FormattingSettingsService();
@@ -70,19 +97,41 @@ export class Visual implements IVisual {
             this.formattingSettings = this.formattingSettingsService.populateFormattingSettingsModel(VisualFormattingSettingsModel, dataView);
             this.target.replaceChildren();
 
-            this.currentDashboardData = parseDashboardJsonData(dataView);
-            const dashboard = parseDashboardData(dataView);
+            const dashboard = parseDashboardJsonData(dataView);
+            this.currentDashboardData = dashboard;
             const root = document.createElement("div");
             root.className = "evm-dashboard";
             root.style.width = `${options.viewport.width}px`;
             root.style.height = `${options.viewport.height}px`;
             this.rootElement = root;
 
-            root.appendChild(renderSidebar());
-
-            root.appendChild(this.renderProjectDashboard(dashboard));
-
-            if (!dashboard.hasData) {
+            if (dashboard) {
+                this.syncFilterStateFromDashboard(dashboard);
+                const sidebarUnit = this.resolveUnitForNavigation(dashboard);
+                const sidebarProject = this.resolveProjectForNavigation(dashboard);
+                console.debug("Update posterior a navegación", {
+                    receivedLevel: dashboard.context.Level,
+                    receivedUnit: dashboard.context.Unit,
+                    receivedProject: dashboard.context.ProjectId,
+                    sidebarUnit,
+                    sidebarProject
+                });
+                root.appendChild(renderSidebar({
+                    activeLevel: dashboard.context.Level,
+                    projectViewActive: this.bodyCarouselIndex === 1 ? "milestones" : "summary",
+                    canOpenUnit: Boolean(sidebarUnit),
+                    canOpenProject: Boolean(sidebarProject),
+                    onOpenPronied: () => this.openProniedDashboard(),
+                    onOpenUnit: () => this.openUnitDashboard(sidebarUnit ?? undefined),
+                    onOpenProject: () => this.openProjectDashboard(sidebarProject ?? undefined),
+                    onProjectView: (view) => this.openProjectView(view),
+                    onOpenFilters: () => this.openFilterPanel()
+                }));
+                root.appendChild(this.renderCurrentDashboard(dashboard, options.viewport));
+                if (this.filterPanelOpen) {
+                    root.appendChild(this.renderFilterPanel());
+                }
+            } else {
                 const empty = document.createElement("div");
                 empty.className = "evm-no-data";
                 empty.textContent = "Asigne columnas o medidas al visual para ver el dashboard EVM.";
@@ -103,16 +152,364 @@ export class Visual implements IVisual {
         return this.formattingSettingsService.buildFormattingModel(this.formattingSettings);
     }
 
-    private renderProjectDashboard(dashboard: ReturnType<typeof parseDashboardData>): HTMLElement {
+    private renderCurrentDashboard(dashboard: ParsedDashboardData, viewport: powerbi.IViewport): HTMLElement {
+        console.debug("Dashboard render target", {
+            level: dashboard.context.Level,
+            axisType: dashboard.context.AxisType,
+            summary: dashboard.summary,
+            units: dashboard.context.Level === "PRONIED" ? dashboard.units.length : undefined,
+            projects: dashboard.context.Level === "UNIDAD" ? dashboard.projects.length : undefined,
+            gaugeRows: dashboard.context.Level === "PROYECTO" ? dashboard.gauges.length : dashboard.aggregateGauges.length,
+            curveRows: dashboard.context.Level === "PROYECTO" ? dashboard.curve.length : dashboard.aggregateCurve.length
+        });
+
+        switch (dashboard.context.Level) {
+            case "PRONIED":
+                return this.renderProniedDashboard(dashboard, viewport);
+            case "UNIDAD":
+                return this.renderUnitDashboard(dashboard, viewport);
+            case "PROYECTO":
+                return this.renderProjectDashboard(dashboard, viewport);
+            default:
+                return this.renderDashboardError(`Nivel no reconocido: ${dashboard.context.Level}`);
+        }
+    }
+
+    private renderProjectDashboard(dashboard: ParsedDashboardData, viewport: powerbi.IViewport): HTMLElement {
+        const projectDashboard = adaptJsonDashboardData(dashboard);
         const main = document.createElement("main");
         main.className = "evm-main";
-        main.appendChild(renderHeader(dashboard.header));
-        main.appendChild(renderGaugeGrid(dashboard.gauges, palette, (key) => this.openGaugeHistoryModal(key)));
-        main.appendChild(this.renderBodyCarousel(dashboard));
+        main.style.minWidth = `${Math.min(780, Math.max(0, viewport.width - 92))}px`;
+        main.appendChild(renderHeader(projectDashboard.header));
+        main.appendChild(renderGaugeGrid(projectDashboard.gauges, palette, (key) => this.openGaugeHistoryModal(key)));
+        main.appendChild(this.renderBodyCarousel(projectDashboard));
         return main;
     }
 
-    private renderBodyCarousel(dashboard: ReturnType<typeof parseDashboardData>): HTMLElement {
+    private renderProniedDashboard(dashboard: ParsedDashboardData, viewport: powerbi.IViewport): HTMLElement {
+        const main = createElement("main", "evm-main evm-portfolio-main");
+        main.style.minWidth = `${Math.min(780, Math.max(0, viewport.width - 92))}px`;
+        main.appendChild(this.renderPortfolioHeader(
+            "PRONIED — Portafolio General",
+            "Todas las Unidades Gerenciales",
+            dashboard
+        ));
+        main.appendChild(this.renderSummaryGrid(dashboard.summary));
+        main.appendChild(renderGaugeGrid(this.buildAggregateGauges(dashboard.aggregateGauges), palette));
+
+        const body = createElement("section", "evm-portfolio-body");
+        body.appendChild(this.renderAggregateCurve(dashboard.aggregateCurve));
+        body.appendChild(this.renderPortfolioInsight(dashboard.summary, dashboard.units.length, "Unidades Gerenciales"));
+        main.appendChild(body);
+        main.appendChild(this.renderUnitsSection(dashboard.units));
+        return main;
+    }
+
+    private renderUnitDashboard(dashboard: ParsedDashboardData, viewport: powerbi.IViewport): HTMLElement {
+        const main = createElement("main", "evm-main evm-portfolio-main");
+        main.style.minWidth = `${Math.min(780, Math.max(0, viewport.width - 92))}px`;
+        main.appendChild(this.renderPortfolioHeader(
+            `UNIDAD GERENCIAL: ${text(dashboard.context.Unit, "Sin unidad")}`,
+            "Portafolio de proyectos de la Unidad",
+            dashboard
+        ));
+        main.appendChild(this.renderSummaryGrid(dashboard.summary));
+        main.appendChild(renderGaugeGrid(this.buildAggregateGauges(dashboard.aggregateGauges), palette));
+
+        const body = createElement("section", "evm-portfolio-body");
+        body.appendChild(this.renderAggregateCurve(dashboard.aggregateCurve));
+        body.appendChild(this.renderPortfolioInsight(dashboard.summary, dashboard.projects.length, "Proyectos"));
+        main.appendChild(body);
+        main.appendChild(this.renderProjectsSection(dashboard.projects));
+        return main;
+    }
+
+    private renderDashboardError(message: string): HTMLElement {
+        const main = createElement("main", "evm-main evm-portfolio-main");
+        const card = createElement("section", "evm-card evm-dashboard-error");
+        card.appendChild(createElement("h1", undefined, "No se pudo renderizar el dashboard"));
+        card.appendChild(createElement("p", undefined, message));
+        main.appendChild(card);
+        return main;
+    }
+
+    private renderPortfolioHeader(titleText: string, subtitleText: string, dashboard: ParsedDashboardData): HTMLElement {
+        const header = createElement("section", "evm-card evm-portfolio-header");
+        const titleGroup = createElement("div", "evm-portfolio-title");
+        titleGroup.appendChild(this.renderBreadcrumb(dashboard));
+        titleGroup.appendChild(createElement("h1", undefined, titleText));
+        titleGroup.appendChild(createElement("p", undefined, this.contextSubtitle(subtitleText, dashboard)));
+        header.appendChild(titleGroup);
+
+        const cutoff = createElement("div", "evm-portfolio-cutoff");
+        cutoff.appendChild(createElement("span", undefined, "Corte"));
+        cutoff.appendChild(createElement("strong", undefined, date(dashboard.context.CutoffDate)));
+        header.appendChild(cutoff);
+        return header;
+    }
+
+    private renderBreadcrumb(dashboard: ParsedDashboardData): HTMLElement {
+        const breadcrumb = createElement("div", "evm-breadcrumb");
+        const pronied = createElement("button", undefined, "PRONIED");
+        pronied.type = "button";
+        pronied.addEventListener("click", () => this.openProniedDashboard());
+        breadcrumb.appendChild(pronied);
+
+        if (dashboard.context.Unit) {
+            breadcrumb.appendChild(createElement("span", undefined, ">"));
+            const unit = createElement("button", undefined, dashboard.context.Unit);
+            unit.type = "button";
+            unit.addEventListener("click", () => this.openUnitDashboard(dashboard.context.Unit ?? undefined));
+            breadcrumb.appendChild(unit);
+        }
+
+        if (dashboard.context.ProjectId) {
+            breadcrumb.appendChild(createElement("span", undefined, ">"));
+            breadcrumb.appendChild(createElement("strong", undefined, dashboard.project?.NombreIntervencion || dashboard.context.ProjectId));
+        }
+
+        return breadcrumb;
+    }
+
+    private contextSubtitle(base: string, dashboard: ParsedDashboardData): string {
+        const filters = [
+            dashboard.context.Region ? `Región: ${dashboard.context.Region}` : "",
+            dashboard.context.Province ? `Provincia: ${dashboard.context.Province}` : "",
+            dashboard.context.District ? `Distrito: ${dashboard.context.District}` : "",
+            dashboard.context.Status ? `Estado: ${dashboard.context.Status}` : ""
+        ].filter((item) => item.length > 0);
+        return filters.length ? `${base} · ${filters.join(" · ")}` : base;
+    }
+
+    private renderSummaryGrid(summary: SummaryData | null): HTMLElement {
+        const grid = createElement("section", "evm-summary-strip");
+        const items: Array<{ label: string; value: string }> = [
+            { label: "Cantidad de Proyectos", value: this.formatInteger(summary?.CantidadProyectos) },
+            { label: "BAC", value: shortCurrency(summary?.BAC) },
+            { label: "PV", value: shortCurrency(summary?.PV) },
+            { label: "EV", value: shortCurrency(summary?.EV) },
+            { label: "AC", value: shortCurrency(summary?.AC) },
+            { label: "CPI", value: decimal(summary?.CPI) },
+            { label: "SPI", value: decimal(summary?.SPIW) },
+            { label: "TCPI", value: decimal(summary?.TCPI) }
+        ];
+
+        items.forEach((item) => {
+            const card = createElement("div", "evm-summary-card evm-card");
+            card.appendChild(createElement("span", undefined, item.label));
+            card.appendChild(createElement("strong", undefined, item.value));
+            grid.appendChild(card);
+        });
+        return grid;
+    }
+
+    private renderPortfolioInsight(summary: SummaryData | null, count: number, label: string): HTMLElement {
+        const card = createElement("aside", "evm-card evm-portfolio-insight");
+        card.appendChild(createElement("span", undefined, "Resumen ejecutivo"));
+        card.appendChild(createElement("strong", undefined, `${this.formatInteger(count)} ${label}`));
+        card.appendChild(this.insightMetric("BAC", currency(summary?.BAC)));
+        card.appendChild(this.insightMetric("EV", currency(summary?.EV)));
+        card.appendChild(this.insightMetric("AC", currency(summary?.AC)));
+        card.appendChild(this.insightMetric("CPI", decimal(summary?.CPI)));
+        card.appendChild(this.insightMetric("SPI", decimal(summary?.SPIW)));
+        return card;
+    }
+
+    private insightMetric(label: string, value: string): HTMLElement {
+        const row = createElement("div", "evm-insight-metric");
+        row.appendChild(createElement("span", undefined, label));
+        row.appendChild(createElement("b", undefined, value));
+        return row;
+    }
+
+    private buildAggregateGauges(rows: AggregateGaugeData[]): GaugeData[] {
+        const definitions: Array<{ key: GaugeData["key"]; title: string; selector: (row: AggregateGaugeData) => number | null }> = [
+            { key: "CPI", title: "CPI", selector: (row) => row.CPI },
+            { key: "SPIW", title: "SPI (w)", selector: (row) => row.SPIW },
+            { key: "TCPI", title: "TCPI", selector: (row) => row.TCPI },
+            { key: "TSPIW", title: "TSPI (w)", selector: () => null }
+        ];
+
+        return definitions.map((definition) => {
+            const sparkline = rows.map(definition.selector).filter((value): value is number => value !== null);
+            return {
+                key: definition.key,
+                title: definition.title,
+                value: sparkline[sparkline.length - 1] ?? null,
+                min: 0,
+                max: 1.5,
+                target: 1,
+                variation: null,
+                status: "",
+                sparkline
+            };
+        });
+    }
+
+    private renderAggregateCurve(curve: AggregateCurveData[]): HTMLElement {
+        const card = createElement("section", "evm-card evm-aggregate-curve-card");
+        card.appendChild(createElement("div", "evm-section-title", "Curva agregada"));
+        if (!curve.length) {
+            card.appendChild(createElement("div", "evm-empty", "Sin datos de curva agregada."));
+            return card;
+        }
+
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("viewBox", "0 0 920 360");
+        svg.setAttribute("class", "evm-aggregate-curve-svg");
+        this.drawAggregateCurveSvg(svg, curve);
+        card.appendChild(svg);
+        return card;
+    }
+
+    private drawAggregateCurveSvg(svg: SVGSVGElement, curve: AggregateCurveData[]): void {
+        const plot = { left: 76, top: 34, width: 790, height: 250 };
+        const values = curve.flatMap((row) => [row.BAC, row.PV, row.EV, row.AC]).filter((value): value is number => value !== null);
+        const maxValue = Math.max(1, ...values) * 1.08;
+        const xScale = (index: number): number => plot.left + (curve.length <= 1 ? 0 : (index / (curve.length - 1)) * plot.width);
+        const yScale = (value: number): number => plot.top + plot.height - (value / maxValue) * plot.height;
+
+        for (let i = 0; i <= 4; i++) {
+            const y = plot.top + (plot.height / 4) * i;
+            this.appendSvgLine(svg, plot.left, y, plot.left + plot.width, y, "evm-aggregate-grid");
+        }
+        this.appendSvgLine(svg, plot.left, plot.top, plot.left, plot.top + plot.height, "evm-aggregate-axis");
+        this.appendSvgLine(svg, plot.left, plot.top + plot.height, plot.left + plot.width, plot.top + plot.height, "evm-aggregate-axis");
+
+        [
+            { key: "PV", color: "#2563EB" },
+            { key: "EV", color: "#16A34A" },
+            { key: "AC", color: "#FF1E1E" },
+            { key: "BAC", color: "#001B8E" }
+        ].forEach((series) => {
+            const points = curve
+                .map((row, index) => ({ x: xScale(index), value: row[series.key as keyof AggregateCurveData] }))
+                .filter((point): point is { x: number; value: number } => typeof point.value === "number");
+            if (!points.length) {
+                return;
+            }
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            path.setAttribute("d", points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${yScale(point.value)}`).join(" "));
+            path.setAttribute("class", "evm-aggregate-line");
+            path.setAttribute("stroke", series.color);
+            svg.appendChild(path);
+            points.forEach((point) => {
+                const marker = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                marker.setAttribute("cx", String(point.x));
+                marker.setAttribute("cy", String(yScale(point.value)));
+                marker.setAttribute("r", "4.5");
+                marker.setAttribute("fill", series.color);
+                svg.appendChild(marker);
+            });
+        });
+
+        curve.forEach((row, index) => {
+            const x = xScale(index);
+            this.appendSvgText(svg, row.LabelSemana || String(row.OrdenSemana), x, plot.top + plot.height + 34, "middle", "evm-aggregate-label");
+        });
+        this.appendSvgText(svg, "Periodo", plot.left + plot.width / 2, 344, "middle", "evm-aggregate-title");
+    }
+
+    private renderUnitsSection(units: UnitSummaryData[]): HTMLElement {
+        const section = createElement("section", "evm-card evm-entity-section");
+        section.appendChild(createElement("div", "evm-section-title", "Unidades Gerenciales"));
+        if (!units.length) {
+            section.appendChild(createElement("div", "evm-empty", "No se encontraron unidades para los filtros seleccionados."));
+            return section;
+        }
+
+        const grid = createElement("div", "evm-unit-grid");
+        units.forEach((unit) => {
+            const card = createElement("button", "evm-unit-card evm-card");
+            card.type = "button";
+            card.setAttribute("role", "button");
+            card.setAttribute("tabindex", "0");
+            card.addEventListener("click", () => {
+                console.debug("Click tarjeta unidad", {
+                    unit: unit.UnidadGerencial
+                });
+                this.openUnitDashboard(unit.UnidadGerencial);
+            });
+            card.addEventListener("keydown", (event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    this.openUnitDashboard(unit.UnidadGerencial);
+                }
+            });
+            card.appendChild(createElement("strong", undefined, unit.UnidadGerencial));
+            card.appendChild(createElement("span", undefined, `${this.formatInteger(unit.CantidadProyectos)} proyectos`));
+            card.appendChild(this.entityMetric("BAC", shortCurrency(unit.BAC)));
+            card.appendChild(this.entityMetric("EV", shortCurrency(unit.EV)));
+            card.appendChild(this.entityMetric("AC", shortCurrency(unit.AC)));
+            card.appendChild(this.entityMetric("CPI", decimal(unit.CPI)));
+            card.appendChild(this.entityMetric("SPI", decimal(unit.SPIW)));
+            grid.appendChild(card);
+        });
+        section.appendChild(grid);
+        return section;
+    }
+
+    private renderProjectsSection(projects: UnitProjectSummaryData[]): HTMLElement {
+        const section = createElement("section", "evm-card evm-entity-section");
+        section.appendChild(createElement("div", "evm-section-title", "Proyectos de la Unidad"));
+        if (!projects.length) {
+            section.appendChild(createElement("div", "evm-empty", "No se encontraron proyectos para la Unidad y filtros seleccionados."));
+            return section;
+        }
+
+        const table = createElement("table", "evm-project-list-table");
+        const head = document.createElement("thead");
+        const headRow = document.createElement("tr");
+        ["Proyecto", "CUI", "Ubicación", "Estado", "BAC", "EV", "AC", "CPI", "SPI", ""].forEach((label) => headRow.appendChild(createElement("th", undefined, label)));
+        head.appendChild(headRow);
+        const body = document.createElement("tbody");
+        projects.slice(0, 100).forEach((project) => {
+            const row = document.createElement("tr");
+            row.className = "evm-project-list-row";
+            row.tabIndex = 0;
+            row.setAttribute("role", "button");
+            row.addEventListener("click", () => this.openProjectDashboard(project.IdIntervencion));
+            row.addEventListener("keydown", (event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    this.openProjectDashboard(project.IdIntervencion);
+                }
+            });
+            row.appendChild(createElement("td", "evm-project-name-cell", project.NombreIntervencion));
+            row.appendChild(createElement("td", undefined, text(project.Cui)));
+            row.appendChild(createElement("td", undefined, [project.Region, project.Provincia, project.Distrito].filter(Boolean).join(" / ")));
+            row.appendChild(createElement("td", undefined, text(project.EstadoProyecto)));
+            row.appendChild(createElement("td", undefined, shortCurrency(project.BAC)));
+            row.appendChild(createElement("td", undefined, shortCurrency(project.EV)));
+            row.appendChild(createElement("td", undefined, shortCurrency(project.AC)));
+            row.appendChild(createElement("td", undefined, decimal(project.CPI)));
+            row.appendChild(createElement("td", undefined, decimal(project.SPIW)));
+            const actionCell = createElement("td");
+            const action = createElement("button", "evm-row-action", "Ver proyecto");
+            action.type = "button";
+            action.addEventListener("click", (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.openProjectDashboard(project.IdIntervencion);
+            });
+            actionCell.appendChild(action);
+            row.appendChild(actionCell);
+            body.appendChild(row);
+        });
+        table.appendChild(head);
+        table.appendChild(body);
+        section.appendChild(table);
+        return section;
+    }
+
+    private entityMetric(label: string, value: string): HTMLElement {
+        const metric = createElement("div", "evm-entity-metric");
+        metric.appendChild(createElement("span", undefined, label));
+        metric.appendChild(createElement("b", undefined, value));
+        return metric;
+    }
+
+    private renderBodyCarousel(dashboard: DashboardData): HTMLElement {
         const carousel = document.createElement("section");
         carousel.className = "evm-body-carousel";
 
@@ -219,6 +616,345 @@ export class Visual implements IVisual {
             button.setAttribute("title", tooltip);
             button.setAttribute("data-tooltip", tooltip);
         });
+    }
+
+    private syncFilterStateFromDashboard(dashboard: ParsedDashboardData): void {
+        this.filterState.level = dashboard.context.Level;
+        this.filterState.selectedUnit = dashboard.context.Unit ?? this.filterState.selectedUnit;
+        this.filterState.selectedProjectId = dashboard.context.ProjectId ?? this.filterState.selectedProjectId;
+        this.filterState.lastNavigableUnit = dashboard.context.Unit
+            ?? dashboard.project?.UnidadGerencial
+            ?? this.filterState.lastNavigableUnit;
+        this.filterState.lastNavigableProjectId = dashboard.context.ProjectId
+            ?? dashboard.project?.IdIntervencion
+            ?? this.filterState.lastNavigableProjectId;
+        this.filterState.region = dashboard.context.Region ?? this.filterState.region;
+        this.filterState.province = dashboard.context.Province ?? this.filterState.province;
+        this.filterState.district = dashboard.context.District ?? this.filterState.district;
+        this.filterState.status = dashboard.context.Status ?? this.filterState.status;
+    }
+
+    private resolveUnitForNavigation(dashboard: ParsedDashboardData | null = this.currentDashboardData): string | null {
+        if (!dashboard) {
+            return this.filterState.selectedUnit ?? this.filterState.lastNavigableUnit;
+        }
+
+        return dashboard.context.Unit
+            ?? dashboard.project?.UnidadGerencial
+            ?? this.filterState.selectedUnit
+            ?? this.filterState.lastNavigableUnit
+            ?? dashboard.units.find((unit) => unit.UnidadGerencial)?.UnidadGerencial
+            ?? this.firstNavigatorUnit();
+    }
+
+    private resolveProjectForNavigation(dashboard: ParsedDashboardData | null = this.currentDashboardData): string | null {
+        if (!dashboard) {
+            return this.filterState.selectedProjectId ?? this.filterState.lastNavigableProjectId;
+        }
+
+        return dashboard.context.ProjectId
+            ?? dashboard.project?.IdIntervencion
+            ?? this.filterState.selectedProjectId
+            ?? this.filterState.lastNavigableProjectId
+            ?? dashboard.projects.find((project) => project.IdIntervencion)?.IdIntervencion
+            ?? this.firstNavigatorProject();
+    }
+
+    private firstNavigatorUnit(): string | null {
+        const project = this.filteredNavigatorProjects().find((item) => this.navigatorText(item.UnidadGerencial));
+        return project ? this.navigatorText(project.UnidadGerencial) : null;
+    }
+
+    private firstNavigatorProject(): string | null {
+        const project = this.filteredNavigatorProjects().find((item) => this.navigatorText(item.IdIntervencion));
+        return project ? this.navigatorText(project.IdIntervencion) : null;
+    }
+
+    private unitForProject(projectId: string): string | null {
+        const currentProject = this.currentDashboardData?.projects.find((project) => project.IdIntervencion === projectId);
+        if (currentProject?.UnidadGerencial) {
+            return currentProject.UnidadGerencial;
+        }
+
+        const navigatorProject = this.currentDashboardData?.navigator?.projects.find((project) => this.navigatorText(project.IdIntervencion) === projectId);
+        const unit = this.navigatorText(navigatorProject?.UnidadGerencial);
+        return unit || null;
+    }
+
+    private openProniedDashboard(): void {
+        console.debug("Navegando a PRONIED");
+        this.filterState.level = "PRONIED";
+        this.filterState.selectedUnit = null;
+        this.filterState.selectedProjectId = null;
+        this.applyBasicFilter("Dim_NivelDashboard", "Nivel", ["PRONIED"], "levelFilter");
+        this.clearInternalFilter("unitFilter");
+        this.clearInternalFilter("projectFilter");
+    }
+
+    private openUnitDashboard(unit?: string): void {
+        const selectedUnit = unit ?? this.resolveUnitForNavigation();
+        if (!selectedUnit) {
+            console.warn("No hay Unidad Gerencial seleccionada.");
+            this.openFilterPanel("unit");
+            return;
+        }
+
+        console.debug("Solicitando navegación", {
+            level: "UNIDAD",
+            unit: selectedUnit
+        });
+        this.filterState.level = "UNIDAD";
+        this.filterState.selectedUnit = selectedUnit;
+        this.filterState.lastNavigableUnit = selectedUnit;
+        this.filterState.selectedProjectId = null;
+        this.applyBasicFilter("Dim_Intervenciones", "UnidadGerencial", [selectedUnit], "unitFilter");
+        this.applyBasicFilter("Dim_NivelDashboard", "Nivel", ["UNIDAD"], "levelFilter");
+        this.clearInternalFilter("projectFilter");
+    }
+
+    private openProjectDashboard(projectId?: string): void {
+        const selectedProject = projectId ?? this.resolveProjectForNavigation();
+        if (!selectedProject) {
+            console.warn("No hay proyecto seleccionado.");
+            this.openProjectSelector();
+            return;
+        }
+
+        console.debug("Solicitando navegación", {
+            level: "PROYECTO",
+            projectId: selectedProject
+        });
+        this.filterState.level = "PROYECTO";
+        this.filterState.selectedProjectId = selectedProject;
+        this.filterState.lastNavigableProjectId = selectedProject;
+        const selectedUnit = this.unitForProject(selectedProject) ?? this.resolveUnitForNavigation();
+        if (selectedUnit) {
+            this.filterState.selectedUnit = selectedUnit;
+            this.filterState.lastNavigableUnit = selectedUnit;
+            this.applyBasicFilter("Dim_Intervenciones", "UnidadGerencial", [selectedUnit], "unitFilter");
+        }
+        this.applyBasicFilter("Dim_Intervenciones", "IdIntervencion", [selectedProject], "projectFilter");
+        this.applyBasicFilter("Dim_NivelDashboard", "Nivel", ["PROYECTO"], "levelFilter");
+    }
+
+    private openProjectView(view: "summary" | "milestones" | "risks"): void {
+        if (this.currentDashboardData?.context.Level !== "PROYECTO") {
+            return;
+        }
+        this.bodyCarouselIndex = view === "summary" ? 0 : 1;
+        const pages = Array.from(this.rootElement?.querySelectorAll(".evm-body-carousel-page") ?? [])
+            .filter((element): element is HTMLElement => element instanceof HTMLElement);
+        if (pages.length) {
+            this.updateCarouselPages(pages);
+        }
+    }
+
+    private openProjectSelector(): void {
+        this.openFilterPanel("project");
+    }
+
+    private openFilterPanel(focus: "unit" | "project" | null = null): void {
+        this.filterPanelOpen = true;
+        this.filterFocus = focus;
+        this.renderFilterPanelIntoRoot();
+    }
+
+    private closeFilterPanel(): void {
+        this.filterPanelOpen = false;
+        this.filterFocus = null;
+        this.rootElement?.querySelector(".evm-filter-panel")?.remove();
+    }
+
+    private renderFilterPanelIntoRoot(): void {
+        if (!this.rootElement || !this.currentDashboardData) {
+            return;
+        }
+        this.rootElement.querySelector(".evm-filter-panel")?.remove();
+        this.rootElement.appendChild(this.renderFilterPanel());
+    }
+
+    private renderFilterPanel(): HTMLElement {
+        const panel = createElement("aside", "evm-filter-panel evm-card");
+        const header = createElement("div", "evm-filter-panel-header");
+        header.appendChild(createElement("strong", undefined, "Filtros"));
+        const close = createElement("button", undefined, "×");
+        close.type = "button";
+        close.setAttribute("aria-label", "Cerrar filtros");
+        close.addEventListener("click", () => this.closeFilterPanel());
+        header.appendChild(close);
+        panel.appendChild(header);
+
+        const projects = this.filteredNavigatorProjects();
+        panel.appendChild(this.renderFilterSelect("Unidad Gerencial", "unit", this.uniqueNavigatorValues("UnidadGerencial"), this.filterState.selectedUnit, (value) => {
+            this.filterState.selectedUnit = value;
+            this.filterState.selectedProjectId = null;
+            value ? this.applyBasicFilter("Dim_Intervenciones", "UnidadGerencial", [value], "unitFilter") : this.clearInternalFilter("unitFilter");
+            this.clearInternalFilter("projectFilter");
+        }));
+        panel.appendChild(this.renderFilterSelect("Región", "region", this.uniqueFromProjects(projects, "Region"), this.filterState.region, (value) => {
+            this.filterState.region = value;
+            value ? this.applyBasicFilter("Dim_Intervenciones", "Region", [value], "regionFilter") : this.clearInternalFilter("regionFilter");
+        }));
+        panel.appendChild(this.renderFilterSelect("Provincia", "province", this.uniqueFromProjects(projects, "Provincia"), this.filterState.province, (value) => {
+            this.filterState.province = value;
+            value ? this.applyBasicFilter("Dim_Intervenciones", "Provincia", [value], "provinceFilter") : this.clearInternalFilter("provinceFilter");
+        }));
+        panel.appendChild(this.renderFilterSelect("Distrito", "district", this.uniqueFromProjects(projects, "Distrito"), this.filterState.district, (value) => {
+            this.filterState.district = value;
+            value ? this.applyBasicFilter("Dim_Intervenciones", "Distrito", [value], "districtFilter") : this.clearInternalFilter("districtFilter");
+        }));
+        panel.appendChild(this.renderFilterSelect("Estado", "status", this.uniqueFromProjects(projects, "EstadoProyecto"), this.filterState.status, (value) => {
+            this.filterState.status = value;
+            value ? this.applyBasicFilter("Dim_Intervenciones", "EstadoProyecto", [value], "statusFilter") : this.clearInternalFilter("statusFilter");
+        }));
+        panel.appendChild(this.renderFilterSelect("Proyecto", "project", this.projectOptions(projects), this.filterState.selectedProjectId, (value) => {
+            this.filterState.selectedProjectId = value;
+            value ? this.applyBasicFilter("Dim_Intervenciones", "IdIntervencion", [value], "projectFilter") : this.clearInternalFilter("projectFilter");
+        }));
+
+        const clear = createElement("button", "evm-filter-clear", "Limpiar filtros");
+        clear.type = "button";
+        clear.addEventListener("click", () => this.clearAllInteractiveFilters());
+        panel.appendChild(clear);
+
+        if (this.filterFocus) {
+            window.setTimeout(() => {
+                const selector = panel.querySelector(`[data-filter-key="${this.filterFocus}"]`);
+                if (selector instanceof HTMLSelectElement) {
+                    selector.focus();
+                }
+            }, 0);
+        }
+
+        return panel;
+    }
+
+    private renderFilterSelect(
+        label: string,
+        key: string,
+        options: Array<{ value: string; label: string }>,
+        selectedValue: string | null,
+        onChange: (value: string | null) => void
+    ): HTMLElement {
+        const field = createElement("label", "evm-filter-field");
+        field.appendChild(createElement("span", undefined, label));
+        const select = createElement("select");
+        select.setAttribute("data-filter-key", key);
+        select.appendChild(new Option("Todos", ""));
+        options.forEach((option) => select.appendChild(new Option(option.label, option.value)));
+        select.value = selectedValue ?? "";
+        select.addEventListener("change", () => {
+            onChange(select.value || null);
+        });
+        field.appendChild(select);
+        return field;
+    }
+
+    private filteredNavigatorProjects(): NavigatorProject[] {
+        const projects = this.currentDashboardData?.navigator?.projects ?? [];
+        return projects.filter((project) => {
+            return this.matchesFilter(project.UnidadGerencial, this.filterState.selectedUnit)
+                && this.matchesFilter(project.Region, this.filterState.region)
+                && this.matchesFilter(project.Provincia, this.filterState.province)
+                && this.matchesFilter(project.Distrito, this.filterState.district)
+                && this.matchesFilter(project.EstadoProyecto, this.filterState.status);
+        });
+    }
+
+    private uniqueNavigatorValues(key: keyof NavigatorProject): Array<{ value: string; label: string }> {
+        return this.uniqueFromProjects(this.currentDashboardData?.navigator?.projects ?? [], key);
+    }
+
+    private uniqueFromProjects(projects: NavigatorProject[], key: keyof NavigatorProject): Array<{ value: string; label: string }> {
+        const values = new Set<string>();
+        projects.forEach((project) => {
+            const value = this.navigatorText(project[key]);
+            if (value) {
+                values.add(value);
+            }
+        });
+        return Array.from(values).sort((a, b) => a.localeCompare(b)).map((value) => ({ value, label: value }));
+    }
+
+    private projectOptions(projects: NavigatorProject[]): Array<{ value: string; label: string }> {
+        return projects
+            .map((project) => ({
+                value: this.navigatorText(project.IdIntervencion),
+                label: this.navigatorText(project.NombreIntervencion) || this.navigatorText(project.IdIntervencion)
+            }))
+            .filter((option) => option.value.length > 0)
+            .slice(0, 100);
+    }
+
+    private matchesFilter(value: unknown, filter: string | null): boolean {
+        return !filter || this.navigatorText(value) === filter;
+    }
+
+    private navigatorText(value: unknown): string {
+        return value === null || value === undefined ? "" : String(value);
+    }
+
+    private applyBasicFilter(table: string, column: string, values: Array<string | number>, propertyName: string): void {
+        const nextValue = values[0] ?? null;
+        if (this.isSameFilterValue(this.appliedFilterValues[propertyName] ?? null, nextValue === null ? null : String(nextValue))) {
+            console.debug("Filtro omitido por valor idéntico", {
+                table,
+                column,
+                values,
+                propertyName
+            });
+            return;
+        }
+
+        const filter = {
+            $schema: ["http", "://powerbi.com/product/schema#basic"].join(""),
+            filterType: 1,
+            target: { table, column },
+            operator: "In",
+            values
+        } as unknown as powerbi.IFilter;
+
+        console.debug("Aplicando filtro", {
+            table,
+            column,
+            values,
+            propertyName,
+            filter
+        });
+        this.host.applyJsonFilter(filter, "internalFilters", propertyName, powerbi.FilterAction.merge);
+        this.appliedFilterValues[propertyName] = nextValue === null ? null : String(nextValue);
+    }
+
+    private clearInternalFilter(propertyName: string, force: boolean = true): void {
+        if (!force && this.appliedFilterValues[propertyName] === null) {
+            return;
+        }
+        console.debug("Limpiando filtro", {
+            propertyName
+        });
+        this.host.applyJsonFilter(null as unknown as powerbi.IFilter, "internalFilters", propertyName, powerbi.FilterAction.remove);
+        this.appliedFilterValues[propertyName] = null;
+    }
+
+    private clearAllInteractiveFilters(): void {
+        ["levelFilter", "unitFilter", "regionFilter", "provinceFilter", "districtFilter", "statusFilter", "projectFilter"].forEach((property) => this.clearInternalFilter(property));
+        this.filterState.level = "PRONIED";
+        this.filterState.selectedUnit = null;
+        this.filterState.selectedProjectId = null;
+        this.filterState.region = null;
+        this.filterState.province = null;
+        this.filterState.district = null;
+        this.filterState.status = null;
+        this.closeFilterPanel();
+    }
+
+    private isSameFilterValue(current: string | null, next: string | null): boolean {
+        return current === next;
+    }
+
+    private formatInteger(value: DataValue): string {
+        const parsed = numberValue(value);
+        return parsed === null ? "—" : parsed.toLocaleString("en-US", { maximumFractionDigits: 0 });
     }
 
     private openGaugeHistoryModal(selectedGaugeKey?: GaugeMetricKey): void {

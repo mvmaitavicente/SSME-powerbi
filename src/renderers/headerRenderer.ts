@@ -1,30 +1,82 @@
 "use strict";
 
-import { ProjectHeader } from "../types";
+import { DashboardLevel, ProjectHeader } from "../types";
 import { createElement, date, text } from "../utils/format";
 
-export function renderSidebar(): HTMLElement {
+export interface SidebarOptions {
+    activeLevel: DashboardLevel;
+    projectViewActive: "summary" | "milestones" | "risks";
+    canOpenUnit: boolean;
+    canOpenProject: boolean;
+    onOpenPronied: () => void;
+    onOpenUnit: () => void;
+    onOpenProject: () => void;
+    onProjectView: (view: "summary" | "milestones" | "risks") => void;
+    onOpenFilters: () => void;
+}
+
+export function renderSidebar(options: SidebarOptions): HTMLElement {
     const sidebar = createElement("aside", "evm-sidebar");
+    console.debug("Sidebar renderizado", {
+        level: options.activeLevel,
+        canOpenUnit: options.canOpenUnit,
+        canOpenProject: options.canOpenProject
+    });
 
     const menu = createElement("nav", "evm-menu");
-    ["Resumen Ejecutivo", "Direccion Unidad de Linea", "Proyectos", "Riesgos", "Tabla de Cierre"].forEach((label, index) => {
-        const item = createElement("div", `evm-menu-item${index === 0 ? " active" : ""}`);
-        item.appendChild(createElement("span", "evm-menu-icon", ["⌂", "◌", "▣", "△", "☷"][index]));
-        item.appendChild(createElement("span", undefined, label));
-        menu.appendChild(item);
-    });
+    menu.appendChild(createElement("div", "evm-menu-group-label", "Navegación"));
+    menu.appendChild(renderSidebarButton("▦", "PRONIED", options.activeLevel === "PRONIED", false, options.onOpenPronied));
+    menu.appendChild(renderSidebarButton("☷", "UNIDAD", options.activeLevel === "UNIDAD", false, options.onOpenUnit, options.canOpenUnit ? "Abrir unidad" : "Seleccione una unidad"));
+    menu.appendChild(renderSidebarButton("▣", "PROYECTO", options.activeLevel === "PROYECTO", false, options.onOpenProject, options.canOpenProject ? "Abrir proyecto" : "Seleccione un proyecto"));
+
+    menu.appendChild(createElement("div", "evm-menu-group-label evm-menu-group-label--project", "Proyecto"));
+    const disableProjectViews = options.activeLevel !== "PROYECTO";
+    menu.appendChild(renderSidebarButton("⌂", "Resumen", options.projectViewActive === "summary" && !disableProjectViews, disableProjectViews, () => options.onProjectView("summary"), disableProjectViews ? "Disponible en nivel PROYECTO" : "Ver Curva S"));
+    menu.appendChild(renderSidebarButton("◇", "Hitos", options.projectViewActive === "milestones" && !disableProjectViews, disableProjectViews, () => options.onProjectView("milestones"), disableProjectViews ? "Disponible en nivel PROYECTO" : "Ver Hitos"));
+    menu.appendChild(renderSidebarButton("△", "Riesgos", options.projectViewActive === "risks" && !disableProjectViews, disableProjectViews, () => options.onProjectView("risks"), disableProjectViews ? "Disponible en nivel PROYECTO" : "Ver Riesgos"));
 
     const footer = createElement("div", "evm-menu-footer");
-    ["Mapa Cartografico", "Explicacion"].forEach((label) => {
-        const item = createElement("div", "evm-menu-item ghost");
-        item.appendChild(createElement("span", "evm-menu-icon", "ⓘ"));
-        item.appendChild(createElement("span", undefined, label));
-        footer.appendChild(item);
-    });
+    footer.appendChild(renderSidebarButton("⚙", "Filtros", false, false, options.onOpenFilters, "Abrir filtros"));
+    footer.appendChild(renderSidebarButton("ⓘ", "Explicación", false, true, () => undefined, "Explicación"));
 
     sidebar.appendChild(menu);
     sidebar.appendChild(footer);
     return sidebar;
+}
+
+function renderSidebarButton(
+    icon: string,
+    label: string,
+    active: boolean,
+    disabled: boolean,
+    onClick: () => void,
+    tooltip?: string
+): HTMLButtonElement {
+    console.debug("Registrando botón sidebar", {
+        name: label,
+        disabled
+    });
+    const item = createElement("button", `evm-menu-item${active ? " sidebar-item--active active" : ""}${disabled ? " disabled" : ""}`);
+    item.type = "button";
+    item.disabled = disabled;
+    item.title = tooltip ?? label;
+    item.setAttribute("aria-label", tooltip ?? label);
+    item.appendChild(createElement("span", "evm-menu-icon", icon));
+    item.appendChild(createElement("span", undefined, label));
+    item.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (item.disabled) {
+            return;
+        }
+
+        console.debug("Sidebar click recibido", {
+            target: label
+        });
+        onClick();
+    });
+    return item;
 }
 
 export function renderHeader(header: ProjectHeader): HTMLElement {

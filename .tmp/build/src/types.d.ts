@@ -189,12 +189,14 @@ export interface NavigatorData {
 }
 export interface DashboardContextData {
     Level: DashboardLevel;
-    Unit?: string;
-    ProjectId?: string;
-    Region?: string;
-    Province?: string;
-    District?: string;
-    Status?: string;
+    AxisType?: "CALENDAR_PERIOD" | "PROJECT_WEEK";
+    Unit: string | null;
+    ProjectId: string | null;
+    Region: string | null;
+    Province: string | null;
+    District: string | null;
+    Status: string | null;
+    CutoffDate: string | null;
 }
 export interface InternalFilterState {
     levelFilter?: DashboardLevel;
@@ -217,6 +219,72 @@ export interface DashboardJsonPayload {
     milestone?: JsonTablePayload;
     milestones?: JsonTablePayload;
     risks?: JsonTablePayload;
+}
+export interface SummaryData {
+    CantidadProyectos: number | null;
+    BAC: number | null;
+    PV: number | null;
+    EV: number | null;
+    AC: number | null;
+    CPI: number | null;
+    SPIW: number | null;
+    TCPI: number | null;
+    TSPIW?: number | null;
+    SPIT?: number | null;
+    TSPIT?: number | null;
+    EACC?: number | null;
+    EACT?: number | null;
+    VACC?: number | null;
+    VACT?: number | null;
+}
+export interface UnitSummaryData extends Record<string, unknown> {
+    UnidadGerencial: string;
+    CantidadProyectos: number | null;
+    BAC: number | null;
+    PV: number | null;
+    EV: number | null;
+    AC: number | null;
+    CPI: number | null;
+    SPIW: number | null;
+    TCPI: number | null;
+}
+export interface UnitProjectSummaryData extends Record<string, unknown> {
+    IdIntervencion: string;
+    NombreIntervencion: string;
+    Cui: string | number | null;
+    UnidadGerencial: string;
+    Region: string;
+    Provincia: string;
+    Distrito: string;
+    EstadoProyecto: string;
+    BAC: number | null;
+    PV: number | null;
+    EV: number | null;
+    AC: number | null;
+    CPI: number | null;
+    SPIW: number | null;
+    TCPI: number | null;
+}
+export interface AggregateCurveData extends Record<string, unknown> {
+    OrdenSemana: number;
+    FechaInicioSemana: string | null;
+    FechaFinSemana: string | null;
+    LabelSemana: string;
+    BAC: number | null;
+    PV: number | null;
+    EV: number | null;
+    AC: number | null;
+    CPI: number | null;
+    SPIW: number | null;
+}
+export interface AggregateGaugeData extends Record<string, unknown> {
+    OrdenSemana: number;
+    FechaInicioSemana: string | null;
+    FechaFinSemana: string | null;
+    LabelSemana: string;
+    CPI: number | null;
+    SPIW: number | null;
+    TCPI: number | null;
 }
 export interface ProjectData extends Record<string, unknown> {
     IdIntervencion: string;
@@ -270,11 +338,17 @@ export interface GaugeChartSeries {
 }
 export interface ParsedDashboardData {
     idIntervencion: string;
-    context?: DashboardContextData;
+    schemaVersion?: string;
+    context: DashboardContextData;
+    summary: SummaryData | null;
     navigator?: NavigatorData;
     project: ProjectData | null;
     gauges: GaugeHistoryRow[];
     curve: CurveData[];
+    aggregateGauges: AggregateGaugeData[];
+    aggregateCurve: AggregateCurveData[];
+    units: UnitSummaryData[];
+    projects: UnitProjectSummaryData[];
     risks: RiskItem[];
     milestones: MilestoneItem[];
 }
