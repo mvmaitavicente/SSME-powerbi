@@ -1,7 +1,7 @@
 "use strict";
 
 import powerbi from "powerbi-visuals-api";
-import { AggregateCurveData, AggregateGaugeData, CurrentSnapshot, CurveData, CurveHistoryPoint, CurveReferences, DashboardContextData, DashboardData, DashboardJsonPayload, DashboardLevel, DataValue, FieldValueMap, GaugeData, GaugeHistory, GaugeHistoryRow, JsonTablePayload, MilestoneItem, NavigatorData, NavigatorJsonPayload, NavigatorProject, ParsedDashboardData, PerformanceData, ProjectData, ProjectHeader, RenderCurveData, RiskItem, SummaryData, UnitProjectSummaryData, UnitSummaryData } from "./types";
+import { AggregateCurveData, AggregateGaugeData, CurrentSnapshot, CurveData, CurveHistoryPoint, CurveReferences, DashboardContextData, DashboardData, DashboardJsonPayload, DashboardLevel, DataValue, FieldValueMap, GaugeData, GaugeHistory, GaugeHistoryRow, JsonTablePayload, MilestoneItem, NavigatorData, NavigatorJsonPayload, NavigatorProject, ParsedDashboardData, ParserDebugData, PerformanceData, ProjectData, ProjectHeader, RenderCurveData, RiskItem, SummaryData, UnitProjectSummaryData, UnitSummaryData } from "./types";
 
 type DataViewTable = powerbi.DataViewTable;
 type DataViewMetadataColumn = powerbi.DataViewMetadataColumn;
@@ -245,26 +245,40 @@ function parseNavigatorPayload(rawNavigator: unknown): NavigatorData {
 }
 
 function parseDashboardContext(contextTable?: JsonTablePayload): DashboardContextData {
+    return parseDashboardContextWithDebug(contextTable).context;
+}
+
+function parseDashboardContextWithDebug(contextTable?: JsonTablePayload): { context: DashboardContextData; rawContextLevel: string; normalizedContextLevel: DashboardLevel } {
     validateJsonTableRowCount(contextTable, "JSON Dashboard context");
 
     if (!contextTable) {
-        return defaultDashboardContext("PRONIED");
+        return {
+            context: defaultDashboardContext("PRONIED"),
+            rawContextLevel: "",
+            normalizedContextLevel: "PRONIED"
+        };
     }
 
     const rows = jsonTableToObjects<Record<string, unknown>>(contextTable);
     const contextRow = rows[0] ?? {};
-    const level = normalizeDashboardLevel(firstKnownValue(contextRow, "Level", "Nivel"));
+    const rawContextLevelValue = firstKnownValue(contextRow, "Level", "Nivel");
+    const rawContextLevel = String(rawContextLevelValue ?? "");
+    const level = normalizeDashboardLevel(rawContextLevelValue);
 
     return {
-        Level: level,
-        AxisType: normalizeAxisType(firstKnownValue(contextRow, "AxisType", "TipoEje")),
-        Unit: nullableText(firstKnownValue(contextRow, "Unit", "Unidad", "UnidadGerencial")),
-        ProjectId: nullableText(firstKnownValue(contextRow, "ProjectId", "IdIntervencion", "ProyectoId")),
-        Region: nullableText(firstKnownValue(contextRow, "Region")),
-        Province: nullableText(firstKnownValue(contextRow, "Province", "Provincia")),
-        District: nullableText(firstKnownValue(contextRow, "District", "Distrito")),
-        Status: nullableText(firstKnownValue(contextRow, "Status", "Estado", "EstadoProyecto")),
-        CutoffDate: nullableText(firstKnownValue(contextRow, "CutoffDate", "FechaCorte", "FechaEstado"))
+        context: {
+            Level: level,
+            AxisType: normalizeAxisType(firstKnownValue(contextRow, "AxisType", "TipoEje")),
+            Unit: nullableText(firstKnownValue(contextRow, "Unit", "Unidad", "UnidadGerencial")),
+            ProjectId: nullableText(firstKnownValue(contextRow, "ProjectId", "IdIntervencion", "ProyectoId")),
+            Region: nullableText(firstKnownValue(contextRow, "Region")),
+            Province: nullableText(firstKnownValue(contextRow, "Province", "Provincia")),
+            District: nullableText(firstKnownValue(contextRow, "District", "Distrito")),
+            Status: nullableText(firstKnownValue(contextRow, "Status", "Estado", "EstadoProyecto")),
+            CutoffDate: nullableText(firstKnownValue(contextRow, "CutoffDate", "FechaCorte", "FechaEstado"))
+        },
+        rawContextLevel,
+        normalizedContextLevel: level
     };
 }
 
@@ -290,13 +304,24 @@ function normalizeAxisType(value: unknown): "CALENDAR_PERIOD" | "PROJECT_WEEK" |
 }
 
 function normalizeDashboardLevel(value: unknown): DashboardLevel {
-    const normalized = textValue(value).trim().toUpperCase();
+    const normalized =
+        typeof value === "string"
+            ? value.trim().toUpperCase()
+            : "";
 
-    if (normalized === "UNIDAD" || normalized === "PROYECTO") {
-        return normalized;
+    switch (normalized) {
+        case "PRONIED":
+            return "PRONIED";
+
+        case "UNIDAD":
+            return "UNIDAD";
+
+        case "PROYECTO":
+            return "PROYECTO";
+
+        default:
+            return "PRONIED";
     }
-
-    return "PRONIED";
 }
 
 function validateJsonTableRowCount(table: JsonTablePayload | undefined, label: string): void {
@@ -310,6 +335,35 @@ function getRoleIndex(dataView: powerbi.DataView, roleName: string): number {
     return columns.findIndex((column) => column.roles?.[roleName] === true);
 }
 
+interface ParserRoleDebugInput {
+    navigatorRoleIndex: number | null;
+    jsonDashboardRoleIndex: number | null;
+    jsonDashboardDisplayName: string | null;
+    jsonDashboardQueryName: string | null;
+    dataViewRowCount: number | null;
+    rowIndexUsed: number | null;
+}
+
+interface ParserDebugInput extends ParserRoleDebugInput {
+    rawContextLevel: string;
+    normalizedContextLevel: DashboardLevel;
+    rawDashboardLength: number;
+    rawDashboardPreview: string;
+    directContextObject: string;
+    directRawLevel: string;
+    directNormalizedLevel: DashboardLevel;
+    contextAfterParse: string;
+    beforeLegacyLevel: string | null;
+    legacyParsedLevel: string | null;
+    legacyContextLevel: string | null;
+    legacyParsedObject: string;
+    parserUsed: string;
+    fallbackUsed: boolean;
+    cachedDashboardUsed: boolean;
+}
+
+type ParserDebugBase = Omit<ParserDebugInput, "beforeLegacyLevel" | "legacyParsedLevel" | "legacyContextLevel" | "legacyParsedObject" | "parserUsed" | "fallbackUsed" | "cachedDashboardUsed">;
+
 export function parseDashboardJsonData(dataView?: powerbi.DataView): ParsedDashboardData | null {
     const table = dataView?.table;
 
@@ -321,8 +375,16 @@ export function parseDashboardJsonData(dataView?: powerbi.DataView): ParsedDashb
     const jsonIndex = getRoleIndex(dataView, "jsonDashboard");
 
     if (navigatorIndex >= 0 && jsonIndex >= 0) {
-        for (const row of table.rows) {
-            const parsed = parseNavigatorDashboardRow(row, navigatorIndex, jsonIndex);
+        for (let rowIndex = 0; rowIndex < table.rows.length; rowIndex += 1) {
+            const row = table.rows[rowIndex];
+            const parsed = parseNavigatorDashboardRow(row, navigatorIndex, jsonIndex, {
+                navigatorRoleIndex: navigatorIndex,
+                jsonDashboardRoleIndex: jsonIndex,
+                jsonDashboardDisplayName: table.columns[jsonIndex]?.displayName ?? null,
+                jsonDashboardQueryName: table.columns[jsonIndex]?.queryName ?? null,
+                dataViewRowCount: table.rows.length,
+                rowIndexUsed: rowIndex
+            });
             if (parsed) {
                 return parsed;
             }
@@ -351,7 +413,12 @@ export function parseDashboardJsonData(dataView?: powerbi.DataView): ParsedDashb
     return null;
 }
 
-function parseNavigatorDashboardRow(row: powerbi.DataViewTableRow, navigatorIndex: number, jsonIndex: number): ParsedDashboardData | null {
+function parseNavigatorDashboardRow(
+    row: powerbi.DataViewTableRow,
+    navigatorIndex: number,
+    jsonIndex: number,
+    roleDebug: ParserRoleDebugInput
+): ParsedDashboardData | null {
     const rawNavigator = row[navigatorIndex];
     const rawDashboard = row[jsonIndex];
 
@@ -362,19 +429,102 @@ function parseNavigatorDashboardRow(row: powerbi.DataViewTableRow, navigatorInde
     try {
         const navigator = parseNavigatorPayload(rawNavigator);
         const payload = JSON.parse(rawDashboard) as DashboardJsonPayload;
-        const context = parseDashboardContext(payload.context);
+        const directContextRows = payload.context ? jsonTableToObjects<Record<string, unknown>>(payload.context) : [];
+        const directContextRow = directContextRows[0] ?? {};
+        const directRawLevelValue = firstKnownValue(directContextRow, "Level", "Nivel");
+        const directRawLevel = String(directRawLevelValue ?? "");
+        const directNormalizedLevel = normalizeDashboardLevel(directRawLevelValue);
+        const contextDebug = parseDashboardContextWithDebug(payload.context);
+        const debugBase: ParserDebugBase = {
+            ...roleDebug,
+            rawContextLevel: contextDebug.rawContextLevel,
+            normalizedContextLevel: contextDebug.normalizedContextLevel,
+            rawDashboardLength: rawDashboard.length,
+            rawDashboardPreview: rawDashboard.slice(0, 800),
+            directContextObject: JSON.stringify(directContextRow, null, 2),
+            directRawLevel,
+            directNormalizedLevel,
+            contextAfterParse: JSON.stringify(contextDebug.context, null, 2)
+        };
 
-        const parsed = parseDashboardJsonRow([context.ProjectId || "__json_dashboard__", rawDashboard], 0, 1);
-        return parsed ? {
-            ...parsed,
-            context,
-            navigator,
-            idIntervencion: context.ProjectId || parsed.idIntervencion
-        } : null;
+        switch (contextDebug.context.Level) {
+            case "PRONIED":
+                return parseProniedDashboardPayload(payload, contextDebug.context, navigator, debugBase);
+            case "UNIDAD":
+                return parseUnitDashboardPayload(payload, contextDebug.context, navigator, debugBase);
+            case "PROYECTO":
+                return parseProjectDashboardPayload(payload, contextDebug.context, navigator, debugBase);
+            default:
+                return null;
+        }
     } catch (error) {
         console.error("No se pudo interpretar JSON Navigator/Dashboard.", error);
         return null;
     }
+}
+
+function parseProniedDashboardPayload(
+    payload: DashboardJsonPayload,
+    context: DashboardContextData,
+    navigator: NavigatorData,
+    debugBase: ParserDebugBase
+): ParsedDashboardData | null {
+    return parseDashboardPayload(payload, context.ProjectId || "__json_dashboard__", context, navigator, {
+        ...debugBase,
+        beforeLegacyLevel: null,
+        legacyParsedLevel: null,
+        legacyContextLevel: null,
+        legacyParsedObject: "",
+        parserUsed: "parseProniedDashboardPayload",
+        fallbackUsed: false,
+        cachedDashboardUsed: false
+    });
+}
+
+function parseUnitDashboardPayload(
+    payload: DashboardJsonPayload,
+    context: DashboardContextData,
+    navigator: NavigatorData,
+    debugBase: ParserDebugBase
+): ParsedDashboardData | null {
+    return parseDashboardPayload(payload, context.ProjectId || "__json_dashboard__", context, navigator, {
+        ...debugBase,
+        beforeLegacyLevel: null,
+        legacyParsedLevel: null,
+        legacyContextLevel: null,
+        legacyParsedObject: "",
+        parserUsed: "parseUnitDashboardPayload",
+        fallbackUsed: false,
+        cachedDashboardUsed: false
+    });
+}
+
+function parseProjectDashboardPayload(
+    payload: DashboardJsonPayload,
+    context: DashboardContextData,
+    navigator: NavigatorData,
+    debugBase: ParserDebugBase
+): ParsedDashboardData | null {
+    const parsed = parseDashboardPayload(payload, context.ProjectId || "__json_dashboard__", context, navigator, {
+        ...debugBase,
+        beforeLegacyLevel: context.Level,
+        legacyParsedLevel: null,
+        legacyContextLevel: null,
+        legacyParsedObject: "",
+        parserUsed: "parseProjectDashboardPayload",
+        fallbackUsed: false,
+        cachedDashboardUsed: false
+    });
+    const legacyParsedLevel = readLegacyParsedLevel(parsed);
+    return parsed ? {
+        ...parsed,
+        debug: parsed.debug
+            ? {
+                ...parsed.debug,
+                legacyParsedLevel
+            }
+            : undefined
+    } : null;
 }
 
 function parseDashboardJsonRow(row: powerbi.DataViewTableRow, idIndex: number, jsonIndex: number): ParsedDashboardData | null {
@@ -387,72 +537,165 @@ function parseDashboardJsonRow(row: powerbi.DataViewTableRow, idIndex: number, j
 
     try {
         const payload = JSON.parse(rawJson) as DashboardJsonPayload;
-
-        const context = parseDashboardContext(payload.context);
-        if (!validateDashboardPayload(payload, context.Level)) {
-            console.warn(`El JSON Dashboard no contiene los bloques requeridos para ${context.Level}.`);
-            return null;
-        }
-
-        const summaryRows = payload.summary ? jsonTableToObjects<Record<string, unknown>>(payload.summary) : [];
-        const projectRows = payload.project ? jsonTableToObjects<ProjectData>(payload.project) : [];
-        const gaugeRows = payload.gauges ? jsonTableToObjects<Record<string, unknown>>(payload.gauges) : [];
-        const curveRows = payload.curve ? jsonTableToObjects<Record<string, unknown>>(payload.curve) : [];
-        const unitRows = payload.units ? jsonTableToObjects<Record<string, unknown>>(payload.units) : [];
-        const projectSummaryRows = payload.projects ? jsonTableToObjects<Record<string, unknown>>(payload.projects) : [];
-        const riskRows = payload.risks ? jsonTableToObjects<Record<string, unknown>>(payload.risks) : [];
-        const milestoneRows = payload.milestone || payload.milestones
-            ? jsonTableToObjects<Record<string, unknown>>((payload.milestone || payload.milestones) as JsonTablePayload)
-            : [];
-
-        validateJsonTableRowCount(payload.summary, "JSON summary");
-        validateJsonTableRowCount(payload.project, "JSON project");
-        validateJsonTableRowCount(payload.gauges, "JSON gauges");
-        validateJsonTableRowCount(payload.curve, "JSON curve");
-        validateJsonTableRowCount(payload.units, "JSON units");
-        validateJsonTableRowCount(payload.projects, "JSON projects");
-        validateJsonTableRowCount(payload.risks, "JSON risks");
-
-        const milestonePayload = payload.milestone || payload.milestones;
-        validateJsonTableRowCount(milestonePayload, "JSON milestone");
-
-        const normalizedGauges = gaugeRows
-            .map(normalizeJsonGauge)
-            .sort((a, b) => a.Semana - b.Semana);
-
-        const normalizedCurve = curveRows
-            .map(normalizeJsonCurve)
-            .sort((a, b) => a.Semana - b.Semana);
-        const normalizedAggregateGauges = gaugeRows.map(normalizeAggregateGauge).sort((a, b) => a.OrdenSemana - b.OrdenSemana);
-        const normalizedAggregateCurve = curveRows.map(normalizeAggregateCurve).sort((a, b) => a.OrdenSemana - b.OrdenSemana);
-        const normalizedUnits = unitRows.map(normalizeUnitSummary);
-        const normalizedProjects = projectSummaryRows.map(normalizeUnitProjectSummary);
-
-        const normalizedRisks = riskRows.map(normalizeJsonRisk).filter((item) => hasAny(item as FieldValueMap, riskFields));
-        const normalizedMilestones = milestoneRows
-            .map(normalizeJsonMilestone)
-            .filter((item) => hasAny(item as FieldValueMap, milestoneFields))
-            .sort((a, b) => (toNullableNumber(a.OrdenHito) ?? 0) - (toNullableNumber(b.OrdenHito) ?? 0));
-
-        return {
-            idIntervencion,
-            schemaVersion: payload.schemaVersion,
-            context,
-            summary: normalizeSummary(summaryRows[0] ?? null),
-            project: normalizeProjectData(projectRows[0] ?? null),
-            gauges: normalizedGauges,
-            curve: normalizedCurve,
-            aggregateGauges: normalizedAggregateGauges,
-            aggregateCurve: normalizedAggregateCurve,
-            units: normalizedUnits,
-            projects: normalizedProjects,
-            risks: normalizedRisks,
-            milestones: normalizedMilestones
-        };
+        const directContextRows = payload.context ? jsonTableToObjects<Record<string, unknown>>(payload.context) : [];
+        const directContextRow = directContextRows[0] ?? {};
+        const directRawLevelValue = firstKnownValue(directContextRow, "Level", "Nivel");
+        const contextDebug = parseDashboardContextWithDebug(payload.context);
+        return parseDashboardPayload(payload, idIntervencion, contextDebug.context, undefined, {
+            rawContextLevel: contextDebug.rawContextLevel,
+            normalizedContextLevel: contextDebug.normalizedContextLevel,
+            rawDashboardLength: rawJson.length,
+            rawDashboardPreview: rawJson.slice(0, 800),
+            directContextObject: JSON.stringify(directContextRow, null, 2),
+            directRawLevel: String(directRawLevelValue ?? ""),
+            directNormalizedLevel: normalizeDashboardLevel(directRawLevelValue),
+            contextAfterParse: JSON.stringify(contextDebug.context, null, 2),
+            beforeLegacyLevel: contextDebug.context.Level,
+            legacyParsedLevel: null,
+            legacyContextLevel: null,
+            legacyParsedObject: "",
+            parserUsed: "parseDashboardJsonRow",
+            fallbackUsed: true,
+            cachedDashboardUsed: false,
+            navigatorRoleIndex: null,
+            jsonDashboardRoleIndex: jsonIndex,
+            jsonDashboardDisplayName: null,
+            jsonDashboardQueryName: null,
+            dataViewRowCount: null,
+            rowIndexUsed: null
+        });
     } catch (error) {
         console.error("No se pudo interpretar JSON Dashboard.", error);
         return null;
     }
+}
+
+function parseDashboardPayload(
+    payload: DashboardJsonPayload,
+    idIntervencion: string,
+    context: DashboardContextData,
+    navigator?: NavigatorData,
+    debugInput?: ParserDebugInput
+): ParsedDashboardData | null {
+    if (!validateDashboardPayload(payload, context.Level)) {
+        console.warn(`El JSON Dashboard no contiene los bloques requeridos para ${context.Level}.`);
+        return null;
+    }
+
+    const summaryRows = payload.summary ? jsonTableToObjects<Record<string, unknown>>(payload.summary) : [];
+    const projectRows = payload.project ? jsonTableToObjects<ProjectData>(payload.project) : [];
+    const gaugeRows = payload.gauges ? jsonTableToObjects<Record<string, unknown>>(payload.gauges) : [];
+    const curveRows = payload.curve ? jsonTableToObjects<Record<string, unknown>>(payload.curve) : [];
+    const unitRows = payload.units ? jsonTableToObjects<Record<string, unknown>>(payload.units) : [];
+    const projectSummaryRows = payload.projects ? jsonTableToObjects<Record<string, unknown>>(payload.projects) : [];
+    const riskRows = payload.risks ? jsonTableToObjects<Record<string, unknown>>(payload.risks) : [];
+    const milestoneRows = payload.milestone || payload.milestones
+        ? jsonTableToObjects<Record<string, unknown>>((payload.milestone || payload.milestones) as JsonTablePayload)
+        : [];
+
+    validateJsonTableRowCount(payload.summary, "JSON summary");
+    validateJsonTableRowCount(payload.project, "JSON project");
+    validateJsonTableRowCount(payload.gauges, "JSON gauges");
+    validateJsonTableRowCount(payload.curve, "JSON curve");
+    validateJsonTableRowCount(payload.units, "JSON units");
+    validateJsonTableRowCount(payload.projects, "JSON projects");
+    validateJsonTableRowCount(payload.risks, "JSON risks");
+
+    const milestonePayload = payload.milestone || payload.milestones;
+    validateJsonTableRowCount(milestonePayload, "JSON milestone");
+
+    const normalizedGauges = gaugeRows
+        .map(normalizeJsonGauge)
+        .sort((a, b) => a.Semana - b.Semana);
+
+    const normalizedCurve = curveRows
+        .map(normalizeJsonCurve)
+        .sort((a, b) => a.Semana - b.Semana);
+    const normalizedAggregateGauges = gaugeRows.map(normalizeAggregateGauge).sort((a, b) => a.OrdenSemana - b.OrdenSemana);
+    const normalizedAggregateCurve = curveRows.map(normalizeAggregateCurve).sort((a, b) => a.OrdenSemana - b.OrdenSemana);
+    const normalizedUnits = unitRows.map(normalizeUnitSummary);
+    const normalizedProjects = projectSummaryRows.map(normalizeUnitProjectSummary);
+
+    const normalizedRisks = riskRows.map(normalizeJsonRisk).filter((item) => hasAny(item as FieldValueMap, riskFields));
+    const normalizedMilestones = milestoneRows
+        .map(normalizeJsonMilestone)
+        .filter((item) => hasAny(item as FieldValueMap, milestoneFields))
+        .sort((a, b) => (toNullableNumber(a.OrdenHito) ?? 0) - (toNullableNumber(b.OrdenHito) ?? 0));
+
+    const debug: ParserDebugData | undefined = debugInput
+        ? {
+            rawContextLevel: debugInput.rawContextLevel,
+            normalizedContextLevel: debugInput.normalizedContextLevel,
+            contextLevelAfterParse: context.Level,
+            rawDashboardLength: debugInput.rawDashboardLength,
+            rawDashboardPreview: debugInput.rawDashboardPreview,
+            directContextObject: debugInput.directContextObject,
+            directRawLevel: debugInput.directRawLevel,
+            directNormalizedLevel: debugInput.directNormalizedLevel,
+            contextAfterParse: debugInput.contextAfterParse,
+            beforeLegacyLevel: debugInput.beforeLegacyLevel,
+            legacyParsedLevel: debugInput.legacyParsedLevel,
+            legacyContextLevel: debugInput.legacyContextLevel,
+            legacyParsedObject: debugInput.legacyParsedObject,
+            finalContextLevel: context.Level,
+            finalParsedPreview: "",
+            parserUsed: debugInput.parserUsed,
+            fallbackUsed: debugInput.fallbackUsed,
+            cachedDashboardUsed: debugInput.cachedDashboardUsed,
+            jsonDashboardRoleIndex: debugInput.jsonDashboardRoleIndex,
+            jsonDashboardDisplayName: debugInput.jsonDashboardDisplayName,
+            jsonDashboardQueryName: debugInput.jsonDashboardQueryName,
+            navigatorRoleIndex: debugInput.navigatorRoleIndex,
+            dataViewRowCount: debugInput.dataViewRowCount,
+            rowIndexUsed: debugInput.rowIndexUsed
+        }
+        : undefined;
+
+    const finalParsed: ParsedDashboardData = {
+        idIntervencion,
+        schemaVersion: payload.schemaVersion,
+        context,
+        debug,
+        navigator,
+        summary: normalizeSummary(summaryRows[0] ?? null),
+        project: normalizeProjectData(projectRows[0] ?? null),
+        gauges: normalizedGauges,
+        curve: normalizedCurve,
+        aggregateGauges: normalizedAggregateGauges,
+        aggregateCurve: normalizedAggregateCurve,
+        units: normalizedUnits,
+        projects: normalizedProjects,
+        risks: normalizedRisks,
+        milestones: normalizedMilestones
+    };
+
+    if (finalParsed.debug) {
+        finalParsed.debug.finalParsedPreview = JSON.stringify(finalParsed, null, 2).slice(0, 2000);
+    }
+
+    return finalParsed;
+}
+
+function readLegacyParsedLevel(parsed: ParsedDashboardData | null): string | null {
+    if (!parsed) {
+        return null;
+    }
+
+    const candidate = parsed as ParsedDashboardData & {
+        level?: unknown;
+        dashboardLevel?: unknown;
+        currentLevel?: unknown;
+        view?: unknown;
+        viewType?: unknown;
+    };
+    const legacyValue = candidate.level
+        ?? candidate.dashboardLevel
+        ?? candidate.currentLevel
+        ?? candidate.view
+        ?? candidate.viewType
+        ?? null;
+
+    return legacyValue === null || legacyValue === undefined ? null : String(legacyValue);
 }
 
 function validateDashboardPayload(payload: DashboardJsonPayload, level: DashboardLevel): boolean {

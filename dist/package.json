@@ -1,5 +1,5 @@
 {
-		"version": "1.0.0.0",
+		"version": "1.0.0.3",
 		"author": {"name":"PRONIED","email":"pronied@example.com"},
 		"resources": [
 			{
@@ -8,7 +8,7 @@
 				"file": "resources/sSME243CE2860C704208ACDF8BC4FCB6C104.pbiviz.json"
 			}
 		],
-		"visual": {"name":"sSME","displayName":"SSME EVM PRONIED","guid":"sSME243CE2860C704208ACDF8BC4FCB6C104","visualClassName":"Visual","version":"1.0.0.0","description":"Dashboard ejecutivo EVM PRONIED con datos calculados desde medidas DAX.","supportUrl":"https://www.gob.pe/pronied","gitHubUrl":""},
+		"visual": {"name":"sSME","displayName":"SSME EVM PRONIED","guid":"sSME243CE2860C704208ACDF8BC4FCB6C104","visualClassName":"Visual","version":"1.0.0.3","description":"Dashboard ejecutivo EVM PRONIED con datos calculados desde medidas DAX.","supportUrl":"https://www.gob.pe/pronied","gitHubUrl":""},
 		"metadata": {
 			"pbivizjson": {
 				"resourceId": "rId0"

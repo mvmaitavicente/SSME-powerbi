@@ -13,7 +13,22 @@
   ],
   "objects": {
     "general": {
+      "displayName": "General",
       "properties": {
+        "filter": {
+          "displayName": "Filtro externo",
+          "type": {
+            "filter": true
+          }
+        },
+        "selfFilter": {
+          "displayName": "Filtro propio",
+          "type": {
+            "filter": {
+              "selfFilter": true
+            }
+          }
+        },
         "showShadow": {
           "type": {
             "bool": true
@@ -64,6 +79,14 @@
         "projectFilter": {
           "type": {
             "filter": true
+          }
+        },
+        "selfProjectFilter": {
+          "displayName": "Filtro propio de proyecto",
+          "type": {
+            "filter": {
+              "selfFilter": true
+            }
           }
         }
       }

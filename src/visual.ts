@@ -2,6 +2,7 @@
 
 import powerbi from "powerbi-visuals-api";
 import { FormattingSettingsService } from "powerbi-visuals-utils-formattingmodel";
+import { BasicFilter } from "powerbi-models";
 import "./styles/visual.less";
 
 import { adaptJsonDashboardData, parseDashboardJsonData } from "./dataParser";
@@ -18,6 +19,56 @@ import VisualConstructorOptions = powerbi.extensibility.visual.VisualConstructor
 import VisualUpdateOptions = powerbi.extensibility.visual.VisualUpdateOptions;
 import IVisual = powerbi.extensibility.visual.IVisual;
 import IVisualEventService = powerbi.extensibility.IVisualEventService;
+
+interface NavigationDebugState {
+    clickCount: number;
+    updateCount: number;
+    lastAction: string;
+    requestedLevel: string | null;
+    requestedUnit: string | null;
+    requestedProjectId: string | null;
+    clickedProjectKeys: string;
+    clickedProjectObject: string;
+    clickedProjectId: string | null;
+    clickedProjectIdType: string | null;
+    applyJsonFilterCalled: boolean;
+    externalProjectFilterApplied: boolean;
+    selfProjectFilterApplied: boolean;
+    receivedLevel: string | null;
+    receivedUnit: string | null;
+    receivedProjectId: string | null;
+    rawContextLevel: string | null;
+    normalizedContextLevel: string | null;
+    contextLevelAfterParse: string | null;
+    rawDashboardLength: number | null;
+    rawDashboardPreview: string;
+    directContextObject: string;
+    directRawLevel: string | null;
+    directNormalizedLevel: string | null;
+    contextAfterParse: string;
+    beforeLegacyLevel: string | null;
+    legacyParsedLevel: string | null;
+    legacyContextLevel: string | null;
+    legacyParsedObject: string;
+    finalContextLevel: string | null;
+    finalParsedPreview: string;
+    parserUsed: string | null;
+    fallbackUsed: boolean;
+    cachedDashboardUsed: boolean;
+    jsonDashboardRoleIndex: number | null;
+    jsonDashboardDisplayName: string | null;
+    jsonDashboardQueryName: string | null;
+    navigatorRoleIndex: number | null;
+    dataViewRowCount: number | null;
+    rowIndexUsed: number | null;
+    renderedLevel: string | null;
+    jsonFilterCount: number;
+    lastFilterJson: string;
+    activeJsonFilters: string;
+    activeFilterSummary: string;
+    lastError: string | null;
+    timestamp: string;
+}
 
 const palette: VisualPalette = {
     blue: "#001B8E",
@@ -71,6 +122,57 @@ export class Visual implements IVisual {
         status: null
     };
     private readonly appliedFilterValues: { [propertyName: string]: string | null } = {};
+    private navigationDebugHidden: boolean = false;
+    private pendingNavigationLevel: DashboardLevel | null = null;
+    private navigationDebug: NavigationDebugState = {
+        clickCount: 0,
+        updateCount: 0,
+        lastAction: "Visual inicializado",
+        requestedLevel: null,
+        requestedUnit: null,
+        requestedProjectId: null,
+        clickedProjectKeys: "",
+        clickedProjectObject: "",
+        clickedProjectId: null,
+        clickedProjectIdType: null,
+        applyJsonFilterCalled: false,
+        externalProjectFilterApplied: false,
+        selfProjectFilterApplied: false,
+        receivedLevel: null,
+        receivedUnit: null,
+        receivedProjectId: null,
+        rawContextLevel: null,
+        normalizedContextLevel: null,
+        contextLevelAfterParse: null,
+        rawDashboardLength: null,
+        rawDashboardPreview: "",
+        directContextObject: "",
+        directRawLevel: null,
+        directNormalizedLevel: null,
+        contextAfterParse: "",
+        beforeLegacyLevel: null,
+        legacyParsedLevel: null,
+        legacyContextLevel: null,
+        legacyParsedObject: "",
+        finalContextLevel: null,
+        finalParsedPreview: "",
+        parserUsed: null,
+        fallbackUsed: false,
+        cachedDashboardUsed: false,
+        jsonDashboardRoleIndex: null,
+        jsonDashboardDisplayName: null,
+        jsonDashboardQueryName: null,
+        navigatorRoleIndex: null,
+        dataViewRowCount: null,
+        rowIndexUsed: null,
+        renderedLevel: null,
+        jsonFilterCount: 0,
+        lastFilterJson: "",
+        activeJsonFilters: "",
+        activeFilterSummary: "",
+        lastError: null,
+        timestamp: new Date().toISOString()
+    };
     private isGaugeHistoryModalOpen: boolean = false;
     private bodyCarouselIndex: number = 0;
     private selectedGaugeKey: GaugeMetricKey | null = null;
@@ -91,6 +193,19 @@ export class Visual implements IVisual {
 
     public update(options: VisualUpdateOptions): void {
         this.events.renderingStarted(options);
+        const jsonFilters = this.readUpdateJsonFilters(options);
+        this.navigationDebug.updateCount += 1;
+        this.navigationDebug.lastAction = "Power BI ejecutó update()";
+        this.navigationDebug.jsonFilterCount = jsonFilters.length;
+        this.navigationDebug.lastFilterJson = JSON.stringify(jsonFilters);
+        this.navigationDebug.activeJsonFilters = JSON.stringify(jsonFilters, null, 2);
+        this.navigationDebug.activeFilterSummary = this.summarizeJsonFilters(jsonFilters);
+        this.navigationDebug.timestamp = new Date().toISOString();
+        console.debug("[UPDATE] Visual actualizado", {
+            updateType: options.type,
+            jsonFilters,
+            dataViews: options.dataViews?.length ?? 0
+        });
 
         try {
             const dataView = options.dataViews?.[0];
@@ -98,11 +213,50 @@ export class Visual implements IVisual {
             this.target.replaceChildren();
 
             const dashboard = parseDashboardJsonData(dataView);
+            console.debug("[UPDATE] Contexto recibido", {
+                level: dashboard?.context?.Level,
+                unit: dashboard?.context?.Unit,
+                projectId: dashboard?.context?.ProjectId
+            });
+            this.navigationDebug.receivedLevel = dashboard?.context?.Level ?? null;
+            this.navigationDebug.receivedUnit = dashboard?.context?.Unit ?? null;
+            this.navigationDebug.receivedProjectId = dashboard?.context?.ProjectId ?? null;
+            if (dashboard?.context?.Level === this.pendingNavigationLevel) {
+                this.pendingNavigationLevel = null;
+            }
+            this.navigationDebug.rawContextLevel = dashboard?.debug?.rawContextLevel ?? null;
+            this.navigationDebug.normalizedContextLevel = dashboard?.debug?.normalizedContextLevel ?? null;
+            this.navigationDebug.contextLevelAfterParse = dashboard?.debug?.contextLevelAfterParse ?? null;
+            this.navigationDebug.rawDashboardLength = dashboard?.debug?.rawDashboardLength ?? null;
+            this.navigationDebug.rawDashboardPreview = dashboard?.debug?.rawDashboardPreview ?? "";
+            this.navigationDebug.directContextObject = dashboard?.debug?.directContextObject ?? "";
+            this.navigationDebug.directRawLevel = dashboard?.debug?.directRawLevel ?? null;
+            this.navigationDebug.directNormalizedLevel = dashboard?.debug?.directNormalizedLevel ?? null;
+            this.navigationDebug.contextAfterParse = dashboard?.debug?.contextAfterParse ?? "";
+            this.navigationDebug.beforeLegacyLevel = dashboard?.debug?.beforeLegacyLevel ?? null;
+            this.navigationDebug.legacyParsedLevel = dashboard?.debug?.legacyParsedLevel ?? null;
+            this.navigationDebug.legacyContextLevel = dashboard?.debug?.legacyContextLevel ?? null;
+            this.navigationDebug.legacyParsedObject = dashboard?.debug?.legacyParsedObject ?? "";
+            this.navigationDebug.finalContextLevel = dashboard?.debug?.finalContextLevel ?? null;
+            this.navigationDebug.finalParsedPreview = dashboard?.debug?.finalParsedPreview ?? "";
+            this.navigationDebug.parserUsed = dashboard?.debug?.parserUsed ?? null;
+            this.navigationDebug.fallbackUsed = dashboard?.debug?.fallbackUsed ?? false;
+            this.navigationDebug.cachedDashboardUsed = dashboard?.debug?.cachedDashboardUsed ?? false;
+            this.navigationDebug.jsonDashboardRoleIndex = dashboard?.debug?.jsonDashboardRoleIndex ?? null;
+            this.navigationDebug.jsonDashboardDisplayName = dashboard?.debug?.jsonDashboardDisplayName ?? null;
+            this.navigationDebug.jsonDashboardQueryName = dashboard?.debug?.jsonDashboardQueryName ?? null;
+            this.navigationDebug.navigatorRoleIndex = dashboard?.debug?.navigatorRoleIndex ?? null;
+            this.navigationDebug.dataViewRowCount = dashboard?.debug?.dataViewRowCount ?? null;
+            this.navigationDebug.rowIndexUsed = dashboard?.debug?.rowIndexUsed ?? null;
+            this.navigationDebug.lastAction = "JSON Dashboard interpretado";
+            this.navigationDebug.lastError = null;
+            this.navigationDebug.timestamp = new Date().toISOString();
             this.currentDashboardData = dashboard;
             const root = document.createElement("div");
             root.className = "evm-dashboard";
             root.style.width = `${options.viewport.width}px`;
             root.style.height = `${options.viewport.height}px`;
+            root.style.position = "relative";
             this.rootElement = root;
 
             if (dashboard) {
@@ -123,7 +277,14 @@ export class Visual implements IVisual {
                     canOpenProject: Boolean(sidebarProject),
                     onOpenPronied: () => this.openProniedDashboard(),
                     onOpenUnit: () => this.openUnitDashboard(sidebarUnit ?? undefined),
-                    onOpenProject: () => this.openProjectDashboard(sidebarProject ?? undefined),
+                    onOpenProject: () => {
+                        const sidebarProjectItem = sidebarProject ? this.findNavigatorProjectById(sidebarProject) : null;
+                        if (sidebarProjectItem) {
+                            this.openProjectDashboard(sidebarProjectItem);
+                            return;
+                        }
+                        this.disableProjectNavigation(sidebarProject ?? null);
+                    },
                     onProjectView: (view) => this.openProjectView(view),
                     onOpenFilters: () => this.openFilterPanel()
                 }));
@@ -138,12 +299,17 @@ export class Visual implements IVisual {
                 root.appendChild(empty);
             }
 
+            this.renderNavigationDebugPanel();
             this.target.appendChild(root);
             if (this.isGaugeHistoryModalOpen) {
                 this.renderGaugeHistoryModal();
             }
             this.events.renderingFinished(options);
         } catch (error) {
+            this.navigationDebug.lastAction = "Error al interpretar JSON Dashboard";
+            this.navigationDebug.lastError = error instanceof Error ? error.message : String(error);
+            this.navigationDebug.timestamp = new Date().toISOString();
+            this.renderNavigationDebugPanel();
             this.events.renderingFailed(options, String(error));
         }
     }
@@ -152,7 +318,331 @@ export class Visual implements IVisual {
         return this.formattingSettingsService.buildFormattingModel(this.formattingSettings);
     }
 
+    private renderNavigationDebugPanel(): void {
+        if (!this.rootElement) {
+            return;
+        }
+
+        this.rootElement.querySelector(".evm-navigation-debug-panel")?.remove();
+
+        if (this.navigationDebugHidden) {
+            const showButton = document.createElement("button");
+            showButton.type = "button";
+            showButton.className = "evm-navigation-debug-panel";
+            showButton.textContent = "Debug nav";
+            showButton.style.position = "absolute";
+            showButton.style.top = "8px";
+            showButton.style.right = "8px";
+            showButton.style.zIndex = "9999";
+            showButton.style.pointerEvents = "auto";
+            showButton.style.fontSize = "11px";
+            showButton.addEventListener("click", (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.navigationDebugHidden = false;
+                this.renderNavigationDebugPanel();
+            });
+            this.rootElement.appendChild(showButton);
+            return;
+        }
+
+        const panel = document.createElement("section");
+        panel.className = "evm-navigation-debug-panel";
+        panel.setAttribute("aria-label", "Panel de depuración de navegación");
+        panel.style.position = "absolute";
+        panel.style.top = "8px";
+        panel.style.right = "8px";
+        panel.style.zIndex = "9999";
+        panel.style.width = "720px";
+        panel.style.maxWidth = "calc(100% - 16px)";
+        panel.style.maxHeight = "calc(100% - 16px)";
+        panel.style.overflow = "auto";
+        panel.style.pointerEvents = "auto";
+        panel.style.background = "#FFFFFF";
+        panel.style.border = "1px solid #CBD5E1";
+        panel.style.boxShadow = "0 12px 28px rgba(15, 23, 42, 0.18)";
+        panel.style.borderRadius = "8px";
+        panel.style.padding = "10px";
+        panel.style.fontSize = "11px";
+        panel.style.lineHeight = "1.35";
+        panel.style.color = "#00145C";
+
+        const header = document.createElement("div");
+        header.style.display = "flex";
+        header.style.alignItems = "center";
+        header.style.justifyContent = "space-between";
+        header.style.gap = "8px";
+        const title = document.createElement("strong");
+        title.textContent = "Debug navegación";
+        const status = document.createElement("span");
+        status.textContent = this.navigationDebugStatusLabel();
+        status.style.padding = "3px 8px";
+        status.style.borderRadius = "999px";
+        status.style.color = "#FFFFFF";
+        status.style.background = this.navigationDebugStatusColor();
+        status.style.fontWeight = "700";
+        header.appendChild(title);
+        header.appendChild(status);
+        panel.appendChild(header);
+
+        const actions = document.createElement("div");
+        actions.style.display = "grid";
+        actions.style.gridTemplateColumns = "1fr 1fr 1fr";
+        actions.style.gap = "6px";
+        actions.style.margin = "8px 0";
+        actions.appendChild(this.renderNavigationDebugButton("Ocultar", () => {
+            this.navigationDebugHidden = true;
+            this.renderNavigationDebugPanel();
+        }));
+        actions.appendChild(this.renderNavigationDebugButton("Copiar diagnóstico", () => this.copyNavigationDebug()));
+        actions.appendChild(this.renderNavigationDebugButton("Limpiar diagnóstico", () => this.resetNavigationDebug()));
+        panel.appendChild(actions);
+
+        const testActions = document.createElement("div");
+        testActions.style.display = "grid";
+        testActions.style.gridTemplateColumns = "1fr 1fr 1fr";
+        testActions.style.gap = "6px";
+        testActions.style.marginBottom = "8px";
+        testActions.appendChild(this.renderNavigationLevelTestButton("Probar PRONIED", "PRONIED"));
+        testActions.appendChild(this.renderNavigationLevelTestButton("Probar UNIDAD", "UNIDAD"));
+        testActions.appendChild(this.renderNavigationLevelTestButton("Probar nivel PROYECTO", "PROYECTO"));
+        panel.appendChild(testActions);
+
+        const projectTestActions = document.createElement("div");
+        projectTestActions.style.display = "grid";
+        projectTestActions.style.gridTemplateColumns = "1fr";
+        projectTestActions.style.gap = "6px";
+        projectTestActions.style.marginBottom = "8px";
+        projectTestActions.appendChild(this.renderNavigationDebugButton("Probar proyecto WP 01", () => this.testProjectNavigationFilter("WP 01")));
+        panel.appendChild(projectTestActions);
+
+        const rows = document.createElement("div");
+        rows.style.display = "grid";
+        rows.style.gridTemplateColumns = "180px minmax(0, 1fr)";
+        rows.style.gap = "4px 8px";
+        this.appendNavigationDebugRow(rows, "Última acción", this.navigationDebug.lastAction);
+        this.appendNavigationDebugRow(rows, "Clics", String(this.navigationDebug.clickCount));
+        this.appendNavigationDebugRow(rows, "Updates", String(this.navigationDebug.updateCount));
+        this.appendNavigationDebugRow(rows, "Nivel solicitado", this.navigationDebug.requestedLevel ?? "-");
+        this.appendNavigationDebugRow(rows, "Unidad solicitada", this.navigationDebug.requestedUnit ?? "-");
+        this.appendNavigationDebugRow(rows, "Proyecto solicitado", this.navigationDebug.requestedProjectId ?? "-");
+        this.appendNavigationDebugRow(rows, "clickedProjectKeys", this.navigationDebug.clickedProjectKeys || "-");
+        this.appendNavigationDebugRow(rows, "clickedProjectObject", this.navigationDebug.clickedProjectObject || "-");
+        this.appendNavigationDebugRow(rows, "clickedProjectId", this.navigationDebug.clickedProjectId ?? "-");
+        this.appendNavigationDebugRow(rows, "typeof clickedProjectId", this.navigationDebug.clickedProjectIdType ?? "-");
+        this.appendNavigationDebugRow(rows, "applyJsonFilter ejecutado", this.navigationDebug.applyJsonFilterCalled ? "Sí" : "No");
+        this.appendNavigationDebugRow(rows, "externalProjectFilterApplied", this.navigationDebug.externalProjectFilterApplied ? "Sí" : "No");
+        this.appendNavigationDebugRow(rows, "selfProjectFilterApplied", this.navigationDebug.selfProjectFilterApplied ? "Sí" : "No");
+        this.appendNavigationDebugRow(rows, "Nivel recibido", this.navigationDebug.receivedLevel ?? "-");
+        this.appendNavigationDebugRow(rows, "Unidad recibida", this.navigationDebug.receivedUnit ?? "-");
+        this.appendNavigationDebugRow(rows, "Proyecto recibido", this.navigationDebug.receivedProjectId ?? "-");
+        this.appendNavigationDebugRow(rows, "rawContextLevel", this.navigationDebug.rawContextLevel ?? "-");
+        this.appendNavigationDebugRow(rows, "normalizedContextLevel", this.navigationDebug.normalizedContextLevel ?? "-");
+        this.appendNavigationDebugRow(rows, "rawDashboardLength", this.navigationDebug.rawDashboardLength === null ? "-" : String(this.navigationDebug.rawDashboardLength));
+        this.appendNavigationDebugRow(rows, "rawDashboardPreview", this.navigationDebug.rawDashboardPreview || "-");
+        this.appendNavigationDebugRow(rows, "directContextObject", this.navigationDebug.directContextObject || "-");
+        this.appendNavigationDebugRow(rows, "directRawLevel", this.navigationDebug.directRawLevel ?? "-");
+        this.appendNavigationDebugRow(rows, "directNormalizedLevel", this.navigationDebug.directNormalizedLevel ?? "-");
+        this.appendNavigationDebugRow(rows, "contextAfterParse", this.navigationDebug.contextAfterParse || "-");
+        this.appendNavigationDebugRow(rows, "contextLevelAfterParse", this.navigationDebug.contextLevelAfterParse ?? "-");
+        this.appendNavigationDebugRow(rows, "beforeLegacyLevel", this.navigationDebug.beforeLegacyLevel ?? "-");
+        this.appendNavigationDebugRow(rows, "legacyParsedLevel", this.navigationDebug.legacyParsedLevel ?? "-");
+        this.appendNavigationDebugRow(rows, "legacyContextLevel", this.navigationDebug.legacyContextLevel ?? "-");
+        this.appendNavigationDebugRow(rows, "legacyParsedObject", this.navigationDebug.legacyParsedObject || "-");
+        this.appendNavigationDebugRow(rows, "finalContextLevel", this.navigationDebug.finalContextLevel ?? "-");
+        this.appendNavigationDebugRow(rows, "finalParsedPreview", this.navigationDebug.finalParsedPreview || "-");
+        this.appendNavigationDebugRow(rows, "parser utilizado", this.navigationDebug.parserUsed ?? "-");
+        this.appendNavigationDebugRow(rows, "fallback utilizado", this.navigationDebug.fallbackUsed ? "Sí" : "No");
+        this.appendNavigationDebugRow(rows, "caché utilizada", this.navigationDebug.cachedDashboardUsed ? "Sí" : "No");
+        this.appendNavigationDebugRow(rows, "jsonDashboardRoleIndex", this.navigationDebug.jsonDashboardRoleIndex === null ? "-" : String(this.navigationDebug.jsonDashboardRoleIndex));
+        this.appendNavigationDebugRow(rows, "jsonDashboardDisplayName", this.navigationDebug.jsonDashboardDisplayName ?? "-");
+        this.appendNavigationDebugRow(rows, "jsonDashboardQueryName", this.navigationDebug.jsonDashboardQueryName ?? "-");
+        this.appendNavigationDebugRow(rows, "navigatorRoleIndex", this.navigationDebug.navigatorRoleIndex === null ? "-" : String(this.navigationDebug.navigatorRoleIndex));
+        this.appendNavigationDebugRow(rows, "dataViewRowCount", this.navigationDebug.dataViewRowCount === null ? "-" : String(this.navigationDebug.dataViewRowCount));
+        this.appendNavigationDebugRow(rows, "rowIndexUsed", this.navigationDebug.rowIndexUsed === null ? "-" : String(this.navigationDebug.rowIndexUsed));
+        this.appendNavigationDebugRow(rows, "renderedLevel", this.navigationDebug.renderedLevel ?? "-");
+        this.appendNavigationDebugRow(rows, "Cantidad jsonFilters", String(this.navigationDebug.jsonFilterCount));
+        this.appendNavigationDebugRow(rows, "Botones de nivel", "Solo prueban Dim_NivelDashboard[Nivel], no seleccionan proyecto");
+        this.appendNavigationDebugRow(rows, "Filtros activos", this.navigationDebug.activeFilterSummary || "-");
+        this.appendNavigationDebugRow(rows, "activeJsonFilters", this.navigationDebug.activeJsonFilters || "-");
+        this.appendNavigationDebugRow(rows, "Último filtro", this.navigationDebug.lastFilterJson || "-");
+        this.appendNavigationDebugRow(rows, "Último error", this.navigationDebug.lastError ?? "-");
+        this.appendNavigationDebugRow(rows, "Hora", this.navigationDebug.timestamp);
+        panel.appendChild(rows);
+
+        this.rootElement.appendChild(panel);
+    }
+
+    private renderNavigationDebugButton(label: string, onClick: () => void): HTMLButtonElement {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = label;
+        button.style.fontSize = "10px";
+        button.style.padding = "5px 6px";
+        button.style.border = "1px solid #CBD5E1";
+        button.style.borderRadius = "5px";
+        button.style.background = "#F8FAFC";
+        button.style.color = "#00145C";
+        button.style.cursor = "pointer";
+        button.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onClick();
+        });
+        return button;
+    }
+
+    private renderNavigationLevelTestButton(label: string, level: "PRONIED" | "UNIDAD" | "PROYECTO"): HTMLButtonElement {
+        const button = this.renderNavigationDebugButton(label, () => {
+            console.debug("[NAV] Click detectado", level);
+            this.navigationDebug.clickCount += 1;
+            this.navigationDebug.lastAction = `Click navegación ${level}`;
+            this.navigationDebug.requestedLevel = level;
+            this.navigationDebug.requestedUnit = null;
+            this.navigationDebug.requestedProjectId = null;
+            this.navigationDebug.applyJsonFilterCalled = false;
+            this.navigationDebug.timestamp = new Date().toISOString();
+            this.renderNavigationDebugPanel();
+            this.navigateLevelForDebug(level);
+        });
+        return button;
+    }
+
+    private appendNavigationDebugRow(container: HTMLElement, labelText: string, valueText: string): void {
+        const label = document.createElement("span");
+        label.textContent = labelText;
+        label.style.fontWeight = "700";
+        const value = document.createElement("span");
+        value.textContent = valueText;
+        value.style.minWidth = "0";
+        value.style.overflowWrap = "anywhere";
+        container.appendChild(label);
+        container.appendChild(value);
+    }
+
+    private navigationDebugStatusLabel(): string {
+        if (this.navigationDebug.lastError) {
+            return "Error";
+        }
+        if (this.navigationDebug.requestedLevel && this.navigationDebug.requestedLevel === this.navigationDebug.receivedLevel) {
+            return "OK";
+        }
+        if (this.navigationDebug.updateCount > 0 && this.navigationDebug.requestedLevel && this.navigationDebug.receivedLevel && this.navigationDebug.requestedLevel !== this.navigationDebug.receivedLevel) {
+            return "No coincide";
+        }
+        if (this.navigationDebug.applyJsonFilterCalled) {
+            return "Filtro enviado";
+        }
+        if (this.navigationDebug.clickCount > 0) {
+            return "Click";
+        }
+        return "Sin interacción";
+    }
+
+    private navigationDebugStatusColor(): string {
+        if (this.navigationDebug.lastError) {
+            return "#DC2626";
+        }
+        if (this.navigationDebug.requestedLevel && this.navigationDebug.requestedLevel === this.navigationDebug.receivedLevel) {
+            return "#16A34A";
+        }
+        if (this.navigationDebug.updateCount > 0 && this.navigationDebug.requestedLevel && this.navigationDebug.receivedLevel && this.navigationDebug.requestedLevel !== this.navigationDebug.receivedLevel) {
+            return "#F97316";
+        }
+        if (this.navigationDebug.applyJsonFilterCalled) {
+            return "#F59E0B";
+        }
+        if (this.navigationDebug.clickCount > 0) {
+            return "#2563EB";
+        }
+        return "#64748B";
+    }
+
+    private copyNavigationDebug(): void {
+        const content = JSON.stringify(this.navigationDebug, null, 2);
+        const clipboard = navigator.clipboard;
+        if (clipboard?.writeText) {
+            clipboard.writeText(content).catch(() => this.showNavigationDebugTextarea(content));
+            return;
+        }
+        this.showNavigationDebugTextarea(content);
+    }
+
+    private showNavigationDebugTextarea(content: string): void {
+        if (!this.rootElement) {
+            return;
+        }
+        this.rootElement.querySelector(".evm-navigation-debug-copy")?.remove();
+        const textarea = document.createElement("textarea");
+        textarea.className = "evm-navigation-debug-copy";
+        textarea.value = content;
+        textarea.style.position = "absolute";
+        textarea.style.top = "8px";
+        textarea.style.right = "360px";
+        textarea.style.zIndex = "10000";
+        textarea.style.width = "320px";
+        textarea.style.height = "220px";
+        textarea.style.fontSize = "11px";
+        this.rootElement.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+    }
+
+    private resetNavigationDebug(): void {
+        this.navigationDebug = {
+            clickCount: 0,
+            updateCount: this.navigationDebug.updateCount,
+            lastAction: "Diagnóstico limpiado",
+            requestedLevel: null,
+            requestedUnit: null,
+            requestedProjectId: null,
+            clickedProjectKeys: this.navigationDebug.clickedProjectKeys,
+            clickedProjectObject: this.navigationDebug.clickedProjectObject,
+            clickedProjectId: this.navigationDebug.clickedProjectId,
+            clickedProjectIdType: this.navigationDebug.clickedProjectIdType,
+            applyJsonFilterCalled: false,
+            externalProjectFilterApplied: this.navigationDebug.externalProjectFilterApplied,
+            selfProjectFilterApplied: this.navigationDebug.selfProjectFilterApplied,
+            receivedLevel: this.currentDashboardData?.context.Level ?? null,
+            receivedUnit: this.currentDashboardData?.context.Unit ?? null,
+            receivedProjectId: this.currentDashboardData?.context.ProjectId ?? null,
+            rawContextLevel: this.currentDashboardData?.debug?.rawContextLevel ?? null,
+            normalizedContextLevel: this.currentDashboardData?.debug?.normalizedContextLevel ?? null,
+            contextLevelAfterParse: this.currentDashboardData?.debug?.contextLevelAfterParse ?? null,
+            rawDashboardLength: this.currentDashboardData?.debug?.rawDashboardLength ?? null,
+            rawDashboardPreview: this.currentDashboardData?.debug?.rawDashboardPreview ?? "",
+            directContextObject: this.currentDashboardData?.debug?.directContextObject ?? "",
+            directRawLevel: this.currentDashboardData?.debug?.directRawLevel ?? null,
+            directNormalizedLevel: this.currentDashboardData?.debug?.directNormalizedLevel ?? null,
+            contextAfterParse: this.currentDashboardData?.debug?.contextAfterParse ?? "",
+            beforeLegacyLevel: this.currentDashboardData?.debug?.beforeLegacyLevel ?? null,
+            legacyParsedLevel: this.currentDashboardData?.debug?.legacyParsedLevel ?? null,
+            legacyContextLevel: this.currentDashboardData?.debug?.legacyContextLevel ?? null,
+            legacyParsedObject: this.currentDashboardData?.debug?.legacyParsedObject ?? "",
+            finalContextLevel: this.currentDashboardData?.debug?.finalContextLevel ?? null,
+            finalParsedPreview: this.currentDashboardData?.debug?.finalParsedPreview ?? "",
+            parserUsed: this.currentDashboardData?.debug?.parserUsed ?? null,
+            fallbackUsed: this.currentDashboardData?.debug?.fallbackUsed ?? false,
+            cachedDashboardUsed: this.currentDashboardData?.debug?.cachedDashboardUsed ?? false,
+            jsonDashboardRoleIndex: this.currentDashboardData?.debug?.jsonDashboardRoleIndex ?? null,
+            jsonDashboardDisplayName: this.currentDashboardData?.debug?.jsonDashboardDisplayName ?? null,
+            jsonDashboardQueryName: this.currentDashboardData?.debug?.jsonDashboardQueryName ?? null,
+            navigatorRoleIndex: this.currentDashboardData?.debug?.navigatorRoleIndex ?? null,
+            dataViewRowCount: this.currentDashboardData?.debug?.dataViewRowCount ?? null,
+            rowIndexUsed: this.currentDashboardData?.debug?.rowIndexUsed ?? null,
+            renderedLevel: this.currentDashboardData?.context.Level ?? null,
+            jsonFilterCount: this.navigationDebug.jsonFilterCount,
+            lastFilterJson: this.navigationDebug.lastFilterJson,
+            activeJsonFilters: this.navigationDebug.activeJsonFilters,
+            activeFilterSummary: this.navigationDebug.activeFilterSummary,
+            lastError: null,
+            timestamp: new Date().toISOString()
+        };
+        this.renderNavigationDebugPanel();
+    }
+
     private renderCurrentDashboard(dashboard: ParsedDashboardData, viewport: powerbi.IViewport): HTMLElement {
+        this.navigationDebug.renderedLevel = dashboard.context.Level;
         console.debug("Dashboard render target", {
             level: dashboard.context.Level,
             axisType: dashboard.context.AxisType,
@@ -468,11 +958,11 @@ export class Visual implements IVisual {
             row.className = "evm-project-list-row";
             row.tabIndex = 0;
             row.setAttribute("role", "button");
-            row.addEventListener("click", () => this.openProjectDashboard(project.IdIntervencion));
+            row.addEventListener("click", (event) => this.handleProjectClick(event, project));
             row.addEventListener("keydown", (event) => {
                 if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
-                    this.openProjectDashboard(project.IdIntervencion);
+                    this.handleProjectClick(event, project);
                 }
             });
             row.appendChild(createElement("td", "evm-project-name-cell", project.NombreIntervencion));
@@ -490,7 +980,7 @@ export class Visual implements IVisual {
             action.addEventListener("click", (event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                this.openProjectDashboard(project.IdIntervencion);
+                this.handleProjectClick(event, project);
             });
             actionCell.appendChild(action);
             row.appendChild(actionCell);
@@ -681,14 +1171,71 @@ export class Visual implements IVisual {
         return unit || null;
     }
 
+    private findNavigatorProjectById(projectId: string): NavigatorProject | null {
+        const cleanProjectId = projectId.trim();
+        if (!cleanProjectId) {
+            return null;
+        }
+
+        return this.currentDashboardData?.navigator?.projects.find((project) => this.navigatorText(project.IdIntervencion) === cleanProjectId)
+            ?? this.currentDashboardData?.projects.find((project) => this.navigatorText(project.IdIntervencion) === cleanProjectId)
+            ?? null;
+    }
+
+    private getProjectId(project: NavigatorProject): string | null {
+        const value =
+            project.IdIntervencion ??
+            project.ProjectId ??
+            project.idIntervencion ??
+            project.projectId ??
+            project.ProyectoId ??
+            project.IdProyecto;
+
+        if (typeof value === "string" && value.trim() !== "") {
+            return value.trim();
+        }
+
+        if (typeof value === "number" && Number.isFinite(value)) {
+            return String(value);
+        }
+
+        return null;
+    }
+
+    private getProjectUnit(project: NavigatorProject): string | null {
+        const unit = this.navigatorText(project.UnidadGerencial);
+        if (unit) {
+            return unit;
+        }
+
+        const projectId = this.getProjectId(project);
+        return projectId ? this.unitForProject(projectId) : null;
+    }
+
+    private handleProjectClick(event: Event, project: UnitProjectSummaryData): void {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const navigatorProject = project as unknown as NavigatorProject;
+        const projectRecord = navigatorProject as Record<string, unknown>;
+        const projectId = this.getProjectId(navigatorProject);
+        this.navigationDebug.clickedProjectObject = JSON.stringify(project, null, 2);
+        this.navigationDebug.clickedProjectKeys = Object.keys(projectRecord).join(", ");
+        this.navigationDebug.clickedProjectId = projectId;
+        this.navigationDebug.clickedProjectIdType = projectId === null ? null : typeof projectId;
+        this.navigationDebug.requestedProjectId = projectId;
+
+        this.openProjectDashboard(navigatorProject);
+    }
+
     private openProniedDashboard(): void {
         console.debug("Navegando a PRONIED");
         this.filterState.level = "PRONIED";
         this.filterState.selectedUnit = null;
         this.filterState.selectedProjectId = null;
-        this.applyBasicFilter("Dim_NivelDashboard", "Nivel", ["PRONIED"], "levelFilter");
-        this.clearInternalFilter("unitFilter");
-        this.clearInternalFilter("projectFilter");
+        this.pendingNavigationLevel = "PRONIED";
+        this.clearGeneralNavigationFilters();
+        this.applyLevelFilter("PRONIED");
     }
 
     private openUnitDashboard(unit?: string): void {
@@ -707,34 +1254,58 @@ export class Visual implements IVisual {
         this.filterState.selectedUnit = selectedUnit;
         this.filterState.lastNavigableUnit = selectedUnit;
         this.filterState.selectedProjectId = null;
-        this.applyBasicFilter("Dim_Intervenciones", "UnidadGerencial", [selectedUnit], "unitFilter");
-        this.applyBasicFilter("Dim_NivelDashboard", "Nivel", ["UNIDAD"], "levelFilter");
-        this.clearInternalFilter("projectFilter");
+        this.pendingNavigationLevel = "UNIDAD";
+        this.clearGeneralNavigationFilters();
+        this.applyLevelFilter("UNIDAD");
     }
 
-    private openProjectDashboard(projectId?: string): void {
-        const selectedProject = projectId ?? this.resolveProjectForNavigation();
-        if (!selectedProject) {
+    private disableProjectNavigation(projectId: string | null): void {
+        this.navigationDebug.requestedLevel = "PROYECTO";
+        this.navigationDebug.requestedProjectId = projectId;
+        this.navigationDebug.lastAction = "Navegación a Proyecto temporalmente deshabilitada";
+        this.navigationDebug.lastError = "Navegación a Proyecto temporalmente deshabilitada";
+        this.navigationDebug.applyJsonFilterCalled = false;
+        this.navigationDebug.timestamp = new Date().toISOString();
+        this.renderNavigationDebugPanel();
+    }
+
+    private openProjectDashboard(project: NavigatorProject): void {
+        const projectId = this.getProjectId(project);
+        if (!projectId) {
             console.warn("No hay proyecto seleccionado.");
-            this.openProjectSelector();
+            this.navigationDebug.lastError = "IdIntervencion vacío";
+            this.renderNavigationDebugPanel();
             return;
         }
 
         console.debug("Solicitando navegación", {
             level: "PROYECTO",
-            projectId: selectedProject
+            projectId
         });
-        this.filterState.level = "PROYECTO";
-        this.filterState.selectedProjectId = selectedProject;
-        this.filterState.lastNavigableProjectId = selectedProject;
-        const selectedUnit = this.unitForProject(selectedProject) ?? this.resolveUnitForNavigation();
-        if (selectedUnit) {
-            this.filterState.selectedUnit = selectedUnit;
-            this.filterState.lastNavigableUnit = selectedUnit;
-            this.applyBasicFilter("Dim_Intervenciones", "UnidadGerencial", [selectedUnit], "unitFilter");
-        }
-        this.applyBasicFilter("Dim_Intervenciones", "IdIntervencion", [selectedProject], "projectFilter");
-        this.applyBasicFilter("Dim_NivelDashboard", "Nivel", ["PROYECTO"], "levelFilter");
+        this.navigationDebug.requestedLevel = "PROYECTO";
+        this.navigationDebug.clickedProjectId = projectId;
+        this.navigationDebug.clickedProjectIdType = typeof projectId;
+        this.navigationDebug.requestedProjectId = projectId;
+        this.navigationDebug.lastAction = "Aplicando filtro de proyecto";
+        this.navigationDebug.externalProjectFilterApplied = false;
+        this.navigationDebug.selfProjectFilterApplied = false;
+        this.navigationDebug.lastError = null;
+        this.filterState.selectedProjectId = projectId;
+        this.filterState.lastNavigableProjectId = projectId;
+        this.navigationDebug.applyJsonFilterCalled = true;
+        this.navigationDebug.lastFilterJson = JSON.stringify({
+            filter: "Dim_Intervenciones[IdIntervencion]",
+            projectId
+        });
+        this.renderNavigationDebugPanel();
+
+        this.applyProjectFilter(projectId);
+        this.navigationDebug.externalProjectFilterApplied = true;
+        this.navigationDebug.selfProjectFilterApplied = true;
+        this.navigationDebug.lastAction = "Filtro de proyecto enviado";
+        this.navigationDebug.lastError = null;
+        this.navigationDebug.timestamp = new Date().toISOString();
+        this.renderNavigationDebugPanel();
     }
 
     private openProjectView(view: "summary" | "milestones" | "risks"): void {
@@ -788,8 +1359,6 @@ export class Visual implements IVisual {
         panel.appendChild(this.renderFilterSelect("Unidad Gerencial", "unit", this.uniqueNavigatorValues("UnidadGerencial"), this.filterState.selectedUnit, (value) => {
             this.filterState.selectedUnit = value;
             this.filterState.selectedProjectId = null;
-            value ? this.applyBasicFilter("Dim_Intervenciones", "UnidadGerencial", [value], "unitFilter") : this.clearInternalFilter("unitFilter");
-            this.clearInternalFilter("projectFilter");
         }));
         panel.appendChild(this.renderFilterSelect("Región", "region", this.uniqueFromProjects(projects, "Region"), this.filterState.region, (value) => {
             this.filterState.region = value;
@@ -809,7 +1378,6 @@ export class Visual implements IVisual {
         }));
         panel.appendChild(this.renderFilterSelect("Proyecto", "project", this.projectOptions(projects), this.filterState.selectedProjectId, (value) => {
             this.filterState.selectedProjectId = value;
-            value ? this.applyBasicFilter("Dim_Intervenciones", "IdIntervencion", [value], "projectFilter") : this.clearInternalFilter("projectFilter");
         }));
 
         const clear = createElement("button", "evm-filter-clear", "Limpiar filtros");
@@ -894,6 +1462,153 @@ export class Visual implements IVisual {
         return value === null || value === undefined ? "" : String(value);
     }
 
+    private handleNavigationClick(level: "PRONIED" | "UNIDAD" | "PROYECTO", unit: string | null = null, projectId: string | null = null): void {
+        console.debug("[NAV] Click detectado", level);
+        this.navigationDebug.clickCount += 1;
+        this.navigationDebug.lastAction = `Click navegación ${level}`;
+        this.navigationDebug.requestedLevel = level;
+        this.navigationDebug.requestedUnit = unit;
+        this.navigationDebug.requestedProjectId = projectId;
+        this.navigationDebug.applyJsonFilterCalled = false;
+        this.navigationDebug.timestamp = new Date().toISOString();
+        this.renderNavigationDebugPanel();
+        this.navigateLevelForDebug(level);
+    }
+
+    private navigateLevelForDebug(
+        level: "PRONIED" | "UNIDAD" | "PROYECTO"
+    ): void {
+        try {
+            this.navigationDebug.applyJsonFilterCalled = true;
+            this.navigationDebug.lastAction = "Ejecutando applyJsonFilter";
+            this.navigationDebug.requestedLevel = level;
+            this.navigationDebug.lastFilterJson = JSON.stringify({ level });
+            this.navigationDebug.lastError = null;
+            this.navigationDebug.timestamp = new Date().toISOString();
+
+            console.debug("[NAV] Aplicando nivel", {
+                level
+            });
+            this.renderNavigationDebugPanel();
+
+            this.applyLevelFilter(level);
+            this.navigationDebug.lastAction = "applyJsonFilter finalizó sin excepción";
+            this.navigationDebug.timestamp = new Date().toISOString();
+            this.renderNavigationDebugPanel();
+        } catch (error) {
+            this.navigationDebug.lastAction = "Error en applyJsonFilter";
+            this.navigationDebug.lastError = error instanceof Error
+                ? error.message
+                : String(error);
+            this.navigationDebug.timestamp = new Date().toISOString();
+            this.renderNavigationDebugPanel();
+        }
+    }
+
+    private applyLevelFilter(level: DashboardLevel): void {
+        const filter = new BasicFilter(
+            {
+                table: "Dim_NivelDashboard",
+                column: "Nivel"
+            },
+            "In",
+            [level]
+        );
+
+        const filterJson = filter.toJSON();
+
+        this.host.applyJsonFilter(filterJson as powerbi.IFilter, "general", "filter", powerbi.FilterAction.merge);
+        this.host.applyJsonFilter(filterJson as powerbi.IFilter, "general", "selfFilter", powerbi.FilterAction.merge);
+    }
+
+    private clearGeneralNavigationFilters(): void {
+        this.host.applyJsonFilter(null as unknown as powerbi.IFilter, "general", "filter", powerbi.FilterAction.remove);
+        this.host.applyJsonFilter(null as unknown as powerbi.IFilter, "general", "selfFilter", powerbi.FilterAction.remove);
+    }
+
+    private applyProjectFilter(projectId: string): void {
+        const cleanProjectId = projectId.trim();
+        if (!cleanProjectId) {
+            this.navigationDebug.lastError = "IdIntervencion vacío";
+            this.navigationDebug.lastAction = "Navegación cancelada";
+            this.renderNavigationDebugPanel();
+            return;
+        }
+
+        const projectFilter = new BasicFilter(
+            {
+                table: "Dim_Intervenciones",
+                column: "IdIntervencion"
+            },
+            "In",
+            [cleanProjectId]
+        );
+        const projectFilterJson = projectFilter.toJSON();
+
+        this.host.applyJsonFilter(projectFilterJson as powerbi.IFilter, "general", "filter", powerbi.FilterAction.merge);
+        this.host.applyJsonFilter(projectFilterJson as powerbi.IFilter, "general", "selfFilter", powerbi.FilterAction.merge);
+    }
+
+    private testProjectNavigationFilter(projectId: string): void {
+        this.navigationDebug.clickCount += 1;
+        this.navigationDebug.requestedLevel = "PROYECTO";
+        this.navigationDebug.requestedProjectId = projectId;
+        this.navigationDebug.clickedProjectId = projectId;
+        this.navigationDebug.clickedProjectIdType = typeof projectId;
+        this.navigationDebug.applyJsonFilterCalled = true;
+        this.navigationDebug.externalProjectFilterApplied = false;
+        this.navigationDebug.selfProjectFilterApplied = false;
+        this.navigationDebug.lastAction = "Prueba temporal de proyecto";
+        this.navigationDebug.lastFilterJson = JSON.stringify({ projectId });
+        this.navigationDebug.timestamp = new Date().toISOString();
+        this.renderNavigationDebugPanel();
+
+        this.applyProjectFilter(projectId);
+        this.navigationDebug.externalProjectFilterApplied = true;
+        this.navigationDebug.selfProjectFilterApplied = true;
+        this.navigationDebug.lastAction = "Filtro de proyecto enviado";
+        this.navigationDebug.timestamp = new Date().toISOString();
+        this.renderNavigationDebugPanel();
+    }
+
+    private readUpdateJsonFilters(options: VisualUpdateOptions): unknown[] {
+        const candidate = options as VisualUpdateOptions & { jsonFilters?: unknown[] };
+        return Array.isArray(candidate.jsonFilters) ? candidate.jsonFilters : [];
+    }
+
+    private summarizeJsonFilters(filters: unknown[]): string {
+        if (!filters.length) {
+            return "";
+        }
+
+        return filters.map((filter, index) => {
+            const item = this.asRecord(filter);
+            const target = this.asRecord(item?.target);
+            const rawValues = item?.values;
+            const operator = this.toDebugText(item?.operator);
+            const values = Array.isArray(rawValues)
+                ? rawValues.map((value) => this.toDebugText(value)).join(", ")
+                : this.toDebugText(rawValues);
+            const propertyName = this.toDebugText(item?.propertyName ?? item?.property ?? item?.propertyIdentifier);
+            const table = this.toDebugText(target?.table);
+            const column = this.toDebugText(target?.column);
+            const targetLabel = table || column ? `${table || "?"}[${column || "?"}]` : "-";
+            const propertyLabel = propertyName ? `propiedad ${propertyName}; ` : "";
+            return `Filtro ${index + 1}: ${propertyLabel}${targetLabel}; operador ${operator || "-"}; valores ${values || "-"}`;
+        }).join("\n");
+    }
+
+    private asRecord(value: unknown): Record<string, unknown> | null {
+        return typeof value === "object" && value !== null ? value as Record<string, unknown> : null;
+    }
+
+    private toDebugText(value: unknown): string {
+        if (value === null || value === undefined) {
+            return "";
+        }
+        return typeof value === "string" ? value : JSON.stringify(value);
+    }
+
     private applyBasicFilter(table: string, column: string, values: Array<string | number>, propertyName: string): void {
         const nextValue = values[0] ?? null;
         if (this.isSameFilterValue(this.appliedFilterValues[propertyName] ?? null, nextValue === null ? null : String(nextValue))) {
@@ -937,7 +1652,9 @@ export class Visual implements IVisual {
     }
 
     private clearAllInteractiveFilters(): void {
-        ["levelFilter", "unitFilter", "regionFilter", "provinceFilter", "districtFilter", "statusFilter", "projectFilter"].forEach((property) => this.clearInternalFilter(property));
+        this.host.applyJsonFilter(null as unknown as powerbi.IFilter, "general", "filter", powerbi.FilterAction.remove);
+        this.host.applyJsonFilter(null as unknown as powerbi.IFilter, "general", "selfFilter", powerbi.FilterAction.remove);
+        ["regionFilter", "provinceFilter", "districtFilter", "statusFilter"].forEach((property) => this.clearInternalFilter(property));
         this.filterState.level = "PRONIED";
         this.filterState.selectedUnit = null;
         this.filterState.selectedProjectId = null;

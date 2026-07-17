@@ -336,10 +336,37 @@ export interface GaugeChartSeries {
     label: string;
     points: GaugeChartPoint[];
 }
+export interface ParserDebugData {
+    rawContextLevel: string;
+    normalizedContextLevel: DashboardLevel;
+    contextLevelAfterParse: DashboardLevel;
+    rawDashboardLength: number;
+    rawDashboardPreview: string;
+    directContextObject: string;
+    directRawLevel: string;
+    directNormalizedLevel: DashboardLevel;
+    contextAfterParse: string;
+    beforeLegacyLevel: string | null;
+    legacyParsedLevel: string | null;
+    legacyContextLevel: string | null;
+    legacyParsedObject: string;
+    finalContextLevel: DashboardLevel;
+    finalParsedPreview: string;
+    parserUsed: string;
+    fallbackUsed: boolean;
+    cachedDashboardUsed: boolean;
+    jsonDashboardRoleIndex: number | null;
+    jsonDashboardDisplayName: string | null;
+    jsonDashboardQueryName: string | null;
+    navigatorRoleIndex: number | null;
+    dataViewRowCount: number | null;
+    rowIndexUsed: number | null;
+}
 export interface ParsedDashboardData {
     idIntervencion: string;
     schemaVersion?: string;
     context: DashboardContextData;
+    debug?: ParserDebugData;
     summary: SummaryData | null;
     navigator?: NavigatorData;
     project: ProjectData | null;
