@@ -1,9 +1,9 @@
 {
   "dataRoles": [
     {
-      "displayName": "Id Intervención",
-      "name": "idIntervencion",
-      "kind": "Grouping"
+      "displayName": "JSON Navigator",
+      "name": "jsonNavigator",
+      "kind": "Measure"
     },
     {
       "displayName": "JSON Dashboard",
@@ -27,6 +27,46 @@
           }
         }
       }
+    },
+    "internalFilters": {
+      "displayName": "Filtros internos",
+      "properties": {
+        "levelFilter": {
+          "type": {
+            "filter": true
+          }
+        },
+        "unitFilter": {
+          "type": {
+            "filter": true
+          }
+        },
+        "regionFilter": {
+          "type": {
+            "filter": true
+          }
+        },
+        "provinceFilter": {
+          "type": {
+            "filter": true
+          }
+        },
+        "districtFilter": {
+          "type": {
+            "filter": true
+          }
+        },
+        "statusFilter": {
+          "type": {
+            "filter": true
+          }
+        },
+        "projectFilter": {
+          "type": {
+            "filter": true
+          }
+        }
+      }
     }
   },
   "dataViewMappings": [
@@ -36,7 +76,7 @@
           "select": [
             {
               "bind": {
-                "to": "idIntervencion"
+                "to": "jsonNavigator"
               }
             },
             {
@@ -47,7 +87,7 @@
           ],
           "dataReductionAlgorithm": {
             "top": {
-              "count": 1000
+              "count": 1
             }
           }
         }

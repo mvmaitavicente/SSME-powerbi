@@ -18,6 +18,7 @@ export declare class Visual implements IVisual {
     constructor(options: VisualConstructorOptions);
     update(options: VisualUpdateOptions): void;
     getFormattingModel(): powerbi.visuals.FormattingModel;
+    private renderProjectDashboard;
     private renderBodyCarousel;
     private renderCarouselButton;
     private renderCarouselDots;

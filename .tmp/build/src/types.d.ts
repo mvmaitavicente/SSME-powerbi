@@ -169,10 +169,51 @@ export interface JsonTablePayload {
     rowCount: number;
     data: unknown[][];
 }
+export type DashboardLevel = "PRONIED" | "UNIDAD" | "PROYECTO";
+export interface NavigatorJsonPayload {
+    schemaVersion?: string;
+    projects?: JsonTablePayload;
+}
+export interface NavigatorProject extends Record<string, unknown> {
+    IdIntervencion?: string | number | null;
+    NombreIntervencion?: string | null;
+    UnidadGerencial?: string | null;
+    Region?: string | null;
+    Provincia?: string | null;
+    Distrito?: string | null;
+    EstadoProyecto?: string | null;
+}
+export interface NavigatorData {
+    schemaVersion?: string;
+    projects: NavigatorProject[];
+}
+export interface DashboardContextData {
+    Level: DashboardLevel;
+    Unit?: string;
+    ProjectId?: string;
+    Region?: string;
+    Province?: string;
+    District?: string;
+    Status?: string;
+}
+export interface InternalFilterState {
+    levelFilter?: DashboardLevel;
+    unitFilter?: string;
+    regionFilter?: string;
+    provinceFilter?: string;
+    districtFilter?: string;
+    statusFilter?: string;
+    projectFilter?: string;
+}
 export interface DashboardJsonPayload {
-    project: JsonTablePayload;
-    gauges: JsonTablePayload;
-    curve: JsonTablePayload;
+    schemaVersion?: string;
+    context?: JsonTablePayload;
+    summary?: JsonTablePayload;
+    project?: JsonTablePayload;
+    gauges?: JsonTablePayload;
+    curve?: JsonTablePayload;
+    units?: JsonTablePayload;
+    projects?: JsonTablePayload;
     milestone?: JsonTablePayload;
     milestones?: JsonTablePayload;
     risks?: JsonTablePayload;
@@ -229,6 +270,8 @@ export interface GaugeChartSeries {
 }
 export interface ParsedDashboardData {
     idIntervencion: string;
+    context?: DashboardContextData;
+    navigator?: NavigatorData;
     project: ProjectData | null;
     gauges: GaugeHistoryRow[];
     curve: CurveData[];

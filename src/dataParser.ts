@@ -1,7 +1,7 @@
 "use strict";
 
 import powerbi from "powerbi-visuals-api";
-import { CurrentSnapshot, CurveData, CurveHistoryPoint, CurveReferences, DashboardData, DashboardJsonPayload, DataValue, FieldValueMap, GaugeData, GaugeHistory, GaugeHistoryRow, JsonTablePayload, MilestoneItem, ParsedDashboardData, PerformanceData, ProjectData, ProjectHeader, RenderCurveData, RiskItem } from "./types";
+import { CurrentSnapshot, CurveData, CurveHistoryPoint, CurveReferences, DashboardContextData, DashboardData, DashboardJsonPayload, DashboardLevel, DataValue, FieldValueMap, GaugeData, GaugeHistory, GaugeHistoryRow, JsonTablePayload, MilestoneItem, NavigatorData, NavigatorJsonPayload, NavigatorProject, ParsedDashboardData, PerformanceData, ProjectData, ProjectHeader, RenderCurveData, RiskItem } from "./types";
 
 type DataViewTable = powerbi.DataViewTable;
 type DataViewMetadataColumn = powerbi.DataViewMetadataColumn;
@@ -146,14 +146,17 @@ export function parseDashboardData(dataView?: powerbi.DataView): DashboardData {
         console.log("Gauge History TCPI", jsonDashboard.gauges.map((row) => row.TCPI).filter((value): value is number => value !== null));
         console.log("Gauge History TSPI", jsonDashboard.gauges.map((row) => row["TSPI (w)"]).filter((value): value is number => value !== null));
         console.log("Current Curve", getCurrentCurveRow(jsonDashboard.curve));
+        if (jsonDashboard.context?.Level && jsonDashboard.context.Level !== "PROYECTO") {
+            return buildNonProjectPlaceholder(jsonDashboard.context);
+        }
+
         return adaptJsonDashboardData(jsonDashboard);
     }
 
-    // Fallback temporal: eliminar este bloque cuando JSON Dashboard quede validado en Power BI.
-    return parseLegacyDashboardData(dataView);
+    return parseLegacyDataView(dataView);
 }
 
-function parseLegacyDashboardData(dataView?: powerbi.DataView): DashboardData {
+export function parseLegacyDataView(dataView?: powerbi.DataView): DashboardData {
     const rows = mapRows(dataView?.table);
     const curveHistory = mergeCurveHistoryRows(
         rows
@@ -225,6 +228,64 @@ function jsonTableToObjects<T extends Record<string, unknown>>(table: JsonTableP
     });
 }
 
+function parseNavigatorPayload(rawNavigator: unknown): NavigatorData {
+    if (typeof rawNavigator !== "string" || rawNavigator.trim() === "") {
+        return { projects: [] };
+    }
+
+    try {
+        const payload = JSON.parse(rawNavigator) as NavigatorJsonPayload;
+        const projects = payload.projects ? jsonTableToObjects<NavigatorProject>(payload.projects) : [];
+        validateJsonTableRowCount(payload.projects, "JSON Navigator projects");
+
+        return {
+            schemaVersion: payload.schemaVersion,
+            projects
+        };
+    } catch (error) {
+        console.warn("No se pudo interpretar JSON Navigator.", error);
+        return { projects: [] };
+    }
+}
+
+function parseDashboardContext(contextTable?: JsonTablePayload): DashboardContextData {
+    validateJsonTableRowCount(contextTable, "JSON Dashboard context");
+
+    if (!contextTable) {
+        return { Level: "PRONIED" };
+    }
+
+    const rows = jsonTableToObjects<Record<string, unknown>>(contextTable);
+    const contextRow = rows[0] ?? {};
+    const level = normalizeDashboardLevel(firstKnownValue(contextRow, "Level", "Nivel"));
+
+    return {
+        Level: level,
+        Unit: asText(firstKnownValue(contextRow, "Unit", "Unidad", "UnidadGerencial")),
+        ProjectId: asText(firstKnownValue(contextRow, "ProjectId", "IdIntervencion", "ProyectoId")),
+        Region: asText(firstKnownValue(contextRow, "Region")),
+        Province: asText(firstKnownValue(contextRow, "Province", "Provincia")),
+        District: asText(firstKnownValue(contextRow, "District", "Distrito")),
+        Status: asText(firstKnownValue(contextRow, "Status", "Estado", "EstadoProyecto"))
+    };
+}
+
+function normalizeDashboardLevel(value: unknown): DashboardLevel {
+    const normalized = textValue(value).trim().toUpperCase();
+
+    if (normalized === "UNIDAD" || normalized === "PROYECTO") {
+        return normalized;
+    }
+
+    return "PRONIED";
+}
+
+function validateJsonTableRowCount(table: JsonTablePayload | undefined, label: string): void {
+    if (table && table.rowCount !== table.data.length) {
+        console.warn(`${label}: rowCount no coincide con data.length.`);
+    }
+}
+
 function getRoleIndex(dataView: powerbi.DataView, roleName: string): number {
     const columns = dataView.table?.columns ?? [];
     return columns.findIndex((column) => column.roles?.[roleName] === true);
@@ -237,8 +298,21 @@ export function parseDashboardJsonData(dataView?: powerbi.DataView): ParsedDashb
         return null;
     }
 
-    const idIndex = getRoleIndex(dataView, "idIntervencion");
+    const navigatorIndex = getRoleIndex(dataView, "jsonNavigator");
     const jsonIndex = getRoleIndex(dataView, "jsonDashboard");
+
+    if (navigatorIndex >= 0 && jsonIndex >= 0) {
+        for (const row of table.rows) {
+            const parsed = parseNavigatorDashboardRow(row, navigatorIndex, jsonIndex);
+            if (parsed) {
+                return parsed;
+            }
+        }
+
+        return null;
+    }
+
+    const idIndex = getRoleIndex(dataView, "idIntervencion");
 
     if (idIndex < 0 || jsonIndex < 0) {
         return null;
@@ -256,6 +330,45 @@ export function parseDashboardJsonData(dataView?: powerbi.DataView): ParsedDashb
     }
 
     return null;
+}
+
+function parseNavigatorDashboardRow(row: powerbi.DataViewTableRow, navigatorIndex: number, jsonIndex: number): ParsedDashboardData | null {
+    const rawNavigator = row[navigatorIndex];
+    const rawDashboard = row[jsonIndex];
+
+    if (typeof rawDashboard !== "string" || rawDashboard.trim() === "") {
+        return null;
+    }
+
+    try {
+        const navigator = parseNavigatorPayload(rawNavigator);
+        const payload = JSON.parse(rawDashboard) as DashboardJsonPayload;
+        const context = parseDashboardContext(payload.context);
+
+        if (context.Level !== "PROYECTO") {
+            return {
+                idIntervencion: context.ProjectId ?? "",
+                context,
+                navigator,
+                project: null,
+                gauges: [],
+                curve: [],
+                risks: [],
+                milestones: []
+            };
+        }
+
+        const parsed = parseDashboardJsonRow([context.ProjectId || "__json_dashboard__", rawDashboard], 0, 1);
+        return parsed ? {
+            ...parsed,
+            context,
+            navigator,
+            idIntervencion: context.ProjectId || parsed.idIntervencion
+        } : null;
+    } catch (error) {
+        console.error("No se pudo interpretar JSON Navigator/Dashboard.", error);
+        return null;
+    }
 }
 
 function parseDashboardJsonRow(row: powerbi.DataViewTableRow, idIndex: number, jsonIndex: number): ParsedDashboardData | null {
@@ -423,6 +536,32 @@ function adaptJsonDashboardData(parsed: ParsedDashboardData): DashboardData {
         risks: parsed.risks,
         milestones: parsed.milestones,
         hasData: parsed.project !== null && parsed.gauges.length > 0 && parsed.curve.length > 0
+    };
+}
+
+function buildNonProjectPlaceholder(context: DashboardContextData): DashboardData {
+    const header: ProjectHeader = {
+        NombreIntervencion: context.Level === "UNIDAD" ? context.Unit : "PRONIED",
+        UnidadGerencial: context.Unit,
+        Region: context.Region,
+        Provincia: context.Province,
+        Distrito: context.District,
+        EstadoProyecto: context.Status
+    };
+
+    return {
+        header,
+        current: header,
+        gauges: [],
+        curve: {
+            history: [],
+            current: {},
+            references: {}
+        },
+        performance: {},
+        risks: [],
+        milestones: [],
+        hasData: false
     };
 }
 

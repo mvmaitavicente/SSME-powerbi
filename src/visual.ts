@@ -80,13 +80,7 @@ export class Visual implements IVisual {
 
             root.appendChild(renderSidebar());
 
-            const main = document.createElement("main");
-            main.className = "evm-main";
-            main.appendChild(renderHeader(dashboard.header));
-            main.appendChild(renderGaugeGrid(dashboard.gauges, palette, (key) => this.openGaugeHistoryModal(key)));
-
-            main.appendChild(this.renderBodyCarousel(dashboard));
-            root.appendChild(main);
+            root.appendChild(this.renderProjectDashboard(dashboard));
 
             if (!dashboard.hasData) {
                 const empty = document.createElement("div");
@@ -107,6 +101,15 @@ export class Visual implements IVisual {
 
     public getFormattingModel(): powerbi.visuals.FormattingModel {
         return this.formattingSettingsService.buildFormattingModel(this.formattingSettings);
+    }
+
+    private renderProjectDashboard(dashboard: ReturnType<typeof parseDashboardData>): HTMLElement {
+        const main = document.createElement("main");
+        main.className = "evm-main";
+        main.appendChild(renderHeader(dashboard.header));
+        main.appendChild(renderGaugeGrid(dashboard.gauges, palette, (key) => this.openGaugeHistoryModal(key)));
+        main.appendChild(this.renderBodyCarousel(dashboard));
+        return main;
     }
 
     private renderBodyCarousel(dashboard: ReturnType<typeof parseDashboardData>): HTMLElement {
