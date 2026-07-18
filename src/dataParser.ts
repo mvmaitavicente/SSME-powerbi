@@ -786,7 +786,8 @@ function normalizeAggregateGauge(row: Record<string, unknown>): AggregateGaugeDa
         LabelSemana: textValue(firstKnownValue(row, "LabelSemana", "SemanaLabel", "Semana")),
         CPI: readNullableNumber(row, ["CPI"]),
         SPIW: readNullableNumber(row, ["SPIW", "SPI (w)", "SPI"]),
-        TCPI: readNullableNumber(row, ["TCPI"])
+        TCPI: readNullableNumber(row, ["TCPI"]),
+        TSPIW: readNullableNumber(row, ["TSPIW", "TSPI (w)", "TSPI"])
     };
 }
 
@@ -798,11 +799,19 @@ function normalizeAggregateCurve(row: Record<string, unknown>): AggregateCurveDa
         FechaFinSemana: nullableText(firstKnownValue(row, "FechaFinSemana")),
         LabelSemana: textValue(firstKnownValue(row, "LabelSemana", "SemanaLabel", "Semana")),
         BAC: readNullableNumber(row, ["BAC"]),
+        SAC: readNullableNumber(row, ["SAC"]),
+        ES: readNullableNumber(row, ["ES"]),
+        AT: readNullableNumber(row, ["AT"]),
         PV: readNullableNumber(row, ["PV"]),
         EV: readNullableNumber(row, ["EV"]),
         AC: readNullableNumber(row, ["AC"]),
         CPI: readNullableNumber(row, ["CPI"]),
-        SPIW: readNullableNumber(row, ["SPIW", "SPI (w)", "SPI"])
+        SPIW: readNullableNumber(row, ["SPIW", "SPI (w)", "SPI"]),
+        TSPIT: readNullableNumber(row, ["TSPIT", "TSPI (t)"]),
+        EACC: readNullableNumber(row, ["EACC", "EAC (c)"]),
+        EACT: readNullableNumber(row, ["EACT", "EAC (t)"]),
+        VACC: readNullableNumber(row, ["VACC", "VAC (c)"]),
+        VACT: readNullableNumber(row, ["VACT", "VAC (t)"])
     };
 }
 

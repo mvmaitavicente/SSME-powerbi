@@ -11,4 +11,6 @@ export interface SidebarOptions {
     onOpenFilters: () => void;
 }
 export declare function renderSidebar(options: SidebarOptions): HTMLElement;
-export declare function renderHeader(header: ProjectHeader): HTMLElement;
+export declare function renderHeader(header: ProjectHeader, options?: {
+    titleLabel?: string | null;
+}): HTMLElement;

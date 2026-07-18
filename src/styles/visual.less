@@ -248,8 +248,9 @@
 
 .evm-aggregate-curve-svg {
     width: 100%;
-    height: calc(100% - 30px);
-    min-height: 230px;
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
     display: block;
 }
 
@@ -271,10 +272,15 @@
 }
 
 .evm-aggregate-label,
-.evm-aggregate-title {
+.evm-aggregate-title,
+.evm-aggregate-final-label {
     fill: #001B8E;
     font-size: 13px;
     font-weight: 900;
+}
+
+.evm-aggregate-final-label {
+    font-size: 14px;
 }
 
 .evm-portfolio-insight {
@@ -1682,6 +1688,54 @@
     align-content: stretch;
     overflow: hidden;
     padding: 12px 14px 14px;
+}
+
+.evm-portfolio-side-panel {
+    grid-template-rows: auto repeat(12, minmax(0, 1fr));
+    align-content: stretch;
+}
+
+.evm-portfolio-side-item {
+    display: grid;
+    align-content: center;
+    gap: 5px;
+    width: 100%;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid #E7ECF5;
+    border-radius: 7px;
+    background: #FFFFFF;
+    color: #001B8E;
+    text-align: left;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0, 27, 142, 0.04);
+}
+
+.evm-portfolio-side-item:hover,
+.evm-portfolio-side-item:focus-visible {
+    border-color: #BFD0FF;
+    background: #F7F9FF;
+    outline: none;
+}
+
+.evm-portfolio-side-item strong,
+.evm-portfolio-side-item span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.evm-portfolio-side-item strong {
+    font-size: 13px;
+    line-height: 1.1;
+    font-weight: 900;
+}
+
+.evm-portfolio-side-item span {
+    font-size: 11px;
+    line-height: 1.15;
+    font-weight: 800;
 }
 
 .evm-risk-card {

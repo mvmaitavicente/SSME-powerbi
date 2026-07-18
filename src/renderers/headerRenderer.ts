@@ -79,13 +79,18 @@ function renderSidebarButton(
     return item;
 }
 
-export function renderHeader(header: ProjectHeader): HTMLElement {
+export function renderHeader(header: ProjectHeader, options: { titleLabel?: string | null } = {}): HTMLElement {
     const wrapper = createElement("section", "evm-header evm-card");
 
     const project = createElement("div", "evm-project-title");
     const title = createElement("h1");
-    title.appendChild(createElement("span", undefined, "Proyecto:"));
-    title.appendChild(document.createTextNode(` ${text(header.NombreIntervencion, "Proyecto sin nombre")}`));
+    const titleLabel = options.titleLabel === undefined ? "Proyecto:" : options.titleLabel;
+    if (titleLabel) {
+        title.appendChild(createElement("span", undefined, titleLabel));
+        title.appendChild(document.createTextNode(` ${text(header.NombreIntervencion, "Proyecto sin nombre")}`));
+    } else {
+        title.appendChild(document.createTextNode(text(header.NombreIntervencion, "Proyecto sin nombre")));
+    }
     project.appendChild(title);
     const meta = createElement("div", "evm-header-meta");
     appendMeta(meta, "Unidad:", text(header.UnidadGerencial));

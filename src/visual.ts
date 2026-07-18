@@ -13,7 +13,7 @@ import { renderMilestones } from "./renderers/milestoneRenderer";
 import { renderPerformance } from "./renderers/performanceRenderer";
 import { renderRisks } from "./renderers/riskRenderer";
 import { VisualFormattingSettingsModel } from "./settings";
-import { AggregateCurveData, AggregateGaugeData, DashboardData, DashboardLevel, DataValue, GaugeChartPoint, GaugeChartSeries, GaugeData, GaugeHistoryRow, GaugeMetricKey, NavigatorProject, ParsedDashboardData, SummaryData, UnitProjectSummaryData, UnitSummaryData, VisualPalette } from "./types";
+import { AggregateCurveData, AggregateGaugeData, CurveHistoryPoint, CurveReferences, DashboardData, DashboardLevel, DataValue, GaugeChartPoint, GaugeChartSeries, GaugeData, GaugeHistoryRow, GaugeMetricKey, NavigatorProject, ParsedDashboardData, ProjectHeader, RenderCurveData, SummaryData, UnitProjectSummaryData, UnitSummaryData, VisualPalette } from "./types";
 import { createElement, currency, date, decimal, numberValue, shortCurrency, text } from "./utils/format";
 import VisualConstructorOptions = powerbi.extensibility.visual.VisualConstructorOptions;
 import VisualUpdateOptions = powerbi.extensibility.visual.VisualUpdateOptions;
@@ -677,40 +677,21 @@ export class Visual implements IVisual {
     }
 
     private renderProniedDashboard(dashboard: ParsedDashboardData, viewport: powerbi.IViewport): HTMLElement {
-        const main = createElement("main", "evm-main evm-portfolio-main");
+        const main = createElement("main", "evm-main");
         main.style.minWidth = `${Math.min(780, Math.max(0, viewport.width - 92))}px`;
-        main.appendChild(this.renderPortfolioHeader(
-            "PRONIED — Portafolio General",
-            "Todas las Unidades Gerenciales",
-            dashboard
-        ));
-        main.appendChild(this.renderSummaryGrid(dashboard.summary));
-        main.appendChild(renderGaugeGrid(this.buildAggregateGauges(dashboard.aggregateGauges), palette));
-
-        const body = createElement("section", "evm-portfolio-body");
-        body.appendChild(this.renderAggregateCurve(dashboard.aggregateCurve));
-        body.appendChild(this.renderPortfolioInsight(dashboard.summary, dashboard.units.length, "Unidades Gerenciales"));
-        main.appendChild(body);
-        main.appendChild(this.renderUnitsSection(dashboard.units));
+        main.appendChild(renderHeader(this.portfolioHeaderData("PRONIED \u2014 Portafolio General", dashboard), { titleLabel: null }));
+        main.appendChild(this.renderPortfolioGaugeSection(dashboard.aggregateGauges));
+        main.appendChild(this.renderPortfolioBody(this.buildAggregateRenderCurve(dashboard), this.renderUnitsPanel(dashboard.units)));
         return main;
     }
 
     private renderUnitDashboard(dashboard: ParsedDashboardData, viewport: powerbi.IViewport): HTMLElement {
-        const main = createElement("main", "evm-main evm-portfolio-main");
+        const main = createElement("main", "evm-main");
         main.style.minWidth = `${Math.min(780, Math.max(0, viewport.width - 92))}px`;
-        main.appendChild(this.renderPortfolioHeader(
-            `UNIDAD GERENCIAL: ${text(dashboard.context.Unit, "Sin unidad")}`,
-            "Portafolio de proyectos de la Unidad",
-            dashboard
-        ));
-        main.appendChild(this.renderSummaryGrid(dashboard.summary));
-        main.appendChild(renderGaugeGrid(this.buildAggregateGauges(dashboard.aggregateGauges), palette));
-
-        const body = createElement("section", "evm-portfolio-body");
-        body.appendChild(this.renderAggregateCurve(dashboard.aggregateCurve));
-        body.appendChild(this.renderPortfolioInsight(dashboard.summary, dashboard.projects.length, "Proyectos"));
-        main.appendChild(body);
-        main.appendChild(this.renderProjectsSection(dashboard.projects));
+        const unitName = text(dashboard.context.Unit, "UGEO");
+        main.appendChild(renderHeader(this.portfolioHeaderData(`${unitName} \u2014 Portafolio ${unitName}`, dashboard), { titleLabel: null }));
+        main.appendChild(this.renderPortfolioGaugeSection(dashboard.aggregateGauges));
+        main.appendChild(this.renderPortfolioBody(this.buildAggregateRenderCurve(dashboard), this.renderProjectsPanel(dashboard.projects)));
         return main;
     }
 
@@ -812,33 +793,215 @@ export class Visual implements IVisual {
         return row;
     }
 
+    private portfolioHeaderData(title: string, dashboard: ParsedDashboardData): ProjectHeader {
+        return {
+            NombreIntervencion: title,
+            UnidadGerencial: dashboard.context.Unit ?? "PRONIED",
+            CUI: "",
+            Region: dashboard.context.Region ?? "",
+            Provincia: dashboard.context.Province ?? "",
+            Distrito: dashboard.context.District ?? "",
+            EstadoProyecto: "",
+            MensajeEjecutivo: "",
+            FechaEstado: dashboard.context.CutoffDate,
+            SemanaActual: dashboard.summary?.SPIT ?? dashboard.summary?.SPIW ?? null
+        };
+    }
+
+    private renderPortfolioBody(curve: RenderCurveData, sidePanel: HTMLElement): HTMLElement {
+        const carousel = createElement("section", "evm-body-carousel");
+        const viewport = createElement("div", "evm-body-carousel-viewport");
+        const page = createElement("div", "evm-body-carousel-page evm-body-carousel-page--evm active");
+        const left = createElement("div", "evm-left-column");
+        const right = createElement("div", "evm-right-column");
+
+        left.appendChild(renderCurve(curve, palette));
+        right.appendChild(sidePanel);
+        page.appendChild(left);
+        page.appendChild(right);
+        viewport.appendChild(page);
+        carousel.appendChild(viewport);
+        return carousel;
+    }
+
+    private renderUnitsPanel(units: UnitSummaryData[]): HTMLElement {
+        const panel = createElement("section", "evm-card evm-performance-card evm-portfolio-side-panel");
+        panel.appendChild(createElement("div", "evm-section-title", "Lista de Unidades"));
+        if (!units.length) {
+            panel.appendChild(createElement("div", "evm-empty", "No se encontraron unidades para los filtros seleccionados."));
+            return panel;
+        }
+
+        units.slice(0, 12).forEach((unit) => {
+            const item = createElement("button", "evm-portfolio-side-item");
+            item.type = "button";
+            item.addEventListener("click", () => this.openUnitDashboard(unit.UnidadGerencial));
+            item.appendChild(createElement("strong", undefined, unit.UnidadGerencial));
+            item.appendChild(createElement("span", undefined, `${this.formatInteger(unit.CantidadProyectos)} proyectos | CPI ${decimal(unit.CPI)} | SPI ${decimal(unit.SPIW)}`));
+            panel.appendChild(item);
+        });
+        return panel;
+    }
+
+    private renderProjectsPanel(projects: UnitProjectSummaryData[]): HTMLElement {
+        const panel = createElement("section", "evm-card evm-performance-card evm-portfolio-side-panel");
+        panel.appendChild(createElement("div", "evm-section-title", "Lista de Proyectos"));
+        if (!projects.length) {
+            panel.appendChild(createElement("div", "evm-empty", "No se encontraron proyectos para la Unidad y filtros seleccionados."));
+            return panel;
+        }
+
+        projects.slice(0, 12).forEach((project) => {
+            const item = createElement("button", "evm-portfolio-side-item");
+            item.type = "button";
+            item.addEventListener("click", (event) => this.handleProjectClick(event, project));
+            item.appendChild(createElement("strong", undefined, project.NombreIntervencion));
+            item.appendChild(createElement("span", undefined, `${project.IdIntervencion} | CPI ${decimal(project.CPI)} | SPI ${decimal(project.SPIW)}`));
+            panel.appendChild(item);
+        });
+        return panel;
+    }
+
+    private renderPortfolioGaugeSection(rows: AggregateGaugeData[]): HTMLElement {
+        const gauges = this.buildAggregateGauges(rows);
+        if (!gauges.length) {
+            const empty = createElement("section", "evm-card evm-portfolio-empty-section");
+            empty.appendChild(createElement("div", "evm-section-title", "Desempeno consolidado"));
+            empty.appendChild(createElement("div", "evm-empty", "No hay indicadores de desempeno disponibles para los filtros seleccionados."));
+            return empty;
+        }
+
+        return renderGaugeGrid(gauges, palette);
+    }
+
     private buildAggregateGauges(rows: AggregateGaugeData[]): GaugeData[] {
         const definitions: Array<{ key: GaugeData["key"]; title: string; selector: (row: AggregateGaugeData) => number | null }> = [
             { key: "CPI", title: "CPI", selector: (row) => row.CPI },
             { key: "SPIW", title: "SPI (w)", selector: (row) => row.SPIW },
             { key: "TCPI", title: "TCPI", selector: (row) => row.TCPI },
-            { key: "TSPIW", title: "TSPI (w)", selector: () => null }
+            { key: "TSPIW", title: "TSPI (w)", selector: (row) => row.TSPIW ?? numberValue(row["TSPI (w)"] as DataValue) ?? numberValue(row.TSPI as DataValue) }
         ];
+        const orderedRows = [...rows].sort((a, b) => a.OrdenSemana - b.OrdenSemana);
 
         return definitions.map((definition) => {
-            const sparkline = rows.map(definition.selector).filter((value): value is number => value !== null);
+            const sparkline = orderedRows.map(definition.selector).filter((value): value is number => value !== null);
+            const value = sparkline[sparkline.length - 1] ?? null;
             return {
                 key: definition.key,
                 title: definition.title,
-                value: sparkline[sparkline.length - 1] ?? null,
+                value,
                 min: 0,
                 max: 1.5,
                 target: 1,
-                variation: null,
-                status: "",
+                variation: this.deltaFromHistory(sparkline),
+                status: this.aggregateGaugeStatus(definition.key, value),
                 sparkline
             };
         });
     }
 
+    private deltaFromHistory(values: number[]): number | null {
+        return values.length >= 2 ? values[values.length - 1] - values[values.length - 2] : null;
+    }
+
+    private aggregateGaugeStatus(key: GaugeData["key"], value: number | null): string {
+        if (value === null) {
+            return "Sin dato";
+        }
+        if (key === "CPI" || key === "SPIW") {
+            if (value < 0.9) {
+                return "Critico";
+            }
+            if (value < 1) {
+                return "En riesgo";
+            }
+            return "Estable";
+        }
+        if (value <= 1) {
+            return "Estable";
+        }
+        if (value <= 1.1) {
+            return "En riesgo";
+        }
+        return "Critico";
+    }
+
+    private buildAggregateRenderCurve(dashboard: ParsedDashboardData): RenderCurveData {
+        const orderedRows = [...dashboard.aggregateCurve].sort((a, b) => a.OrdenSemana - b.OrdenSemana);
+        const history: CurveHistoryPoint[] = orderedRows.map((row) => ({
+            SemanaProyecto: row.OrdenSemana,
+            PV: row.PV,
+            EV: row.EV,
+            AC: row.AC
+        }));
+        const references: CurveReferences = {
+            BAC: this.lastAggregateValue(orderedRows, (row) => row.BAC),
+            SAC: this.lastAggregateValue(orderedRows, (row) => row.SAC),
+            AT: this.lastAggregateValue(orderedRows, (row) => row.AT),
+            ES: this.lastAggregateValue(orderedRows, (row) => row.ES),
+            EACC: this.lastAggregateValue(orderedRows, (row) => row.EACC),
+            EACT: this.lastAggregateValue(orderedRows, (row) => row.EACT),
+            VACC: this.lastAggregateValue(orderedRows, (row) => row.VACC),
+            VACT: this.lastAggregateValue(orderedRows, (row) => row.VACT),
+            SPIT: this.lastAggregateValue(orderedRows, (row) => numberValue(row["SPI (t)"] as DataValue) ?? numberValue(row.SPIT as DataValue)),
+            TSPIT: this.lastAggregateValue(orderedRows, (row) => row.TSPIT),
+            FechaEstado: dashboard.context.CutoffDate
+        };
+        const current = this.currentAggregateCurvePoint(orderedRows, references, dashboard.context.CutoffDate);
+
+        return {
+            history,
+            current,
+            references
+        };
+    }
+
+    private currentAggregateCurvePoint(rows: AggregateCurveData[], references: CurveReferences, cutoffDate: DataValue): CurveHistoryPoint {
+        const at = numberValue(references.AT);
+        const atRow = at === null ? null : rows.find((row) => row.OrdenSemana === at);
+        const cutoffRow = atRow ?? this.findAggregateRowByCutoffDate(rows, cutoffDate);
+        const fallbackRow = cutoffRow ?? [...rows].reverse().find((row) => row.PV !== null || row.EV !== null || row.AC !== null) ?? rows[rows.length - 1];
+
+        if (!fallbackRow) {
+            return {};
+        }
+
+        return {
+            SemanaProyecto: fallbackRow.OrdenSemana,
+            PV: fallbackRow.PV,
+            EV: fallbackRow.EV,
+            AC: fallbackRow.AC
+        };
+    }
+
+    private findAggregateRowByCutoffDate(rows: AggregateCurveData[], cutoffDate: DataValue): AggregateCurveData | null {
+        if (!cutoffDate) {
+            return null;
+        }
+        const cutoffTime = new Date(cutoffDate as string).getTime();
+        if (!Number.isFinite(cutoffTime)) {
+            return null;
+        }
+        return rows.find((row) => {
+            const start = row.FechaInicioSemana ? new Date(row.FechaInicioSemana).getTime() : NaN;
+            const end = row.FechaFinSemana ? new Date(row.FechaFinSemana).getTime() : NaN;
+            return Number.isFinite(start) && Number.isFinite(end) && cutoffTime >= start && cutoffTime <= end;
+        }) ?? null;
+    }
+
+    private lastAggregateValue(rows: AggregateCurveData[], accessor: (row: AggregateCurveData) => number | null): number | null {
+        for (let index = rows.length - 1; index >= 0; index--) {
+            const value = accessor(rows[index]);
+            if (value !== null && Number.isFinite(value)) {
+                return value;
+            }
+        }
+        return null;
+    }
+
     private renderAggregateCurve(curve: AggregateCurveData[]): HTMLElement {
-        const card = createElement("section", "evm-card evm-aggregate-curve-card");
-        card.appendChild(createElement("div", "evm-section-title", "Curva agregada"));
+        const card = createElement("section", "evm-card evm-curve-card evm-aggregate-curve-card");
+        card.appendChild(createElement("div", "evm-section-title", "Curva S - Desempeno Consolidado (EVM)"));
         if (!curve.length) {
             card.appendChild(createElement("div", "evm-empty", "Sin datos de curva agregada."));
             return card;

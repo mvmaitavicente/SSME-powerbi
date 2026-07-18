@@ -46,7 +46,18 @@ export declare class Visual implements IVisual {
     private renderSummaryGrid;
     private renderPortfolioInsight;
     private insightMetric;
+    private portfolioHeaderData;
+    private renderPortfolioBody;
+    private renderUnitsPanel;
+    private renderProjectsPanel;
+    private renderPortfolioGaugeSection;
     private buildAggregateGauges;
+    private deltaFromHistory;
+    private aggregateGaugeStatus;
+    private buildAggregateRenderCurve;
+    private currentAggregateCurvePoint;
+    private findAggregateRowByCutoffDate;
+    private lastAggregateValue;
     private renderAggregateCurve;
     private drawAggregateCurveSvg;
     private renderUnitsSection;

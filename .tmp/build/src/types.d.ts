@@ -271,11 +271,19 @@ export interface AggregateCurveData extends Record<string, unknown> {
     FechaFinSemana: string | null;
     LabelSemana: string;
     BAC: number | null;
+    SAC: number | null;
+    ES: number | null;
+    AT: number | null;
     PV: number | null;
     EV: number | null;
     AC: number | null;
     CPI: number | null;
     SPIW: number | null;
+    TSPIT: number | null;
+    EACC: number | null;
+    EACT: number | null;
+    VACC: number | null;
+    VACT: number | null;
 }
 export interface AggregateGaugeData extends Record<string, unknown> {
     OrdenSemana: number;
@@ -285,6 +293,7 @@ export interface AggregateGaugeData extends Record<string, unknown> {
     CPI: number | null;
     SPIW: number | null;
     TCPI: number | null;
+    TSPIW: number | null;
 }
 export interface ProjectData extends Record<string, unknown> {
     IdIntervencion: string;
