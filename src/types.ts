@@ -236,6 +236,7 @@ export interface DashboardJsonPayload {
     schemaVersion?: string;
     context?: JsonTablePayload;
     summary?: JsonTablePayload;
+    portfolioSummary?: JsonTablePayload;
     project?: JsonTablePayload;
     gauges?: JsonTablePayload;
     curve?: JsonTablePayload;
@@ -313,6 +314,19 @@ export interface AggregateCurveData extends Record<string, unknown> {
     EACT: number | null;
     VACC: number | null;
     VACT: number | null;
+}
+
+export interface PortfolioSummary {
+    activeProjects: number | null;
+    projects: number | null;
+    interventions: number | null;
+    institutionalBudget: number | null;
+    projectedBudget: number | null;
+    interventionBudget: number | null;
+    scheduleDeviation: number | null;
+    costDeviation: number | null;
+    criticalInterventions: number | null;
+    portfolioRisk: number | null;
 }
 
 export interface AggregateGaugeData extends Record<string, unknown> {
@@ -415,6 +429,7 @@ export interface ParsedDashboardData {
     context: DashboardContextData;
     debug?: ParserDebugData;
     summary: SummaryData | null;
+    portfolioSummary: PortfolioSummary | null;
     navigator?: NavigatorData;
     project: ProjectData | null;
     gauges: GaugeHistoryRow[];

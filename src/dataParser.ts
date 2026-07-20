@@ -1,7 +1,7 @@
 "use strict";
 
 import powerbi from "powerbi-visuals-api";
-import { AggregateCurveData, AggregateGaugeData, CurrentSnapshot, CurveData, CurveHistoryPoint, CurveReferences, DashboardContextData, DashboardData, DashboardJsonPayload, DashboardLevel, DataValue, FieldValueMap, GaugeData, GaugeHistory, GaugeHistoryRow, JsonTablePayload, MilestoneItem, NavigatorData, NavigatorJsonPayload, NavigatorProject, ParsedDashboardData, ParserDebugData, PerformanceData, ProjectData, ProjectHeader, RenderCurveData, RiskItem, SummaryData, UnitProjectSummaryData, UnitSummaryData } from "./types";
+import { AggregateCurveData, AggregateGaugeData, CurrentSnapshot, CurveData, CurveHistoryPoint, CurveReferences, DashboardContextData, DashboardData, DashboardJsonPayload, DashboardLevel, DataValue, FieldValueMap, GaugeData, GaugeHistory, GaugeHistoryRow, JsonTablePayload, MilestoneItem, NavigatorData, NavigatorJsonPayload, NavigatorProject, ParsedDashboardData, ParserDebugData, PerformanceData, PortfolioSummary, ProjectData, ProjectHeader, RenderCurveData, RiskItem, SummaryData, UnitProjectSummaryData, UnitSummaryData } from "./types";
 
 type DataViewTable = powerbi.DataViewTable;
 type DataViewMetadataColumn = powerbi.DataViewMetadataColumn;
@@ -583,6 +583,9 @@ function parseDashboardPayload(
     }
 
     const summaryRows = payload.summary ? jsonTableToObjects<Record<string, unknown>>(payload.summary) : [];
+    const portfolioSummaryRows = payload.portfolioSummary
+        ? jsonTableToObjects<Record<string, unknown>>(payload.portfolioSummary)
+        : [];
     const projectRows = payload.project ? jsonTableToObjects<ProjectData>(payload.project) : [];
     const gaugeRows = payload.gauges ? jsonTableToObjects<Record<string, unknown>>(payload.gauges) : [];
     const curveRows = payload.curve ? jsonTableToObjects<Record<string, unknown>>(payload.curve) : [];
@@ -594,6 +597,7 @@ function parseDashboardPayload(
         : [];
 
     validateJsonTableRowCount(payload.summary, "JSON summary");
+    validateJsonTableRowCount(payload.portfolioSummary, "JSON portfolioSummary");
     validateJsonTableRowCount(payload.project, "JSON project");
     validateJsonTableRowCount(payload.gauges, "JSON gauges");
     validateJsonTableRowCount(payload.curve, "JSON curve");
@@ -658,6 +662,7 @@ function parseDashboardPayload(
         debug,
         navigator,
         summary: normalizeSummary(summaryRows[0] ?? null),
+        portfolioSummary: normalizePortfolioSummary(portfolioSummaryRows[0] ?? null),
         project: normalizeProjectData(projectRows[0] ?? null),
         gauges: normalizedGauges,
         curve: normalizedCurve,
@@ -674,6 +679,25 @@ function parseDashboardPayload(
     }
 
     return finalParsed;
+}
+
+function normalizePortfolioSummary(row: Record<string, unknown> | null): PortfolioSummary | null {
+    if (!row) {
+        return null;
+    }
+
+    return {
+        activeProjects: readNullableNumber(row, ["ActiveProjects"]),
+        projects: readNullableNumber(row, ["Projects"]),
+        interventions: readNullableNumber(row, ["Interventions"]),
+        institutionalBudget: readNullableNumber(row, ["InstitutionalBudget"]),
+        projectedBudget: readNullableNumber(row, ["ProjectedBudget"]),
+        interventionBudget: readNullableNumber(row, ["InterventionBudget"]),
+        scheduleDeviation: readNullableNumber(row, ["ScheduleDeviation"]),
+        costDeviation: readNullableNumber(row, ["CostDeviation"]),
+        criticalInterventions: readNullableNumber(row, ["CriticalInterventions"]),
+        portfolioRisk: readNullableNumber(row, ["PortfolioRisk"])
+    };
 }
 
 function readLegacyParsedLevel(parsed: ParsedDashboardData | null): string | null {

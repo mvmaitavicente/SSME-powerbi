@@ -11,6 +11,7 @@ import { renderGaugeGrid } from "./renderers/gaugeRenderer";
 import { renderHeader, renderSidebar } from "./renderers/headerRenderer";
 import { renderMilestones } from "./renderers/milestoneRenderer";
 import { renderPerformance } from "./renderers/performanceRenderer";
+import { renderPortfolioSummary } from "./renderers/portfolioSummaryRenderer";
 import { renderRisks } from "./renderers/riskRenderer";
 import { VisualFormattingSettingsModel } from "./settings";
 import { AggregateCurveData, AggregateGaugeData, CurveHistoryPoint, CurveReferences, DashboardData, DashboardLevel, DataValue, GaugeChartPoint, GaugeChartSeries, GaugeData, GaugeHistoryRow, GaugeMetricKey, NavigatorProject, ParsedDashboardData, ProjectHeader, RenderCurveData, SummaryData, UnitProjectSummaryData, UnitSummaryData, VisualPalette } from "./types";
@@ -690,7 +691,7 @@ export class Visual implements IVisual {
             }
         ));
         main.appendChild(this.renderPortfolioGaugeSection(dashboard));
-        main.appendChild(this.renderPortfolioBody(this.buildAggregateRenderCurve(dashboard), this.renderUnitsPanel(dashboard.units)));
+        main.appendChild(this.renderPortfolioBody(this.buildAggregateRenderCurve(dashboard), renderPortfolioSummary(dashboard.portfolioSummary)));
         return main;
     }
 
