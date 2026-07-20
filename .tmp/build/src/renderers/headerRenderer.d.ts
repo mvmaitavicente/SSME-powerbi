@@ -13,4 +13,5 @@ export interface SidebarOptions {
 export declare function renderSidebar(options: SidebarOptions): HTMLElement;
 export declare function renderHeader(header: ProjectHeader, options?: {
     titleLabel?: string | null;
+    subtitle?: string;
 }): HTMLElement;

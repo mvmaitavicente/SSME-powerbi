@@ -11,25 +11,19 @@ interface TimelinePosition {
 
 const timeline = {
     width: 960,
-    startX: 96,
-    endX: 864,
-    firstRowY: 62,
-    rowGap: 222,
-    rowContainerX: 16,
-    rowContainerTopOffset: 58,
-    rowContainerWidth: 928,
-    rowContainerHeight: 210,
-    orderOffset: 28,
+    startX: 70,
+    endX: 890,
+    firstRowY: 35,
     connectorEndOffset: 48,
-    nameOffset: 68,
+    nameOffset: 78,
     nameLineGap: 30,
-    dateOffset: 118,
+    dateOffset: 135,
     bottomPadding: 18
 };
 
 export function renderMilestones(milestones: MilestoneItem[]): HTMLElement {
     const card = createElement("section", "evm-card evm-milestone-card milestone-card");
-    card.appendChild(createElement("div", "evm-section-title evm-milestone-title", "Hitos Principales del Proyecto"));
+    const title = createElement("div", "evm-section-title evm-milestone-title", "Hitos Principales del Proyecto");
 
     const ordered = [...milestones].sort((a, b) => (numberValue(a.OrdenHito) ?? 0) - (numberValue(b.OrdenHito) ?? 0));
     const wrap = createElement("div", "milestone-svg-wrap");
@@ -40,13 +34,18 @@ export function renderMilestones(milestones: MilestoneItem[]): HTMLElement {
         svg.setAttribute("viewBox", `0 0 ${timeline.width} 220`);
         addText(svg, "Sin hitos", timeline.width / 2, 110, "middle", "evm-empty-svg");
     } else {
-        svg.setAttribute("viewBox", `0 0 ${timeline.width} ${timelineHeight(ordered.length)}`);
+        svg.setAttribute("viewBox", `0 0 ${timeline.width} ${timelineHeight()}`);
         drawTimeline(svg, ordered);
     }
 
     wrap.appendChild(svg);
-    card.appendChild(wrap);
-    card.appendChild(renderMilestoneLegend());
+    const content = createElement("div", "evm-milestone-content");
+    const timelineColumn = createElement("div", "evm-milestone-timeline-column");
+    timelineColumn.appendChild(title);
+    timelineColumn.appendChild(wrap);
+    content.appendChild(timelineColumn);
+    content.appendChild(renderMilestoneLegend());
+    card.appendChild(content);
     return card;
 }
 
@@ -55,10 +54,10 @@ function renderMilestoneLegend(): HTMLElement {
     legend.appendChild(createElement("div", "evm-milestone-legend-title", "Leyenda de estados"));
 
     const items = [
-        { className: "done", title: "Completado" },
-        { className: "active", title: "En ejecucion" },
-        { className: "late", title: "Retrasado" },
-        { className: "pending", title: "Pendiente" }
+        { className: "done", title: "Completado", description: "Hito finalizado correctamente." },
+        { className: "active", title: "En ejecución", description: "Hito en desarrollo." },
+        { className: "late", title: "Retrasado", description: "Hito no cumplido a la fecha programada." },
+        { className: "pending", title: "Pendiente", description: "Hito aún no iniciado." }
     ];
 
     const grid = createElement("div", "evm-milestone-legend-grid");
@@ -69,6 +68,7 @@ function renderMilestoneLegend(): HTMLElement {
         title.appendChild(createElement("span", `evm-milestone-legend-icon ${item.className}`));
         title.appendChild(document.createTextNode(item.title));
         copy.appendChild(title);
+        copy.appendChild(createElement("span", undefined, item.description));
         node.appendChild(copy);
         grid.appendChild(node);
     });
@@ -79,13 +79,11 @@ function renderMilestoneLegend(): HTMLElement {
 
 function drawTimeline(svg: SVGSVGElement, milestones: MilestoneItem[]): void {
     const positions = milestones.map((_, index) => milestonePosition(index, milestones.length));
-    drawRowContainers(svg, milestones, positions);
     drawRowLines(svg, milestones, positions);
 
     milestones.forEach((milestone, index) => {
         const position = positions[index];
         const stateClass = milestoneClass(milestone.EstadoHito);
-        drawOrderBadge(svg, milestone, index, position, stateClass);
         drawMilestoneConnector(svg, position, stateClass);
         drawMarker(svg, position.x, position.y, stateClass);
         drawMilestoneLabel(svg, milestone, position, stateClass);
@@ -93,56 +91,17 @@ function drawTimeline(svg: SVGSVGElement, milestones: MilestoneItem[]): void {
 }
 
 function milestonePosition(index: number, count: number): TimelinePosition {
-    const firstRowCount = Math.ceil(count / 2);
-    const row = index < firstRowCount ? 0 : 1;
-    const positionInRow = row === 0 ? index : index - firstRowCount;
-    const columnsInRow = row === 0 ? firstRowCount : count - firstRowCount;
-    const step = columnsInRow > 1 ? (timeline.endX - timeline.startX) / (columnsInRow - 1) : 0;
-    const x = columnsInRow > 1 ? timeline.startX + step * positionInRow : timeline.width / 2;
-    const y = timeline.firstRowY + row * timeline.rowGap;
+    const step = count > 1 ? (timeline.endX - timeline.startX) / (count - 1) : 0;
+    const x = count > 1 ? timeline.startX + step * index : timeline.width / 2;
     return {
         x,
-        y,
-        row
+        y: timeline.firstRowY,
+        row: 0
     };
 }
 
-function timelineHeight(count: number): number {
-    const rows = count > 1 ? 2 : 1;
-    return timeline.firstRowY + (rows - 1) * timeline.rowGap + timeline.dateOffset + timeline.bottomPadding;
-}
-
-function drawRowContainers(svg: SVGSVGElement, milestones: MilestoneItem[], positions: TimelinePosition[]): void {
-    const rows = new Set(positions.map((position) => position.row));
-    rows.forEach((row) => {
-        const y = timeline.firstRowY + row * timeline.rowGap - timeline.rowContainerTopOffset;
-        const container = svgElement("rect");
-        container.setAttribute("x", String(timeline.rowContainerX));
-        container.setAttribute("y", String(y));
-        container.setAttribute("width", String(timeline.rowContainerWidth));
-        container.setAttribute("height", String(timeline.rowContainerHeight));
-        container.setAttribute("rx", "10");
-        container.setAttribute("class", `evm-milestone-row-container ${rowStateClass(row, milestones, positions)}`);
-        svg.appendChild(container);
-    });
-}
-
-function rowStateClass(row: number, milestones: MilestoneItem[], positions: TimelinePosition[]): string {
-    const counts = new Map<string, number>();
-    positions.forEach((position, index) => {
-        if (position.row !== row) {
-            return;
-        }
-
-        const stateClass = milestoneClass(milestones[index].EstadoHito);
-        counts.set(stateClass, (counts.get(stateClass) ?? 0) + 1);
-    });
-
-    return ["done", "pending", "active", "late"].reduce((selected, stateClass) => {
-        const selectedCount = counts.get(selected) ?? 0;
-        const candidateCount = counts.get(stateClass) ?? 0;
-        return candidateCount > selectedCount ? stateClass : selected;
-    }, "done");
+function timelineHeight(): number {
+    return 198;
 }
 
 function drawRowLines(svg: SVGSVGElement, milestones: MilestoneItem[], positions: TimelinePosition[]): void {
@@ -159,21 +118,6 @@ function drawRowLines(svg: SVGSVGElement, milestones: MilestoneItem[], positions
     }
 }
 
-function drawOrderBadge(svg: SVGSVGElement, milestone: MilestoneItem, index: number, position: TimelinePosition, stateClass: string): void {
-    const order = text(milestone.OrdenHito, String(index + 1));
-    const x = position.x - 36;
-    const y = position.y - timeline.orderOffset;
-    const badge = svgElement("rect");
-    badge.setAttribute("x", String(x - 13));
-    badge.setAttribute("y", String(y - 13));
-    badge.setAttribute("width", "26");
-    badge.setAttribute("height", "26");
-    badge.setAttribute("rx", "6");
-    badge.setAttribute("class", `evm-milestone-order-bg ${stateClass}`);
-    svg.appendChild(badge);
-    addText(svg, order, x, y + 5, "middle", `evm-milestone-order-text ${stateClass}`);
-}
-
 function drawTimelineSegment(svg: SVGSVGElement, x1: number, x2: number, y: number, stateClass: string): void {
     const segment = svgElement("line");
     segment.setAttribute("x1", String(x1));
@@ -187,7 +131,7 @@ function drawTimelineSegment(svg: SVGSVGElement, x1: number, x2: number, y: numb
 function drawMilestoneConnector(svg: SVGSVGElement, position: TimelinePosition, stateClass: string): void {
     const line = svgElement("line");
     line.setAttribute("x1", String(position.x));
-    line.setAttribute("y1", String(position.y + 17));
+    line.setAttribute("y1", String(position.y + 15));
     line.setAttribute("x2", String(position.x));
     line.setAttribute("y2", String(position.y + timeline.connectorEndOffset - 8));
     line.setAttribute("class", `evm-milestone-connector ${stateClass}`);
@@ -196,7 +140,7 @@ function drawMilestoneConnector(svg: SVGSVGElement, position: TimelinePosition, 
     const dot = svgElement("circle");
     dot.setAttribute("cx", String(position.x));
     dot.setAttribute("cy", String(position.y + timeline.connectorEndOffset));
-    dot.setAttribute("r", "7");
+    dot.setAttribute("r", "5");
     dot.setAttribute("class", `evm-milestone-small-dot ${stateClass}`);
     svg.appendChild(dot);
 }
@@ -205,7 +149,7 @@ function drawMarker(svg: SVGSVGElement, x: number, y: number, stateClass: string
     if (stateClass === "done") {
         drawCircleMarker(svg, x, y, stateClass, true);
         const check = svgElement("path");
-        check.setAttribute("d", `M ${x - 7} ${y} L ${x - 3} ${y + 4} L ${x + 9} ${y - 7}`);
+        check.setAttribute("d", `M ${x - 6} ${y} L ${x - 2.5} ${y + 3.5} L ${x + 8} ${y - 6}`);
         check.setAttribute("class", "evm-milestone-icon light");
         svg.appendChild(check);
         return;
@@ -213,10 +157,10 @@ function drawMarker(svg: SVGSVGElement, x: number, y: number, stateClass: string
 
     if (stateClass === "late") {
         const triangle = svgElement("polygon");
-        triangle.setAttribute("points", `${x},${y - 18} ${x + 19},${y + 16} ${x - 19},${y + 16}`);
+        triangle.setAttribute("points", `${x},${y - 14} ${x + 15},${y + 13} ${x - 15},${y + 13}`);
         triangle.setAttribute("class", "evm-milestone-triangle late");
         svg.appendChild(triangle);
-        addText(svg, "!", x, y + 9, "middle", "evm-milestone-alert");
+        addText(svg, "!", x, y + 8, "middle", "evm-milestone-alert");
         return;
     }
 
@@ -227,14 +171,14 @@ function drawCircleMarker(svg: SVGSVGElement, x: number, y: number, stateClass: 
     const halo = svgElement("circle");
     halo.setAttribute("cx", String(x));
     halo.setAttribute("cy", String(y));
-    halo.setAttribute("r", "20");
+    halo.setAttribute("r", "15.5");
     halo.setAttribute("class", `evm-milestone-halo ${stateClass}`);
     svg.appendChild(halo);
 
     const marker = svgElement("circle");
     marker.setAttribute("cx", String(x));
     marker.setAttribute("cy", String(y));
-    marker.setAttribute("r", filled ? "14.5" : "12.5");
+    marker.setAttribute("r", filled ? "11" : "9.5");
     marker.setAttribute("class", `evm-milestone-dot ${stateClass}`);
     svg.appendChild(marker);
 }
@@ -284,11 +228,11 @@ function addWrappedText(svg: SVGSVGElement, label: string, x: number, y: number,
 
 function addDateBadge(svg: SVGSVGElement, label: string, x: number, y: number, stateClass: string): void {
     const badge = svgElement("rect");
-    badge.setAttribute("x", String(x - 40));
-    badge.setAttribute("y", String(y - 12));
-    badge.setAttribute("width", "80");
-    badge.setAttribute("height", "21");
-    badge.setAttribute("rx", "5");
+    badge.setAttribute("x", String(x - 33));
+    badge.setAttribute("y", String(y - 9));
+    badge.setAttribute("width", "66");
+    badge.setAttribute("height", "17");
+    badge.setAttribute("rx", "4");
     badge.setAttribute("class", `evm-milestone-date-bg ${stateClass}`);
     svg.appendChild(badge);
     addText(svg, label, x, y + 2, "middle", "evm-milestone-date-text");

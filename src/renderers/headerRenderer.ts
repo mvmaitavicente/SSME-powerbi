@@ -79,7 +79,7 @@ function renderSidebarButton(
     return item;
 }
 
-export function renderHeader(header: ProjectHeader, options: { titleLabel?: string | null } = {}): HTMLElement {
+export function renderHeader(header: ProjectHeader, options: { titleLabel?: string | null; subtitle?: string } = {}): HTMLElement {
     const wrapper = createElement("section", "evm-header evm-card");
 
     const project = createElement("div", "evm-project-title");
@@ -93,11 +93,16 @@ export function renderHeader(header: ProjectHeader, options: { titleLabel?: stri
     }
     project.appendChild(title);
     const meta = createElement("div", "evm-header-meta");
-    appendMeta(meta, "Unidad:", text(header.UnidadGerencial));
-    appendMeta(meta, "CUI:", text(header.CUI));
-    appendMeta(meta, "Region:", text(header.Region));
-    appendMeta(meta, "Provincia:", text(header.Provincia));
-    appendMeta(meta, "Distrito:", text(header.Distrito));
+    if (options.subtitle) {
+        meta.classList.add("evm-header-subtitle");
+        meta.textContent = options.subtitle;
+    } else {
+        appendMeta(meta, "Unidad:", text(header.UnidadGerencial));
+        appendMeta(meta, "CUI:", text(header.CUI));
+        appendMeta(meta, "Region:", text(header.Region));
+        appendMeta(meta, "Provincia:", text(header.Provincia));
+        appendMeta(meta, "Distrito:", text(header.Distrito));
+    }
     project.appendChild(meta);
 
     const stateClass = projectStateClass(header.EstadoProyecto);

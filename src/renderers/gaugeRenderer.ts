@@ -68,9 +68,8 @@ export function renderGauge(data: GaugeData, palette: VisualPalette, onHistoryOp
 function renderHistoryCard(data: GaugeData, onHistoryOpen?: (key: GaugeMetricKey) => void): HTMLElement {
     const historyCard = createElement("div", "gauge-history-card");
     const metricKey = gaugeMetricKey(data.key);
-    const isDisabled = data.sparkline.length === 0 || !onHistoryOpen;
 
-    if (isDisabled) {
+    if (data.sparkline.length === 0) {
         historyCard.classList.add("gauge-history-card--disabled");
         historyCard.setAttribute("aria-label", `Histórico de ${data.title} sin datos`);
         historyCard.textContent = "Sin datos";
@@ -79,8 +78,14 @@ function renderHistoryCard(data: GaugeData, onHistoryOpen?: (key: GaugeMetricKey
 
     historyCard.appendChild(renderHistorySparkline(data));
     historyCard.appendChild(renderHistoryVariation(data));
-    historyCard.appendChild(createElement("span", "gauge-history-card-action", "Ver histórico"));
     historyCard.style.setProperty("--gauge-color", gaugeRangeColor(data));
+
+    if (!onHistoryOpen) {
+        historyCard.setAttribute("aria-label", `Histórico de ${data.title}`);
+        return historyCard;
+    }
+
+    historyCard.appendChild(createElement("span", "gauge-history-card-action", "Ver histórico"));
 
     historyCard.setAttribute("role", "button");
     historyCard.setAttribute("tabindex", "0");

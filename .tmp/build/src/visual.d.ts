@@ -51,6 +51,7 @@ export declare class Visual implements IVisual {
     private renderUnitsPanel;
     private renderProjectsPanel;
     private renderPortfolioGaugeSection;
+    private windowAggregateGaugeRows;
     private buildAggregateGauges;
     private deltaFromHistory;
     private aggregateGaugeStatus;
@@ -127,6 +128,8 @@ export declare class Visual implements IVisual {
     private gaugeDefinitionItems;
     private toggleGaugeSeries;
     private buildGaugeHistorySeries;
+    private buildAggregateGaugeHistorySeries;
+    private gaugeHistorySubtitle;
     private lastGaugeWeek;
     private removeExistingGaugeHistoryModal;
     private appendSvgLine;

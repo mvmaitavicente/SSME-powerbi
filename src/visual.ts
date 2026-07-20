@@ -668,10 +668,13 @@ export class Visual implements IVisual {
     private renderProjectDashboard(dashboard: ParsedDashboardData, viewport: powerbi.IViewport): HTMLElement {
         const projectDashboard = adaptJsonDashboardData(dashboard);
         const main = document.createElement("main");
-        main.className = "evm-main";
+        main.className = "evm-main evm-main--project";
+        main.classList.toggle("evm-main--project-details", this.bodyCarouselIndex === 1);
         main.style.minWidth = `${Math.min(780, Math.max(0, viewport.width - 92))}px`;
         main.appendChild(renderHeader(projectDashboard.header));
-        main.appendChild(renderGaugeGrid(projectDashboard.gauges, palette, (key) => this.openGaugeHistoryModal(key)));
+        const gaugeGrid = renderGaugeGrid(projectDashboard.gauges, palette, (key) => this.openGaugeHistoryModal(key));
+        gaugeGrid.classList.add("evm-project-gauge-grid");
+        main.appendChild(gaugeGrid);
         main.appendChild(this.renderBodyCarousel(projectDashboard));
         return main;
     }
@@ -679,8 +682,14 @@ export class Visual implements IVisual {
     private renderProniedDashboard(dashboard: ParsedDashboardData, viewport: powerbi.IViewport): HTMLElement {
         const main = createElement("main", "evm-main");
         main.style.minWidth = `${Math.min(780, Math.max(0, viewport.width - 92))}px`;
-        main.appendChild(renderHeader(this.portfolioHeaderData("PRONIED \u2014 Portafolio General", dashboard), { titleLabel: null }));
-        main.appendChild(this.renderPortfolioGaugeSection(dashboard.aggregateGauges));
+        main.appendChild(renderHeader(
+            this.portfolioHeaderData("TABLERO EJECUTIVO - PORTAFOLIO INSTITUCIONAL", dashboard),
+            {
+                titleLabel: null,
+                subtitle: "Sistema de Seguimiento, Monitoreo y Evaluación - SSME"
+            }
+        ));
+        main.appendChild(this.renderPortfolioGaugeSection(dashboard));
         main.appendChild(this.renderPortfolioBody(this.buildAggregateRenderCurve(dashboard), this.renderUnitsPanel(dashboard.units)));
         return main;
     }
@@ -690,7 +699,7 @@ export class Visual implements IVisual {
         main.style.minWidth = `${Math.min(780, Math.max(0, viewport.width - 92))}px`;
         const unitName = text(dashboard.context.Unit, "UGEO");
         main.appendChild(renderHeader(this.portfolioHeaderData(`${unitName} \u2014 Portafolio ${unitName}`, dashboard), { titleLabel: null }));
-        main.appendChild(this.renderPortfolioGaugeSection(dashboard.aggregateGauges));
+        main.appendChild(this.renderPortfolioGaugeSection(dashboard));
         main.appendChild(this.renderPortfolioBody(this.buildAggregateRenderCurve(dashboard), this.renderProjectsPanel(dashboard.projects)));
         return main;
     }
@@ -862,7 +871,8 @@ export class Visual implements IVisual {
         return panel;
     }
 
-    private renderPortfolioGaugeSection(rows: AggregateGaugeData[]): HTMLElement {
+    private renderPortfolioGaugeSection(dashboard: ParsedDashboardData): HTMLElement {
+        const rows = this.windowAggregateGaugeRows(dashboard);
         const gauges = this.buildAggregateGauges(rows);
         if (!gauges.length) {
             const empty = createElement("section", "evm-card evm-portfolio-empty-section");
@@ -871,7 +881,20 @@ export class Visual implements IVisual {
             return empty;
         }
 
-        return renderGaugeGrid(gauges, palette);
+        return renderGaugeGrid(gauges, palette, (key) => this.openGaugeHistoryModal(key));
+    }
+
+    private windowAggregateGaugeRows(dashboard: ParsedDashboardData): AggregateGaugeData[] {
+        const orderedRows = [...dashboard.aggregateGauges].sort((a, b) => a.OrdenSemana - b.OrdenSemana);
+        const curve = this.buildAggregateRenderCurve(dashboard);
+        const currentWeek = numberValue(curve.current.SemanaProyecto);
+        if (currentWeek === null) {
+            return orderedRows;
+        }
+
+        const historyStartWeek = Math.max(0, currentWeek - 5);
+        const filtered = orderedRows.filter((row) => row.OrdenSemana >= historyStartWeek && row.OrdenSemana <= currentWeek);
+        return filtered.length ? filtered : orderedRows;
     }
 
     private buildAggregateGauges(rows: AggregateGaugeData[]): GaugeData[] {
@@ -1182,14 +1205,14 @@ export class Visual implements IVisual {
 
         const riskPage = document.createElement("div");
         riskPage.className = "evm-body-carousel-page evm-body-carousel-page--risk";
-        const riskLeft = document.createElement("div");
-        riskLeft.className = "evm-left-column";
-        riskLeft.appendChild(renderMilestones(dashboard.milestones));
-        const riskRight = document.createElement("div");
-        riskRight.className = "evm-right-column";
-        riskRight.appendChild(renderRisks(dashboard.risks));
-        riskPage.appendChild(riskLeft);
-        riskPage.appendChild(riskRight);
+        riskPage.appendChild(renderMilestones(dashboard.milestones));
+        const lowerRow = createElement("div", "evm-project-details-lower-row");
+        lowerRow.appendChild(renderRisks(dashboard.risks));
+        const stakeholders = createElement("section", "evm-card evm-stakeholder-card");
+        stakeholders.appendChild(createElement("div", "evm-section-title", "PARTES INTERESADAS"));
+        stakeholders.appendChild(createElement("div", "evm-empty", "Sin datos de partes interesadas."));
+        lowerRow.appendChild(stakeholders);
+        riskPage.appendChild(lowerRow);
 
         const pages = [evmPage, riskPage];
         pages.forEach((page, index) => {
@@ -1253,6 +1276,7 @@ export class Visual implements IVisual {
         const carousel = pages[0]?.parentElement?.parentElement;
         if (carousel instanceof HTMLElement) {
             this.updateCarouselButtons(carousel);
+            carousel.closest(".evm-main")?.classList.toggle("evm-main--project-details", this.bodyCarouselIndex === 1);
         }
     }
 
@@ -1838,7 +1862,11 @@ export class Visual implements IVisual {
     }
 
     private openGaugeHistoryModal(selectedGaugeKey?: GaugeMetricKey): void {
-        if (!this.currentDashboardData?.gauges.length) {
+        const dashboard = this.currentDashboardData;
+        const hasRows = dashboard?.context.Level === "PROYECTO"
+            ? Boolean(dashboard.gauges.length)
+            : Boolean(dashboard?.aggregateGauges.length);
+        if (!dashboard || !hasRows) {
             return;
         }
 
@@ -1858,14 +1886,22 @@ export class Visual implements IVisual {
     private renderGaugeHistoryModal(): void {
         this.removeExistingGaugeHistoryModal();
 
-        if (!this.rootElement || !this.currentDashboardData?.gauges.length) {
+        const dashboard = this.currentDashboardData;
+        const hasRows = dashboard?.context.Level === "PROYECTO"
+            ? Boolean(dashboard.gauges.length)
+            : Boolean(dashboard?.aggregateGauges.length);
+        if (!this.rootElement || !dashboard || !hasRows) {
             return;
         }
 
-        const series = this.buildGaugeHistorySeries(this.currentDashboardData.gauges);
+        const aggregateRows = dashboard.context.Level === "PROYECTO" ? [] : this.windowAggregateGaugeRows(dashboard);
+        const series = dashboard.context.Level === "PROYECTO"
+            ? this.buildGaugeHistorySeries(dashboard.gauges)
+            : this.buildAggregateGaugeHistorySeries(aggregateRows);
         console.debug("Gauge history modal", {
             selectedGaugeKey: this.selectedGaugeKey,
-            gaugeRows: this.currentDashboardData.gauges.length,
+            level: dashboard.context.Level,
+            gaugeRows: dashboard.context.Level === "PROYECTO" ? dashboard.gauges.length : aggregateRows.length,
             series
         });
 
@@ -1900,10 +1936,12 @@ export class Visual implements IVisual {
         titleGroup.className = "gauge-history-modal-heading";
         const title = document.createElement("h2");
         title.className = "gauge-history-modal-title";
-        title.textContent = "Histórico de indicadores del proyecto";
+        title.textContent = this.currentDashboardData?.context.Level === "PROYECTO"
+            ? "Histórico de indicadores del proyecto"
+            : "Histórico de indicadores consolidados";
         const subtitle = document.createElement("p");
         subtitle.className = "gauge-history-modal-subtitle";
-        subtitle.textContent = this.currentDashboardData?.project?.NombreIntervencion || this.currentDashboardData?.idIntervencion || "Proyecto sin nombre";
+        subtitle.textContent = this.gaugeHistorySubtitle();
         titleGroup.appendChild(title);
         titleGroup.appendChild(subtitle);
 
@@ -2211,6 +2249,39 @@ export class Visual implements IVisual {
                 }))
                 .filter((point): point is GaugeChartPoint => typeof point.value === "number" && Number.isFinite(point.value))
         }));
+    }
+
+    private buildAggregateGaugeHistorySeries(rows: AggregateGaugeData[]): GaugeChartSeries[] {
+        const orderedRows = [...rows].sort((a, b) => a.OrdenSemana - b.OrdenSemana);
+        const definitions: Array<{ key: GaugeMetricKey; label: string; value: (row: AggregateGaugeData) => number | null }> = [
+            { key: "SPI (w)", label: "SPI", value: (row) => row.SPIW },
+            { key: "CPI", label: "CPI", value: (row) => row.CPI },
+            { key: "TCPI", label: "TCPI", value: (row) => row.TCPI },
+            { key: "TSPI (w)", label: "TSPI", value: (row) => row.TSPIW }
+        ];
+
+        return definitions.map((definition) => ({
+            key: definition.key,
+            label: definition.label,
+            points: orderedRows
+                .map((row) => ({ week: row.OrdenSemana, value: definition.value(row) }))
+                .filter((point): point is GaugeChartPoint => typeof point.value === "number" && Number.isFinite(point.value))
+        }));
+    }
+
+    private gaugeHistorySubtitle(): string {
+        const dashboard = this.currentDashboardData;
+        if (!dashboard) {
+            return "Portafolio";
+        }
+        if (dashboard.context.Level === "PRONIED") {
+            return "PRONIED — Portafolio General";
+        }
+        if (dashboard.context.Level === "UNIDAD") {
+            const unitName = text(dashboard.context.Unit, "UGEO");
+            return `${unitName} — Portafolio ${unitName}`;
+        }
+        return dashboard.project?.NombreIntervencion || dashboard.idIntervencion || "Proyecto sin nombre";
     }
 
     private lastGaugeWeek(rows: GaugeHistoryRow[]): number | null {
