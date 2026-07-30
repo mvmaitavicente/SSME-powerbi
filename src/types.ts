@@ -111,6 +111,14 @@ export interface RiskItem {
     PorcentajeRiesgos?: DataValue;
     ImpactoPlazoSemanas?: DataValue;
     ImpactoCosto?: DataValue;
+    UnidadGerencial?: string;
+    Bajo?: DataValue;
+    Medio?: DataValue;
+    Alto?: DataValue;
+    Total?: DataValue;
+    IntervencionesRiesgo?: DataValue;
+    IntervencionesRiesgoAltoPct?: DataValue;
+    TendenciaRiesgosPct?: DataValue;
 }
 
 export interface MilestoneItem {
@@ -244,10 +252,13 @@ export interface DashboardJsonPayload {
     milestone?: JsonTablePayload;
     milestones?: JsonTablePayload;
     risks?: JsonTablePayload;
+    portfolioSummary?: JsonTablePayload;
 }
 
 export interface SummaryData {
     CantidadProyectos: number | null;
+    Estado?: string;
+    Mensaje?: string;
     BAC: number | null;
     PV: number | null;
     EV: number | null;
@@ -274,6 +285,22 @@ export interface UnitSummaryData extends Record<string, unknown> {
     CPI: number | null;
     SPIW: number | null;
     TCPI: number | null;
+    TSPI: number | null;
+    Avance: number | null;
+    Estado: string;
+}
+
+export interface PortfolioSummaryData {
+    ProyectosActivos: number | null;
+    CantidadProyectos: number | null;
+    CantidadIntervenciones: number | null;
+    PresupuestoInstitucional: number | null;
+    PresupuestoProyectos: number | null;
+    PresupuestoIntervenciones: number | null;
+    IntervencionesCriticas: number | null;
+    DesviacionPlazoPct: number | null;
+    DesviacionCostoPct: number | null;
+    RiesgoPortafolioPct: number | null;
 }
 
 export interface UnitProjectSummaryData extends Record<string, unknown> {
@@ -349,12 +376,22 @@ export interface CurveData extends Record<string, unknown> {
     PV: number | null;
     EV: number | null;
     AC: number | null;
+    CV: number | null;
+    CPI: number | null;
+    "SPI (w)": number | null;
     "SPI (t)": number | null;
+    TCPI: number | null;
+    "TSPI (w)": number | null;
     "TSPI (t)": number | null;
     "EAC (c)": number | null;
     "EAC (t)": number | null;
+    "IEAC (t)": number | null;
     "VAC (c)": number | null;
     "VAC (t)": number | null;
+    "SV (w)": number | null;
+    "SV (t)": number | null;
+    "ETC (c)": number | null;
+    "ETC (t)": number | null;
 }
 
 export interface GaugeHistoryRow extends Record<string, unknown> {
@@ -422,6 +459,7 @@ export interface ParsedDashboardData {
     aggregateGauges: AggregateGaugeData[];
     aggregateCurve: AggregateCurveData[];
     units: UnitSummaryData[];
+    portfolioSummary: PortfolioSummaryData | null;
     projects: UnitProjectSummaryData[];
     risks: RiskItem[];
     milestones: MilestoneItem[];

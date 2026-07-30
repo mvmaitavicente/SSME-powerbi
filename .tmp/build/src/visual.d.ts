@@ -38,6 +38,14 @@ export declare class Visual implements IVisual {
     private renderCurrentDashboard;
     private renderProjectDashboard;
     private renderProniedDashboard;
+    private renderProniedBodyCarousel;
+    private renderPortfolioCurveLegend;
+    private renderUnitProgressPanel;
+    private renderPortfolioRiskSection;
+    private renderPortfolioRiskIndicator;
+    private renderPortfolioRiskDonut;
+    private renderUnitProgressHeader;
+    private renderUnitProgressIcon;
     private renderUnitDashboard;
     private renderDashboardError;
     private renderPortfolioHeader;
@@ -49,6 +57,12 @@ export declare class Visual implements IVisual {
     private portfolioHeaderData;
     private renderPortfolioBody;
     private renderUnitsPanel;
+    private renderPortfolioSummary;
+    private portfolioCompositeCard;
+    private portfolioMetricCard;
+    private portfolioIcon;
+    private signedPortfolioPercent;
+    private portfolioPercent;
     private renderProjectsPanel;
     private renderPortfolioGaugeSection;
     private windowAggregateGaugeRows;
@@ -65,6 +79,7 @@ export declare class Visual implements IVisual {
     private renderProjectsSection;
     private entityMetric;
     private renderBodyCarousel;
+    private renderProjectCurveMatrix;
     private renderCarouselButton;
     private renderCarouselDots;
     private updateCarouselPages;

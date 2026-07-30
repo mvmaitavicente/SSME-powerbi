@@ -79,7 +79,7 @@ function renderSidebarButton(
     return item;
 }
 
-export function renderHeader(header: ProjectHeader, options: { titleLabel?: string | null; subtitle?: string } = {}): HTMLElement {
+export function renderHeader(header: ProjectHeader, options: { titleLabel?: string | null; subtitle?: string; stateLabel?: string } = {}): HTMLElement {
     const wrapper = createElement("section", "evm-header evm-card");
 
     const project = createElement("div", "evm-project-title");
@@ -111,7 +111,7 @@ export function renderHeader(header: ProjectHeader, options: { titleLabel?: stri
     stateIcon.appendChild(createElement("span", undefined, stateClass === "stable" ? "✓" : "!"));
     const stateBody = createElement("div", "evm-project-state-body");
     const stateCopy = createElement("div", "evm-project-state-copy");
-    stateCopy.appendChild(createElement("span", undefined, "Estado del Proyecto"));
+    stateCopy.appendChild(createElement("span", undefined, options.stateLabel ?? "Estado del Proyecto"));
     stateCopy.appendChild(createElement("strong", undefined, text(header.EstadoProyecto, "Sin estado")));
     const stateMessage = createElement("small", "evm-project-state-message", text(header.MensajeEjecutivo, ""));
     state.appendChild(stateIcon);

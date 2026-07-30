@@ -50,7 +50,7 @@ export function renderRisks(risks: RiskItem[]): HTMLElement {
         level.appendChild(document.createTextNode(riskLevelLabel(risk.NivelRiesgo)));
         row.appendChild(level);
         row.appendChild(createElement("td", undefined, integer(risk.CantidadRiesgos)));
-        row.appendChild(createElement("td", undefined, percent(risk.PorcentajeRiesgos)));
+        row.appendChild(createElement("td", undefined, riskPercent(risk, totals.quantity)));
         row.appendChild(createElement("td", undefined, signedWeeks(risk.ImpactoPlazoSemanas)));
         row.appendChild(createElement("td", undefined, currencyFull(risk.ImpactoCosto)));
         body.appendChild(row);
@@ -148,6 +148,15 @@ function riskLevelLabel(level?: string): string {
 function integer(value: DataValue): string {
     const numeric = numberValue(value);
     return numeric === null ? "0" : numeric.toLocaleString("en-US", { maximumFractionDigits: 0 });
+}
+
+function riskPercent(risk: RiskItem, totalQuantity: number): string {
+    const supplied = numberValue(risk.PorcentajeRiesgos);
+    if (supplied !== null) {
+        return percent(supplied);
+    }
+    const quantity = numberValue(risk.CantidadRiesgos);
+    return quantity === null || totalQuantity === 0 ? "—" : percent(quantity / totalQuantity);
 }
 
 function signedWeeks(value: DataValue): string {

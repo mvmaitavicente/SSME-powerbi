@@ -27,25 +27,66 @@ export function renderMilestones(milestones: MilestoneItem[]): HTMLElement {
 
     const ordered = [...milestones].sort((a, b) => (numberValue(a.OrdenHito) ?? 0) - (numberValue(b.OrdenHito) ?? 0));
     const wrap = createElement("div", "milestone-svg-wrap");
-    const svg = svgElement("svg");
-    svg.classList.add("evm-timeline-svg");
+    const pageSize = 5;
+    const pageCount = Math.max(1, Math.ceil(ordered.length / pageSize));
+    let pageIndex = 0;
+    const renderPage = (): void => {
+        wrap.replaceChildren();
+        const svg = svgElement("svg");
+        svg.classList.add("evm-timeline-svg");
+        const pageMilestones = ordered.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize);
+        if (!pageMilestones.length) {
+            svg.setAttribute("viewBox", `0 0 ${timeline.width} 220`);
+            addText(svg, "Sin hitos", timeline.width / 2, 110, "middle", "evm-empty-svg");
+        } else {
+            svg.setAttribute("viewBox", `0 0 ${timeline.width} ${timelineHeight()}`);
+            drawTimeline(svg, pageMilestones);
+        }
+        wrap.appendChild(svg);
+    };
 
-    if (!ordered.length) {
-        svg.setAttribute("viewBox", `0 0 ${timeline.width} 220`);
-        addText(svg, "Sin hitos", timeline.width / 2, 110, "middle", "evm-empty-svg");
-    } else {
-        svg.setAttribute("viewBox", `0 0 ${timeline.width} ${timelineHeight()}`);
-        drawTimeline(svg, ordered);
-    }
-
-    wrap.appendChild(svg);
     const content = createElement("div", "evm-milestone-content");
     const timelineColumn = createElement("div", "evm-milestone-timeline-column");
-    timelineColumn.appendChild(title);
+    const heading = createElement("div", "evm-milestone-heading");
+    heading.appendChild(title);
+    if (pageCount > 1) {
+        const navigation = createElement("div", "evm-milestone-carousel-nav");
+        const previous = createElement("button", undefined, "‹");
+        const status = createElement("span", undefined, `1 / ${pageCount}`);
+        const next = createElement("button", undefined, "›");
+        previous.type = "button";
+        next.type = "button";
+        const updateNavigation = (): void => {
+            previous.disabled = pageIndex === 0;
+            next.disabled = pageIndex === pageCount - 1;
+            status.textContent = `${pageIndex + 1} / ${pageCount}`;
+        };
+        previous.addEventListener("click", () => {
+            if (pageIndex > 0) {
+                pageIndex -= 1;
+                renderPage();
+                updateNavigation();
+            }
+        });
+        next.addEventListener("click", () => {
+            if (pageIndex < pageCount - 1) {
+                pageIndex += 1;
+                renderPage();
+                updateNavigation();
+            }
+        });
+        navigation.appendChild(previous);
+        navigation.appendChild(status);
+        navigation.appendChild(next);
+        heading.appendChild(navigation);
+        updateNavigation();
+    }
+    timelineColumn.appendChild(heading);
     timelineColumn.appendChild(wrap);
     content.appendChild(timelineColumn);
     content.appendChild(renderMilestoneLegend());
     card.appendChild(content);
+    renderPage();
     return card;
 }
 
@@ -131,7 +172,7 @@ function drawTimelineSegment(svg: SVGSVGElement, x1: number, x2: number, y: numb
 function drawMilestoneConnector(svg: SVGSVGElement, position: TimelinePosition, stateClass: string): void {
     const line = svgElement("line");
     line.setAttribute("x1", String(position.x));
-    line.setAttribute("y1", String(position.y + 15));
+    line.setAttribute("y1", String(position.y + 19));
     line.setAttribute("x2", String(position.x));
     line.setAttribute("y2", String(position.y + timeline.connectorEndOffset - 8));
     line.setAttribute("class", `evm-milestone-connector ${stateClass}`);
@@ -140,7 +181,7 @@ function drawMilestoneConnector(svg: SVGSVGElement, position: TimelinePosition, 
     const dot = svgElement("circle");
     dot.setAttribute("cx", String(position.x));
     dot.setAttribute("cy", String(position.y + timeline.connectorEndOffset));
-    dot.setAttribute("r", "5");
+    dot.setAttribute("r", "6.5");
     dot.setAttribute("class", `evm-milestone-small-dot ${stateClass}`);
     svg.appendChild(dot);
 }
@@ -149,7 +190,7 @@ function drawMarker(svg: SVGSVGElement, x: number, y: number, stateClass: string
     if (stateClass === "done") {
         drawCircleMarker(svg, x, y, stateClass, true);
         const check = svgElement("path");
-        check.setAttribute("d", `M ${x - 6} ${y} L ${x - 2.5} ${y + 3.5} L ${x + 8} ${y - 6}`);
+        check.setAttribute("d", `M ${x - 8} ${y} L ${x - 3} ${y + 5} L ${x + 10} ${y - 8}`);
         check.setAttribute("class", "evm-milestone-icon light");
         svg.appendChild(check);
         return;
@@ -157,7 +198,7 @@ function drawMarker(svg: SVGSVGElement, x: number, y: number, stateClass: string
 
     if (stateClass === "late") {
         const triangle = svgElement("polygon");
-        triangle.setAttribute("points", `${x},${y - 14} ${x + 15},${y + 13} ${x - 15},${y + 13}`);
+        triangle.setAttribute("points", `${x},${y - 18} ${x + 19},${y + 17} ${x - 19},${y + 17}`);
         triangle.setAttribute("class", "evm-milestone-triangle late");
         svg.appendChild(triangle);
         addText(svg, "!", x, y + 8, "middle", "evm-milestone-alert");
@@ -171,14 +212,14 @@ function drawCircleMarker(svg: SVGSVGElement, x: number, y: number, stateClass: 
     const halo = svgElement("circle");
     halo.setAttribute("cx", String(x));
     halo.setAttribute("cy", String(y));
-    halo.setAttribute("r", "15.5");
+    halo.setAttribute("r", "19");
     halo.setAttribute("class", `evm-milestone-halo ${stateClass}`);
     svg.appendChild(halo);
 
     const marker = svgElement("circle");
     marker.setAttribute("cx", String(x));
     marker.setAttribute("cy", String(y));
-    marker.setAttribute("r", filled ? "11" : "9.5");
+    marker.setAttribute("r", filled ? "14" : "12");
     marker.setAttribute("class", `evm-milestone-dot ${stateClass}`);
     svg.appendChild(marker);
 }
@@ -228,14 +269,14 @@ function addWrappedText(svg: SVGSVGElement, label: string, x: number, y: number,
 
 function addDateBadge(svg: SVGSVGElement, label: string, x: number, y: number, stateClass: string): void {
     const badge = svgElement("rect");
-    badge.setAttribute("x", String(x - 33));
-    badge.setAttribute("y", String(y - 9));
-    badge.setAttribute("width", "66");
-    badge.setAttribute("height", "17");
-    badge.setAttribute("rx", "4");
+    badge.setAttribute("x", String(x - 46));
+    badge.setAttribute("y", String(y - 13));
+    badge.setAttribute("width", "92");
+    badge.setAttribute("height", "25");
+    badge.setAttribute("rx", "5");
     badge.setAttribute("class", `evm-milestone-date-bg ${stateClass}`);
     svg.appendChild(badge);
-    addText(svg, label, x, y + 2, "middle", "evm-milestone-date-text");
+    addText(svg, label, x, y + 4, "middle", "evm-milestone-date-text");
 }
 
 function addText(svg: SVGSVGElement, label: string, x: number, y: number, anchor: "middle", className: string): SVGTextElement {

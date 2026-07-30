@@ -1,7 +1,7 @@
 "use strict";
 
 import powerbi from "powerbi-visuals-api";
-import { AggregateCurveData, AggregateGaugeData, CurrentSnapshot, CurveData, CurveHistoryPoint, CurveReferences, DashboardContextData, DashboardData, DashboardJsonPayload, DashboardLevel, DataValue, FieldValueMap, GaugeData, GaugeHistory, GaugeHistoryRow, JsonTablePayload, MilestoneItem, NavigatorData, NavigatorJsonPayload, NavigatorProject, ParsedDashboardData, ParserDebugData, PerformanceData, ProjectData, ProjectHeader, RenderCurveData, RiskItem, SummaryData, UnitProjectSummaryData, UnitSummaryData } from "./types";
+import { AggregateCurveData, AggregateGaugeData, CurrentSnapshot, CurveData, CurveHistoryPoint, CurveReferences, DashboardContextData, DashboardData, DashboardJsonPayload, DashboardLevel, DataValue, FieldValueMap, GaugeData, GaugeHistory, GaugeHistoryRow, JsonTablePayload, MilestoneItem, NavigatorData, NavigatorJsonPayload, NavigatorProject, ParsedDashboardData, ParserDebugData, PerformanceData, PortfolioSummaryData, ProjectData, ProjectHeader, RenderCurveData, RiskItem, SummaryData, UnitProjectSummaryData, UnitSummaryData } from "./types";
 
 type DataViewTable = powerbi.DataViewTable;
 type DataViewMetadataColumn = powerbi.DataViewMetadataColumn;
@@ -68,7 +68,21 @@ const performanceFields = [
     "SobreCostoProyectadoPct"
 ];
 
-const riskFields = ["NivelRiesgo", "CantidadRiesgos", "PorcentajeRiesgos", "ImpactoPlazoSemanas", "ImpactoCosto"];
+const riskFields = [
+    "NivelRiesgo",
+    "CantidadRiesgos",
+    "PorcentajeRiesgos",
+    "ImpactoPlazoSemanas",
+    "ImpactoCosto",
+    "UnidadGerencial",
+    "Bajo",
+    "Medio",
+    "Alto",
+    "Total",
+    "IntervencionesRiesgo",
+    "IntervencionesRiesgoAltoPct",
+    "TendenciaRiesgosPct"
+];
 const milestoneFields = ["OrdenHito", "NombreHito", "FechaHitoPlan", "FechaHitoReal", "EstadoHito"];
 const roleFieldMap: { [roleName: string]: string } = {
     proyectoNombreIntervencion: "NombreIntervencion",
@@ -587,6 +601,7 @@ function parseDashboardPayload(
     const gaugeRows = payload.gauges ? jsonTableToObjects<Record<string, unknown>>(payload.gauges) : [];
     const curveRows = payload.curve ? jsonTableToObjects<Record<string, unknown>>(payload.curve) : [];
     const unitRows = payload.units ? jsonTableToObjects<Record<string, unknown>>(payload.units) : [];
+    const portfolioSummaryRows = payload.portfolioSummary ? jsonTableToObjects<Record<string, unknown>>(payload.portfolioSummary) : [];
     const projectSummaryRows = payload.projects ? jsonTableToObjects<Record<string, unknown>>(payload.projects) : [];
     const riskRows = payload.risks ? jsonTableToObjects<Record<string, unknown>>(payload.risks) : [];
     const milestoneRows = payload.milestone || payload.milestones
@@ -598,6 +613,7 @@ function parseDashboardPayload(
     validateJsonTableRowCount(payload.gauges, "JSON gauges");
     validateJsonTableRowCount(payload.curve, "JSON curve");
     validateJsonTableRowCount(payload.units, "JSON units");
+    validateJsonTableRowCount(payload.portfolioSummary, "JSON portfolioSummary");
     validateJsonTableRowCount(payload.projects, "JSON projects");
     validateJsonTableRowCount(payload.risks, "JSON risks");
 
@@ -614,6 +630,7 @@ function parseDashboardPayload(
     const normalizedAggregateGauges = gaugeRows.map(normalizeAggregateGauge).sort((a, b) => a.OrdenSemana - b.OrdenSemana);
     const normalizedAggregateCurve = curveRows.map(normalizeAggregateCurve).sort((a, b) => a.OrdenSemana - b.OrdenSemana);
     const normalizedUnits = unitRows.map(normalizeUnitSummary);
+    const normalizedPortfolioSummary = normalizePortfolioSummary(portfolioSummaryRows[0] ?? null);
     const normalizedProjects = projectSummaryRows.map(normalizeUnitProjectSummary);
 
     const normalizedRisks = riskRows.map(normalizeJsonRisk).filter((item) => hasAny(item as FieldValueMap, riskFields));
@@ -664,6 +681,7 @@ function parseDashboardPayload(
         aggregateGauges: normalizedAggregateGauges,
         aggregateCurve: normalizedAggregateCurve,
         units: normalizedUnits,
+        portfolioSummary: normalizedPortfolioSummary,
         projects: normalizedProjects,
         risks: normalizedRisks,
         milestones: normalizedMilestones
@@ -725,6 +743,8 @@ function normalizeSummary(row: Record<string, unknown> | null): SummaryData | nu
 
     return {
         CantidadProyectos: readNullableNumber(row, ["CantidadProyectos", "Cantidad Proyectos", "Proyectos"]),
+        Estado: textValue(firstKnownValue(row, "ESTADO", "Estado", "estado")),
+        Mensaje: textValue(firstKnownValue(row, "MENSAJE", "Mensaje", "mensaje")),
         BAC: readNullableNumber(row, ["BAC"]),
         PV: readNullableNumber(row, ["PV"]),
         EV: readNullableNumber(row, ["EV"]),
@@ -768,12 +788,22 @@ function normalizeJsonCurve(row: Record<string, unknown>): CurveData {
         PV: readNullableNumber(row, ["PV"]),
         EV: readNullableNumber(row, ["EV"]),
         AC: readNullableNumber(row, ["AC"]),
+        CV: readNullableNumber(row, ["CV"]),
+        CPI: readNullableNumber(row, ["CPI"]),
+        "SPI (w)": readNullableNumber(row, ["SPI (w)", "SPIW"]),
         "SPI (t)": readNullableNumber(row, ["SPI (t)", "SPIT"]),
+        TCPI: readNullableNumber(row, ["TCPI"]),
+        "TSPI (w)": readNullableNumber(row, ["TSPI (w)", "TSPIW"]),
         "TSPI (t)": readNullableNumber(row, ["TSPI (t)", "TSPIT"]),
         "EAC (c)": readNullableNumber(row, ["EAC (c)", "EACC"]),
         "EAC (t)": readNullableNumber(row, ["EAC (t)", "EACT"]),
+        "IEAC (t)": readNullableNumber(row, ["IEAC (t)", "IEACT"]),
         "VAC (c)": readNullableNumber(row, ["VAC (c)", "VACC"]),
-        "VAC (t)": readNullableNumber(row, ["VAC (t)", "VACT"])
+        "VAC (t)": readNullableNumber(row, ["VAC (t)", "VACT"]),
+        "SV (w)": readNullableNumber(row, ["SV (w)", "SVW"]),
+        "SV (t)": readNullableNumber(row, ["SV (t)", "SVT"]),
+        "ETC (c)": readNullableNumber(row, ["ETC (c)", "ETCC"]),
+        "ETC (t)": readNullableNumber(row, ["ETC (t)", "ETCT"])
     };
 }
 
@@ -818,7 +848,13 @@ function normalizeAggregateCurve(row: Record<string, unknown>): AggregateCurveDa
 function normalizeUnitSummary(row: Record<string, unknown>): UnitSummaryData {
     return {
         ...row,
-        UnidadGerencial: textValue(firstKnownValue(row, "UnidadGerencial", "Unidad")),
+        UnidadGerencial: textValue(firstKnownValue(
+            row,
+            "UnidadLinea",
+            "Dim_Intervenciones[UnidadLinea]",
+            "UnidadGerencial",
+            "Unidad"
+        )),
         CantidadProyectos: readNullableNumber(row, ["CantidadProyectos", "Cantidad Proyectos", "Proyectos"]),
         BAC: readNullableNumber(row, ["BAC"]),
         PV: readNullableNumber(row, ["PV"]),
@@ -826,7 +862,10 @@ function normalizeUnitSummary(row: Record<string, unknown>): UnitSummaryData {
         AC: readNullableNumber(row, ["AC"]),
         CPI: readNullableNumber(row, ["CPI"]),
         SPIW: readNullableNumber(row, ["SPIW", "SPI (w)", "SPI"]),
-        TCPI: readNullableNumber(row, ["TCPI"])
+        TCPI: readNullableNumber(row, ["TCPI"]),
+        TSPI: readNullableNumber(row, ["TSPI", "TSPIW", "TSPI (w)"]),
+        Avance: toPercentagePoints(firstKnownValue(row, "Avance", "% Avance", "PorcentajeAvance")),
+        Estado: textValue(firstKnownValue(row, "Estado", "EstadoProyecto", "Estado Proyecto"))
     };
 }
 
@@ -949,9 +988,62 @@ function normalizeJsonRisk(row: Record<string, unknown>): RiskItem {
     return {
         NivelRiesgo: textValue(firstKnownValue(row, "NivelRiesgo")),
         CantidadRiesgos: toNullableNumber(firstKnownValue(row, "CantidadRiesgos", "Cantidad")),
-        PorcentajeRiesgos: toNullableNumber(firstKnownValue(row, "PorcentajeRiesgos", "PorcentajeRiesgo", "% Total Riesgo")),
+        PorcentajeRiesgos: toNullablePercentage(firstKnownValue(
+            row,
+            "PorcentajeRiesgos",
+            "PorcentajeRiesgo",
+            "Porcentaje",
+            "PorcentajeTotal",
+            "% Total Riesgo",
+            "% del Total"
+        )),
         ImpactoPlazoSemanas: toNullableNumber(firstKnownValue(row, "ImpactoPlazoSemanas", "ImpactoPlazo", "Impacto en plazo")),
-        ImpactoCosto: toNullableNumber(firstKnownValue(row, "ImpactoCosto", "ImpactoCostoSoles", "Impacto en costo"))
+        ImpactoCosto: toNullableNumber(firstKnownValue(row, "ImpactoCosto", "ImpactoCostoSoles", "Impacto en costo")),
+        UnidadGerencial: textValue(firstKnownValue(
+            row,
+            "UnidadGerencial",
+            "Dim_Intervenciones[UnidadGerencial]",
+            "UnidadLinea",
+            "Dim_Intervenciones[UnidadLinea]",
+            "Unidad"
+        )),
+        Bajo: toNullableNumber(firstKnownValue(row, "Bajo")),
+        Medio: toNullableNumber(firstKnownValue(row, "Medio")),
+        Alto: toNullableNumber(firstKnownValue(row, "Alto")),
+        Total: toNullableNumber(firstKnownValue(row, "Total")),
+        IntervencionesRiesgo: toNullableNumber(firstKnownValue(row, "IntervencionesRiesgo")),
+        IntervencionesRiesgoAltoPct: toNullablePercentage(firstKnownValue(
+            row,
+            "IntervencionesRiesgoAltoPct",
+            "RiesgoAltoPct",
+            "PorcentajeRiesgoAlto"
+        )),
+        TendenciaRiesgosPct: toNullablePercentage(firstKnownValue(
+            row,
+            "TendenciaRiesgo",
+            "TendenciaRiesgosPct",
+            "TendenciaRiesgos",
+            "VariacionRiesgosPct"
+        ))
+    };
+}
+
+function normalizePortfolioSummary(row: Record<string, unknown> | null): PortfolioSummaryData | null {
+    if (!row) {
+        return null;
+    }
+
+    return {
+        ProyectosActivos: readPortfolioMetric(row, ["ProyectosActivos", "CantidadProyectosActivos", "TotalProyectosActivos"], ["proyecto", "activo"], 0),
+        CantidadProyectos: readPortfolioMetric(row, ["CantidadProyectos", "Proyectos", "TotalProyectos"], ["cantidad", "proyecto"], 1),
+        CantidadIntervenciones: readPortfolioMetric(row, ["CantidadIntervenciones", "Intervenciones", "TotalIntervenciones"], ["cantidad", "intervencion"], 2),
+        PresupuestoInstitucional: readPortfolioMetric(row, ["PresupuestoInstitucional", "PresupuestoTotal", "PIMInstitucional"], ["presupuesto", "institucional"], 3),
+        PresupuestoProyectos: readPortfolioMetric(row, ["PresupuestoProyectos", "PresupuestoProyecto", "PIMProyectos"], ["presupuesto", "proyecto"], 4),
+        PresupuestoIntervenciones: readPortfolioMetric(row, ["PresupuestoIntervenciones", "PresupuestoIntervencion", "PIMIntervenciones"], ["presupuesto", "intervencion"], 5),
+        IntervencionesCriticas: readPortfolioMetric(row, ["IntervencionesCriticas", "CantidadIntervencionesCriticas", "Criticas"], ["intervencion", "critica"], 8),
+        DesviacionPlazoPct: readPortfolioMetric(row, ["DesviacionPlazoPct", "DesviacionPlazo", "PorcentajeDesviacionPlazo"], ["desviacion", "plazo"], 7),
+        DesviacionCostoPct: readPortfolioMetric(row, ["DesviacionCostoPct", "DesviacionCosto", "PorcentajeDesviacionCosto"], ["desviacion", "costo"], 6),
+        RiesgoPortafolioPct: readPortfolioMetric(row, ["RiesgoPortafolioPct", "RiesgoPortafolio", "PorcentajeRiesgoPortafolio"], ["riesgo", "portafolio"], 9)
     };
 }
 
@@ -1125,6 +1217,38 @@ function toNullableNumber(value: unknown): number | null {
     return Number.isFinite(parsed) ? parsed : null;
 }
 
+function toNullablePercentage(value: unknown): number | null {
+    if (value === null || value === undefined || value === "") {
+        return null;
+    }
+
+    if (typeof value === "number") {
+        return Number.isFinite(value) ? value : null;
+    }
+
+    let normalized = String(value).trim().replace(/\s/g, "").replace(/%$/, "");
+    if (normalized.includes(",") && !normalized.includes(".")) {
+        normalized = normalized.replace(",", ".");
+    } else {
+        normalized = normalized.replace(/,/g, "");
+    }
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toPercentagePoints(value: unknown): number | null {
+    if (value === null || value === undefined || value === "") {
+        return null;
+    }
+
+    if (typeof value === "string" && value.trim().endsWith("%")) {
+        return toNullablePercentage(value);
+    }
+
+    const parsed = toNullablePercentage(value);
+    return parsed === null ? null : parsed * 100;
+}
+
 function toFiniteNumber(value: unknown, fallback: number): number {
     const parsed = Number(value);
 
@@ -1155,6 +1279,49 @@ function readNullableNumber(row: Record<string, unknown>, keys: string[]): numbe
     }
 
     return null;
+}
+
+function readFlexibleMetric(row: Record<string, unknown>, aliases: string[]): number | null {
+    const normalizedAliases = new Set(aliases.map(normalizeMetricKey));
+    for (const [key, value] of Object.entries(row)) {
+        if (normalizedAliases.has(normalizeMetricKey(key))) {
+            return toNullablePercentage(value);
+        }
+    }
+    return null;
+}
+
+function readPortfolioMetric(
+    row: Record<string, unknown>,
+    aliases: string[],
+    requiredTokens: string[],
+    fallbackIndex: number
+): number | null {
+    const exact = readFlexibleMetric(row, aliases);
+    if (exact !== null) {
+        return exact;
+    }
+
+    for (const [key, value] of Object.entries(row)) {
+        const normalizedKey = normalizeMetricKey(key);
+        if (requiredTokens.every((token) => normalizedKey.includes(normalizeMetricKey(token)))) {
+            const parsed = toNullablePercentage(value);
+            if (parsed !== null) {
+                return parsed;
+            }
+        }
+    }
+
+    const fallback = Object.values(row)[fallbackIndex];
+    return toNullablePercentage(fallback);
+}
+
+function normalizeMetricKey(value: string): string {
+    return value
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9]/g, "")
+        .toLowerCase();
 }
 
 function readFiniteNumber(row: Record<string, unknown>, keys: string[], fallback: number): number {

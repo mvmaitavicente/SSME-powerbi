@@ -12,8 +12,9 @@ import { renderHeader, renderSidebar } from "./renderers/headerRenderer";
 import { renderMilestones } from "./renderers/milestoneRenderer";
 import { renderPerformance } from "./renderers/performanceRenderer";
 import { renderRisks } from "./renderers/riskRenderer";
+import { renderPortfolioDashboard } from "./portfolioSummary/Dashboard";
 import { VisualFormattingSettingsModel } from "./settings";
-import { AggregateCurveData, AggregateGaugeData, CurveHistoryPoint, CurveReferences, DashboardData, DashboardLevel, DataValue, GaugeChartPoint, GaugeChartSeries, GaugeData, GaugeHistoryRow, GaugeMetricKey, NavigatorProject, ParsedDashboardData, ProjectHeader, RenderCurveData, SummaryData, UnitProjectSummaryData, UnitSummaryData, VisualPalette } from "./types";
+import { AggregateCurveData, AggregateGaugeData, CurveData, CurveHistoryPoint, CurveReferences, DashboardData, DashboardLevel, DataValue, GaugeChartPoint, GaugeChartSeries, GaugeData, GaugeHistoryRow, GaugeMetricKey, NavigatorProject, ParsedDashboardData, PortfolioSummaryData, ProjectHeader, RenderCurveData, RiskItem, SummaryData, UnitProjectSummaryData, UnitSummaryData, VisualPalette } from "./types";
 import { createElement, currency, date, decimal, numberValue, shortCurrency, text } from "./utils/format";
 import VisualConstructorOptions = powerbi.extensibility.visual.VisualConstructorOptions;
 import VisualUpdateOptions = powerbi.extensibility.visual.VisualUpdateOptions;
@@ -675,23 +676,544 @@ export class Visual implements IVisual {
         const gaugeGrid = renderGaugeGrid(projectDashboard.gauges, palette, (key) => this.openGaugeHistoryModal(key));
         gaugeGrid.classList.add("evm-project-gauge-grid");
         main.appendChild(gaugeGrid);
-        main.appendChild(this.renderBodyCarousel(projectDashboard));
+        main.appendChild(this.renderBodyCarousel(projectDashboard, dashboard.curve));
         return main;
     }
 
     private renderProniedDashboard(dashboard: ParsedDashboardData, viewport: powerbi.IViewport): HTMLElement {
-        const main = createElement("main", "evm-main");
+        const main = createElement("main", "evm-main evm-main--pronied");
+        main.classList.toggle("evm-main--portfolio-details", this.bodyCarouselIndex === 1);
         main.style.minWidth = `${Math.min(780, Math.max(0, viewport.width - 92))}px`;
         main.appendChild(renderHeader(
             this.portfolioHeaderData("TABLERO EJECUTIVO - PORTAFOLIO INSTITUCIONAL", dashboard),
             {
                 titleLabel: null,
-                subtitle: "Sistema de Seguimiento, Monitoreo y Evaluación - SSME"
+                subtitle: "Sistema de Seguimiento, Monitoreo y Evaluación - SSME",
+                stateLabel: "Estado del Portafolio"
             }
         ));
-        main.appendChild(this.renderPortfolioGaugeSection(dashboard));
-        main.appendChild(this.renderPortfolioBody(this.buildAggregateRenderCurve(dashboard), this.renderUnitsPanel(dashboard.units)));
+        const gaugeSection = this.renderPortfolioGaugeSection(dashboard);
+        gaugeSection.classList.add("evm-portfolio-gauge-grid");
+        main.appendChild(gaugeSection);
+        main.appendChild(this.renderProniedBodyCarousel(dashboard));
         return main;
+    }
+
+    private renderProniedBodyCarousel(dashboard: ParsedDashboardData): HTMLElement {
+        const carousel = createElement("section", "evm-body-carousel evm-body-carousel--portfolio");
+        const viewport = createElement("div", "evm-body-carousel-viewport");
+
+        const summaryPage = createElement("div", "evm-body-carousel-page evm-body-carousel-page--evm");
+        const left = createElement("div", "evm-left-column");
+        const curveCard = renderCurve(this.buildAggregateRenderCurve(dashboard), palette);
+        curveCard.classList.add("evm-portfolio-curve-card");
+        const curveTitle = curveCard.querySelector(".evm-section-title");
+        if (curveTitle instanceof HTMLElement) {
+            curveTitle.textContent = "CURVA S - PORTAFOLIO INSTITUCIONAL";
+            curveTitle.insertAdjacentElement("afterend", this.renderPortfolioCurveLegend());
+        }
+        left.appendChild(curveCard);
+        const right = createElement("div", "evm-right-column");
+        right.appendChild(renderPortfolioDashboard(dashboard.portfolioSummary));
+        summaryPage.appendChild(left);
+        summaryPage.appendChild(right);
+
+        const unitsPage = createElement("div", "evm-body-carousel-page evm-body-carousel-page--portfolio-units");
+        unitsPage.appendChild(this.renderUnitProgressPanel(dashboard.units));
+        unitsPage.appendChild(this.renderPortfolioRiskSection(dashboard.risks));
+
+        const pages = [summaryPage, unitsPage];
+        pages.forEach((page, index) => {
+            page.classList.toggle("active", index === this.bodyCarouselIndex);
+            page.setAttribute("aria-hidden", index === this.bodyCarouselIndex ? "false" : "true");
+            viewport.appendChild(page);
+        });
+
+        carousel.appendChild(viewport);
+        carousel.appendChild(this.renderCarouselButton("prev", "‹", "Ver pantalla anterior", pages));
+        carousel.appendChild(this.renderCarouselButton("next", "›", "Ver pantalla siguiente", pages));
+        this.updateCarouselButtons(carousel);
+        return carousel;
+    }
+
+    private renderPortfolioCurveLegend(): HTMLElement {
+        const legend = createElement("div", "evm-portfolio-curve-legend");
+        [
+            { label: "PV (Valor Planificado)", className: "pv" },
+            { label: "EV (Valor Ganado)", className: "ev" },
+            { label: "AC (Costo Actual)", className: "ac" },
+            { label: "EAC (Estimado al Término)", className: "eac" },
+            { label: "SAC (Cronograma al Término)", className: "sac" }
+        ].forEach((item) => {
+            const entry = createElement("div", `evm-portfolio-curve-legend-item ${item.className}`);
+            entry.appendChild(createElement("i"));
+            entry.appendChild(createElement("span", undefined, item.label));
+            legend.appendChild(entry);
+        });
+        return legend;
+    }
+
+    private renderUnitProgressPanel(units: UnitSummaryData[]): HTMLElement {
+        const section = createElement("section", "evm-card evm-unit-progress-card");
+        const heading = createElement("div", "evm-unit-progress-heading");
+        heading.appendChild(createElement("div", "evm-section-title", "AVANCE POR UNIDAD GERENCIAL"));
+        const legend = createElement("div", "evm-unit-progress-range-legend");
+        const legendTitle = createElement("div", "evm-unit-progress-range-title");
+        legendTitle.appendChild(document.createTextNode("CRITERIO DE ESTADOS"));
+        const infoIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        infoIcon.setAttribute("viewBox", "0 0 24 24");
+        infoIcon.setAttribute("aria-hidden", "true");
+        const infoCircle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        infoCircle.setAttribute("cx", "12");
+        infoCircle.setAttribute("cy", "12");
+        infoCircle.setAttribute("r", "9");
+        const infoLine = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        infoLine.setAttribute("d", "M12 10v6M12 7.25v.1");
+        infoIcon.appendChild(infoCircle);
+        infoIcon.appendChild(infoLine);
+        legendTitle.appendChild(infoIcon);
+        legend.appendChild(legendTitle);
+        const legendItems = createElement("div", "evm-unit-progress-range-items");
+        [
+            {
+                range: "1.00 – 1.19",
+                label: "ESTABLE",
+                description: "Ambos indicadores (CPI y SPI) se encuentran en el rango:",
+                className: "stable"
+            },
+            {
+                range: "0.90 – 0.99",
+                label: "EN RIESGO",
+                description: "Cualquiera de los indicadores (CPI o SPI) se encuentra en el rango:",
+                className: "risk"
+            },
+            {
+                range: "0.00 – 0.89",
+                label: "CRÍTICO",
+                description: "Cualquiera de los indicadores (CPI o SPI) se encuentra en el rango:",
+                className: "critical"
+            }
+        ].forEach((item) => {
+            const legendItem = createElement("div", `evm-unit-progress-range-item ${item.className}`);
+            const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            icon.setAttribute("viewBox", "0 0 40 40");
+            icon.setAttribute("aria-hidden", "true");
+            const targetOuter = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            targetOuter.setAttribute("cx", "18");
+            targetOuter.setAttribute("cy", "22");
+            targetOuter.setAttribute("r", "12");
+            const targetInner = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            targetInner.setAttribute("cx", "18");
+            targetInner.setAttribute("cy", "22");
+            targetInner.setAttribute("r", "7");
+            const targetCenter = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            targetCenter.setAttribute("cx", "18");
+            targetCenter.setAttribute("cy", "22");
+            targetCenter.setAttribute("r", "2");
+            const arrow = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            arrow.setAttribute("d", "M18 22 33 7M26 7h7v7");
+            icon.appendChild(targetOuter);
+            icon.appendChild(targetInner);
+            icon.appendChild(targetCenter);
+            icon.appendChild(arrow);
+            legendItem.appendChild(icon);
+            const copy = createElement("span", "evm-unit-progress-range-copy");
+            copy.appendChild(createElement("b", undefined, item.label));
+            copy.appendChild(createElement("small", undefined, item.description));
+            legendItem.appendChild(copy);
+            legendItem.appendChild(createElement("strong", undefined, item.range));
+            legendItems.appendChild(legendItem);
+        });
+        legend.appendChild(legendItems);
+        section.appendChild(heading);
+
+        if (!units.length) {
+            section.appendChild(createElement("div", "evm-empty", "No se encontraron unidades para los filtros seleccionados."));
+            return section;
+        }
+
+        const table = createElement("div", "evm-unit-progress-table");
+        const header = createElement("div", "evm-unit-progress-row evm-unit-progress-header");
+        header.appendChild(this.renderUnitProgressHeader("Unidad Gerencial", "unit"));
+        header.appendChild(this.renderUnitProgressHeader("Proyectos", "projects"));
+        header.appendChild(this.renderUnitProgressHeader("% Avance", "advance"));
+        header.appendChild(this.renderUnitProgressHeader("SPI", "spi"));
+        header.appendChild(this.renderUnitProgressHeader("CPI", "cpi"));
+        header.appendChild(this.renderUnitProgressHeader("Estado", "status"));
+        table.appendChild(header);
+
+        const progressRows = units.slice(0, 12).map((unit) => {
+            const calculatedAdvance = unit.BAC && unit.EV !== null ? Math.max(0, unit.EV / unit.BAC) : 0;
+            const advancePct = Math.round(unit.Avance ?? calculatedAdvance * 100);
+            return { unit, advancePct };
+        });
+        progressRows.forEach(({ unit, advancePct }) => {
+            const isTotal = unit.UnidadGerencial.trim().toLowerCase() === "portafolio pronied";
+            const spi = unit.SPIW;
+            const cpi = unit.CPI;
+            const minimumIndex = Math.min(spi ?? 0, cpi ?? 0);
+            const sourceStatus = unit.Estado.trim();
+            const normalizedStatus = sourceStatus.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+            const status = sourceStatus
+                ? {
+                    label: sourceStatus,
+                    className: normalizedStatus.includes("adecuad") || normalizedStatus.includes("estable")
+                        ? "adequate"
+                        : normalizedStatus.includes("riesgo") || normalizedStatus.includes("alerta")
+                            ? "risk"
+                            : "critical"
+                }
+                : minimumIndex >= 0.95
+                    ? { label: "Adecuado", className: "adequate" }
+                    : minimumIndex >= 0.85
+                        ? { label: "En Riesgo", className: "risk" }
+                        : { label: "Crítico", className: "critical" };
+
+            const row = createElement("div", `evm-unit-progress-row${isTotal ? " evm-unit-progress-row--total" : ""}`);
+            const unitCell = createElement("div", "evm-unit-progress-unit");
+            if (!isTotal) {
+                unitCell.appendChild(this.renderUnitProgressIcon(unit.UnidadGerencial));
+                const rawUnitName = unit.UnidadGerencial.trim();
+                const separatorIndex = rawUnitName.indexOf(" - ");
+                const unitCode = separatorIndex >= 0 ? rawUnitName.slice(0, separatorIndex) : rawUnitName;
+                const unitName = separatorIndex >= 0 ? rawUnitName.slice(separatorIndex + 3) : "";
+                const unitCopy = createElement("span", "evm-unit-progress-unit-copy");
+                unitCopy.appendChild(createElement("strong", "evm-unit-progress-unit-code", unitCode));
+                if (unitName) {
+                    unitCopy.appendChild(createElement("small", "evm-unit-progress-unit-name", unitName));
+                }
+                unitCell.appendChild(unitCopy);
+            } else {
+                unitCell.appendChild(createElement("strong", undefined, unit.UnidadGerencial));
+            }
+            row.appendChild(unitCell);
+            row.appendChild(createElement("strong", "evm-unit-progress-projects", this.formatInteger(unit.CantidadProyectos)));
+
+            const isOverTarget = advancePct > 100;
+            const progressCell = createElement("div", `evm-unit-progress-value${isOverTarget ? " is-over-target" : ""}`);
+            const progress = document.createElement("progress");
+            progress.className = `evm-unit-progress-track${isOverTarget ? " is-over-target" : ""}`;
+            progress.max = 100;
+            progress.value = Math.min(advancePct, 100);
+            progressCell.appendChild(progress);
+            progressCell.appendChild(createElement("strong", undefined, `${advancePct}%`));
+            row.appendChild(progressCell);
+            row.appendChild(createElement("span", "evm-unit-progress-index", decimal(spi)));
+            row.appendChild(createElement("span", "evm-unit-progress-index", decimal(cpi)));
+            const statusCell = createElement("span", `evm-unit-progress-status ${status.className}`);
+            statusCell.appendChild(createElement("i"));
+            statusCell.appendChild(document.createTextNode(status.label));
+            row.appendChild(statusCell);
+            table.appendChild(row);
+        });
+
+        const body = createElement("div", "evm-unit-progress-body");
+        body.appendChild(table);
+        body.appendChild(legend);
+        section.appendChild(body);
+        return section;
+    }
+
+    private renderPortfolioRiskSection(risks: RiskItem[]): HTMLElement {
+        const section = createElement("section", "evm-card evm-portfolio-risk-section");
+
+        const matrixRows = risks.filter((risk) => Boolean(risk.UnidadGerencial));
+        if (!matrixRows.length) {
+            section.appendChild(createElement("div", "evm-empty", "No se encontraron datos de riesgos por unidad."));
+            return section;
+        }
+
+        const totalSource = matrixRows.find((risk) => risk.UnidadGerencial?.trim().toLowerCase() === "total");
+        const detailRows = matrixRows.filter((risk) => risk !== totalSource);
+        const sum = (key: "Bajo" | "Medio" | "Alto"): number => {
+            const explicit = numberValue(totalSource?.[key]);
+            return explicit ?? detailRows.reduce((total, row) => total + (numberValue(row[key]) ?? 0), 0);
+        };
+        const totals = {
+            bajo: sum("Bajo"),
+            medio: sum("Medio"),
+            alto: sum("Alto")
+        };
+        const grandTotal = numberValue(totalSource?.Total) ?? totals.bajo + totals.medio + totals.alto;
+
+        const content = createElement("div", "evm-portfolio-risk-content");
+        const distribution = createElement("div", "evm-portfolio-risk-panel evm-portfolio-risk-distribution");
+        distribution.appendChild(createElement("h3", undefined, "DISTRIBUCIÓN DE RIESGOS"));
+        const chartBody = createElement("div", "evm-portfolio-risk-chart-body");
+        chartBody.appendChild(this.renderPortfolioRiskDonut(totals.bajo, totals.medio, totals.alto));
+        distribution.appendChild(chartBody);
+        content.appendChild(distribution);
+
+        const matrix = createElement("div", "evm-portfolio-risk-panel evm-portfolio-risk-matrix");
+        matrix.appendChild(createElement("h3", undefined, "MATRIZ DE RIESGOS"));
+        const grid = createElement("div", "evm-portfolio-risk-grid");
+        [
+            { label: "UNIDAD GERENCIAL", className: "unit" },
+            { label: "BAJO", className: "low" },
+            { label: "MEDIO", className: "medium" },
+            { label: "ALTO", className: "high" },
+            { label: "TOTAL", className: "overall" }
+        ].forEach(({ label, className }) => {
+            const header = createElement("span", `header ${className}`);
+            if (className !== "unit") {
+                header.appendChild(createElement("i"));
+            }
+            header.appendChild(document.createTextNode(label));
+            grid.appendChild(header);
+        });
+        [...detailRows, ...(totalSource ? [totalSource] : [])].forEach((risk) => {
+            const isTotal = risk === totalSource;
+            const rowLabel = createElement("strong", isTotal ? "row-label total" : "row-label");
+            if (!isTotal) {
+                rowLabel.appendChild(this.renderUnitProgressIcon(risk.UnidadGerencial ?? ""));
+                const rawUnitName = risk.UnidadGerencial?.trim() ?? "—";
+                const separatorIndex = rawUnitName.indexOf(" - ");
+                const unitCode = separatorIndex >= 0 ? rawUnitName.slice(0, separatorIndex) : rawUnitName;
+                const unitName = separatorIndex >= 0 ? rawUnitName.slice(separatorIndex + 3) : "";
+                const unitCopy = createElement("span", "evm-portfolio-risk-unit-copy");
+                unitCopy.appendChild(createElement("span", "evm-portfolio-risk-unit-code", unitCode));
+                if (unitName) {
+                    unitCopy.appendChild(createElement("span", "evm-portfolio-risk-unit-name", unitName));
+                }
+                rowLabel.appendChild(unitCopy);
+            } else {
+                rowLabel.appendChild(document.createTextNode("Total"));
+            }
+            grid.appendChild(rowLabel);
+            grid.appendChild(createElement("span", `cell low${isTotal ? " total" : ""}`, this.formatInteger(risk.Bajo)));
+            grid.appendChild(createElement("span", `cell medium${isTotal ? " total" : ""}`, this.formatInteger(risk.Medio)));
+            grid.appendChild(createElement("span", `cell high${isTotal ? " total" : ""}`, this.formatInteger(risk.Alto)));
+            grid.appendChild(createElement("span", `cell overall${isTotal ? " total" : ""}`, this.formatInteger(risk.Total)));
+        });
+        matrix.appendChild(grid);
+        content.appendChild(matrix);
+
+        const indicators = createElement("div", "evm-portfolio-risk-panel evm-portfolio-risk-indicators");
+        const interventionsAtRisk = numberValue(totalSource?.IntervencionesRiesgo) ?? totals.alto;
+        const trendSource = numberValue(totalSource?.TendenciaRiesgosPct);
+        const trendPct = trendSource === null
+            ? null
+            : (Math.abs(trendSource) <= 1 ? trendSource * 100 : trendSource);
+        indicators.appendChild(this.renderPortfolioRiskIndicator(
+            "shield",
+            "Total Riesgos Activos",
+            this.formatInteger(grandTotal),
+            "",
+            "blue"
+        ));
+        indicators.appendChild(this.renderPortfolioRiskIndicator(
+            "high",
+            "Intervenciones en Riesgo",
+            this.formatInteger(interventionsAtRisk),
+            "",
+            "orange"
+        ));
+        indicators.appendChild(this.renderPortfolioRiskIndicator(
+            "trend",
+            "Tendencia de Riesgos",
+            trendPct === null ? "—" : `${trendPct > 0 ? "+" : ""}${trendPct.toLocaleString("en-US", { maximumFractionDigits: 1 })}%`,
+            "vs semana anterior",
+            "red"
+        ));
+        content.appendChild(indicators);
+        section.appendChild(content);
+        return section;
+    }
+
+    private renderPortfolioRiskIndicator(
+        icon: "shield" | "high" | "trend",
+        label: string,
+        value: string,
+        note: string,
+        color: "blue" | "orange" | "red"
+    ): HTMLElement {
+        const item = createElement("div", `evm-portfolio-risk-indicator ${color}`);
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("viewBox", "0 0 40 40");
+        svg.setAttribute("aria-hidden", "true");
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", icon === "shield"
+            ? "M20 3c5 4 10 5 15 5v10c0 9-6 15-15 20C11 33 5 27 5 18V8c5 0 10-1 15-5zM12 20l5 5 11-12"
+            : "M5 31 16 18l7 7L35 9M27 9h8v8");
+        svg.appendChild(path);
+        item.appendChild(svg);
+        const copy = createElement("div", "evm-portfolio-risk-indicator-copy");
+        copy.appendChild(createElement("span", undefined, label));
+        copy.appendChild(createElement("strong", undefined, value));
+        if (note) {
+            copy.appendChild(createElement("small", undefined, note));
+        }
+        item.appendChild(copy);
+        return item;
+    }
+
+    private renderPortfolioRiskDonut(low: number, medium: number, high: number): SVGSVGElement {
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("viewBox", "0 0 600 360");
+        svg.setAttribute("aria-label", "Distribución de riesgos");
+        svg.classList.add("evm-portfolio-risk-callout-chart");
+        const total = low + medium + high;
+        const circumference = 2 * Math.PI * 100;
+
+        const base = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        base.setAttribute("cx", "300");
+        base.setAttribute("cy", "190");
+        base.setAttribute("r", "100");
+        base.setAttribute("class", "track");
+        svg.appendChild(base);
+
+        let consumed = 0;
+        [
+            { value: low, className: "low" },
+            { value: medium, className: "medium" },
+            { value: high, className: "high" }
+        ].forEach((item) => {
+            const segment = total > 0 ? (item.value / total) * circumference : 0;
+            const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            circle.setAttribute("cx", "300");
+            circle.setAttribute("cy", "190");
+            circle.setAttribute("r", "100");
+            circle.setAttribute("class", item.className);
+            const visibleSegment = Math.max(0, segment - 6);
+            circle.setAttribute("stroke-dasharray", `${visibleSegment} ${circumference - visibleSegment}`);
+            circle.setAttribute("stroke-dashoffset", String(-consumed));
+            circle.setAttribute("transform", "rotate(-90 300 190)");
+            svg.appendChild(circle);
+            consumed += segment;
+        });
+
+        const centerTotal = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        centerTotal.setAttribute("x", "300");
+        centerTotal.setAttribute("y", "202");
+        centerTotal.setAttribute("class", "donut-center-total");
+        centerTotal.textContent = this.formatInteger(total);
+        svg.appendChild(centerTotal);
+
+        const addCallout = (
+            label: string,
+            value: number,
+            className: "low" | "medium" | "high",
+            points: string,
+            dotX: number,
+            dotY: number,
+            textX: number,
+            titleY: number
+        ): void => {
+            const connector = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+            connector.setAttribute("points", points);
+            connector.setAttribute("class", `connector ${className}`);
+            svg.appendChild(connector);
+            const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            dot.setAttribute("cx", String(dotX));
+            dot.setAttribute("cy", String(dotY));
+            dot.setAttribute("r", "5");
+            dot.setAttribute("class", `callout-dot ${className}`);
+            svg.appendChild(dot);
+            const title = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            title.setAttribute("x", String(textX));
+            title.setAttribute("y", String(titleY));
+            title.setAttribute("class", `callout-title ${className}`);
+            title.textContent = label;
+            svg.appendChild(title);
+            const detail = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            detail.setAttribute("x", String(textX));
+            detail.setAttribute("y", String(titleY + 34));
+            detail.setAttribute("class", "callout-value");
+            const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+            detail.textContent = `${this.formatInteger(value)} (${percentage}%)`;
+            svg.appendChild(detail);
+        };
+
+        addCallout("Alto", high, "high", "220,116 190,84 130,84", 130, 84, 30, 75);
+        addCallout("Medio", medium, "medium", "215,232 182,260 125,260", 125, 260, 25, 250);
+        addCallout("Bajo", low, "low", "405,220 430,194 455,194", 455, 194, 470, 185);
+        return svg;
+    }
+
+    private renderUnitProgressHeader(label: string, icon: "unit" | "projects" | "advance" | "spi" | "cpi" | "status"): HTMLElement {
+        const header = createElement("span", "evm-unit-progress-header-label");
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("viewBox", "0 0 32 32");
+        svg.setAttribute("aria-hidden", "true");
+        const path = (data: string): void => {
+            const node = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            node.setAttribute("d", data);
+            svg.appendChild(node);
+        };
+        const circle = (cx: number, cy: number, radius: number): void => {
+            const node = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            node.setAttribute("cx", String(cx));
+            node.setAttribute("cy", String(cy));
+            node.setAttribute("r", String(radius));
+            svg.appendChild(node);
+        };
+
+        if (icon === "unit") {
+            path("M4 28V10l12-7 12 7v18M9 28V15h14v13M13 15v13M19 15v13M8 10h16");
+        } else if (icon === "projects") {
+            path("M9 4h14v24H9zM13 8h6M13 13h6M13 18h6M13 23h4M5 9h4M5 14h4M5 19h4M5 24h4");
+        } else if (icon === "advance") {
+            circle(15, 17, 11);
+            circle(15, 17, 6);
+            circle(15, 17, 1.5);
+            path("M15 17 27 5M21 5h6v6");
+        } else if (icon === "spi") {
+            path("M4 27h24M6 27v-7h5v7M14 27V15h5v12M22 27V9h5v18M5 15l7-6 5 3 10-8M22 4h5v5");
+        } else if (icon === "cpi") {
+            path("M5 8c0-3 5-5 10-5s10 2 10 5v15c0 3-5 5-10 5S5 26 5 23zM5 8c0 3 5 5 10 5s10-2 10-5M5 15c0 3 5 5 10 5 2 0 4-.3 5-1");
+            circle(24, 22, 6);
+            path("M24 18v8M21.5 20h3.5a1.5 1.5 0 0 1 0 3h-2a1.5 1.5 0 0 0 0 3h3");
+        } else {
+            path("M11 3h10l4 4v18l-4 4H11l-4-4V7z");
+            circle(16, 10, 2);
+            circle(16, 16, 2);
+            circle(16, 22, 2);
+            path("M4 9h3M4 16h3M4 23h3M25 9h3M25 16h3M25 23h3");
+        }
+
+        header.appendChild(svg);
+        header.appendChild(createElement("strong", undefined, label));
+        return header;
+    }
+
+    private renderUnitProgressIcon(unitName: string): SVGSVGElement {
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("viewBox", "0 0 32 32");
+        svg.setAttribute("aria-hidden", "true");
+        svg.classList.add("evm-unit-progress-unit-icon");
+
+        const path = (data: string): void => {
+            const node = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            node.setAttribute("d", data);
+            svg.appendChild(node);
+        };
+        const circle = (cx: number, cy: number, radius: number): void => {
+            const node = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            node.setAttribute("cx", String(cx));
+            node.setAttribute("cy", String(cy));
+            node.setAttribute("r", String(radius));
+            svg.appendChild(node);
+        };
+
+        const unitCode = unitName.trim().split(/\s|-/)[0].toUpperCase();
+        if (unitCode === "UGRD") {
+            path("M3 13 16 3l13 10v16H3zM13 11l3 4-3 3 4 4-3 4");
+        } else if (unitCode === "UGME") {
+            path("M4 13 16 3l12 10v16H4z");
+            circle(16, 14, 3);
+            path("M11 25v-3c0-3 2-5 5-5s5 2 5 5v3");
+        } else if (unitCode === "UGEO") {
+            path("M9 7H5v22h19V7h-4M11 3h8v7h-8zM10 15l2 2 4-4M10 22l2 2 4-4M18 15h3M18 22h3");
+        } else if (unitCode === "UGSC") {
+            circle(11, 9, 5);
+            path("M3 27v-4c0-5 3-8 8-8s8 3 8 8v4M19 19l3-3 3 3M17 25l3 3 3-3M22 16h3a4 4 0 0 1 4 4v1M20 28h-3a4 4 0 0 1-4-4v-1");
+        } else if (unitCode === "UGM") {
+            circle(10, 9, 5);
+            path("M2 27v-4c0-5 3-8 8-8 3 0 5 1 7 3M21 17l8 8M24 14l-3 3 8 8-3 3-8-8 3-3M19 25l-4 4");
+        } else {
+            path("M4 29V11L16 3l12 8v18M2 29h28M10 29V17h12v12M11 12h2M19 12h2");
+        }
+        return svg;
     }
 
     private renderUnitDashboard(dashboard: ParsedDashboardData, viewport: powerbi.IViewport): HTMLElement {
@@ -810,8 +1332,8 @@ export class Visual implements IVisual {
             Region: dashboard.context.Region ?? "",
             Provincia: dashboard.context.Province ?? "",
             Distrito: dashboard.context.District ?? "",
-            EstadoProyecto: "",
-            MensajeEjecutivo: "",
+            EstadoProyecto: dashboard.summary?.Estado ?? "",
+            MensajeEjecutivo: dashboard.summary?.Mensaje ?? "",
             FechaEstado: dashboard.context.CutoffDate,
             SemanaActual: dashboard.summary?.SPIT ?? dashboard.summary?.SPIW ?? null
         };
@@ -850,6 +1372,141 @@ export class Visual implements IVisual {
             panel.appendChild(item);
         });
         return panel;
+    }
+
+    private renderPortfolioSummary(summary: PortfolioSummaryData | null): HTMLElement {
+        const panel = createElement("section", "evm-card evm-performance-card evm-portfolio-summary");
+        panel.appendChild(createElement("div", "evm-section-title", "Resumen General"));
+        if (!summary) {
+            panel.appendChild(createElement("div", "evm-empty", "No se encontraron datos del resumen general."));
+            return panel;
+        }
+
+        const grid = createElement("div", "evm-portfolio-summary-grid");
+        grid.appendChild(this.portfolioCompositeCard(
+            "building",
+            this.formatInteger(summary.ProyectosActivos),
+            "Proyectos Activos",
+            [
+                [this.formatInteger(summary.CantidadProyectos), "Proyectos"],
+                [this.formatInteger(summary.CantidadIntervenciones), "Intervenciones"]
+            ]
+        ));
+        grid.appendChild(this.portfolioCompositeCard(
+            "budget",
+            shortCurrency(summary.PresupuestoInstitucional),
+            "Presupuesto Institucional",
+            [
+                [shortCurrency(summary.PresupuestoProyectos), "Proyectos"],
+                [shortCurrency(summary.PresupuestoIntervenciones), "Intervenciones"]
+            ]
+        ));
+        grid.appendChild(this.portfolioMetricCard("schedule", this.signedPortfolioPercent(summary.DesviacionPlazoPct), "Desviación del Portafolio", "(Plazo)"));
+        grid.appendChild(this.portfolioMetricCard("cost", this.signedPortfolioPercent(summary.DesviacionCostoPct), "Desviación del Portafolio", "(Costo)"));
+        const bottom = createElement("div", "evm-portfolio-summary-bottom");
+        bottom.appendChild(this.portfolioMetricCard("critical", this.formatInteger(summary.IntervencionesCriticas), "Intervenciones Críticas"));
+        bottom.appendChild(this.portfolioMetricCard("risk", this.portfolioPercent(summary.RiesgoPortafolioPct), "Riesgo Alto/Alto"));
+        grid.appendChild(bottom);
+        panel.appendChild(grid);
+        return panel;
+    }
+
+    private portfolioCompositeCard(
+        iconClass: string,
+        value: string,
+        label: string,
+        details: Array<[string, string]>
+    ): HTMLElement {
+        const card = createElement("article", `evm-portfolio-summary-card evm-portfolio-summary-card--${iconClass}`);
+        card.appendChild(this.portfolioIcon(iconClass));
+        const main = createElement("div", "evm-portfolio-summary-main");
+        main.appendChild(createElement("strong", undefined, value));
+        main.appendChild(createElement("span", undefined, label));
+        card.appendChild(main);
+        const detail = createElement("div", "evm-portfolio-summary-detail");
+        details.forEach(([detailValue, detailLabel]) => {
+            const row = createElement("div");
+            row.appendChild(createElement("b", undefined, detailValue));
+            row.appendChild(createElement("span", undefined, detailLabel));
+            detail.appendChild(row);
+        });
+        card.appendChild(detail);
+        return card;
+    }
+
+    private portfolioMetricCard(iconClass: string, value: string, label: string, note?: string): HTMLElement {
+        const card = createElement("article", `evm-portfolio-summary-card evm-portfolio-summary-card--${iconClass}`);
+        card.appendChild(this.portfolioIcon(iconClass));
+        const main = createElement("div", "evm-portfolio-summary-main");
+        main.appendChild(createElement("strong", undefined, value));
+        main.appendChild(createElement("span", undefined, label));
+        if (note) {
+            main.appendChild(createElement("small", undefined, note));
+        }
+        card.appendChild(main);
+        return card;
+    }
+
+    private portfolioIcon(iconClass: string): SVGSVGElement {
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("viewBox", "0 0 64 64");
+        svg.setAttribute("aria-hidden", "true");
+        svg.classList.add("evm-portfolio-summary-icon");
+        const path = (d: string): void => {
+            const node = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            node.setAttribute("d", d);
+            svg.appendChild(node);
+        };
+        const line = (x1: number, y1: number, x2: number, y2: number): void => {
+            const node = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            node.setAttribute("x1", String(x1));
+            node.setAttribute("y1", String(y1));
+            node.setAttribute("x2", String(x2));
+            node.setAttribute("y2", String(y2));
+            svg.appendChild(node);
+        };
+
+        if (iconClass === "building") {
+            path("M9 54V27h14v27M23 54V12h19v42M42 54V25h13v29M5 54h54");
+            path("M29 20h4v4h-4zM36 20h4v4h-4zM29 29h4v4h-4zM36 29h4v4h-4zM29 38h4v4h-4zM36 38h4v4h-4zM14 34h4v4h-4zM14 43h4v4h-4zM47 33h4v4h-4zM47 42h4v4h-4z");
+        } else if (iconClass === "budget") {
+            path("M21 16c5-5 17-5 22 0l-4 6H25zM25 22c-8 8-12 15-12 24 0 9 8 14 19 14s19-5 19-14c0-9-4-16-12-24");
+            path("M36 34c-1-2-7-2-8 1-1 4 9 3 8 8-1 4-8 3-9 1M32 30v18");
+        } else if (iconClass === "schedule") {
+            path("M11 16h35v34H11zM11 25h35M18 10v12M38 10v12");
+            path("M18 32h4v4h-4zM27 32h4v4h-4zM18 41h4v4h-4zM27 41h4v4h-4z");
+            path("M40 37a13 13 0 1 0 0 26 13 13 0 0 0 0-26M40 43v8l5 3");
+        } else if (iconClass === "cost") {
+            path("M14 23a12 12 0 1 0 24 0 12 12 0 0 0-24 0M29 17c-1-2-7-2-8 1-1 4 9 3 8 8-1 4-8 3-9 1M25 13v20");
+            path("M14 55l12-12 8 7 17-19M43 31h8v8");
+        } else if (iconClass === "critical") {
+            path("M20 13h24v43H12V13h8M24 9h16v9H24z");
+            path("M19 29l2 2 4-5M19 39l2 2 4-5M19 49l2 2 4-5M30 29h9M30 39h9M30 49h9");
+        } else {
+            path("M32 8 57 55H7z");
+            line(32, 23, 32, 41);
+            line(32, 48, 32, 49);
+        }
+        return svg;
+    }
+
+    private signedPortfolioPercent(value: DataValue): string {
+        const parsed = numberValue(value);
+        if (parsed === null) {
+            return "—";
+        }
+        const normalized = Math.abs(parsed) <= 1 ? parsed * 100 : parsed;
+        const sign = normalized > 0 ? "+" : "";
+        return `${sign}${normalized.toLocaleString("en-US", { maximumFractionDigits: 1 })}%`;
+    }
+
+    private portfolioPercent(value: DataValue): string {
+        const parsed = numberValue(value);
+        if (parsed === null) {
+            return "—";
+        }
+        const normalized = Math.abs(parsed) <= 1 ? parsed * 100 : parsed;
+        return `${normalized.toLocaleString("en-US", { maximumFractionDigits: 1 })}%`;
     }
 
     private renderProjectsPanel(projects: UnitProjectSummaryData[]): HTMLElement {
@@ -1185,7 +1842,7 @@ export class Visual implements IVisual {
         return metric;
     }
 
-    private renderBodyCarousel(dashboard: DashboardData): HTMLElement {
+    private renderBodyCarousel(dashboard: DashboardData, curveRows: CurveData[]): HTMLElement {
         const carousel = document.createElement("section");
         carousel.className = "evm-body-carousel";
 
@@ -1205,13 +1862,10 @@ export class Visual implements IVisual {
 
         const riskPage = document.createElement("div");
         riskPage.className = "evm-body-carousel-page evm-body-carousel-page--risk";
-        riskPage.appendChild(renderMilestones(dashboard.milestones));
+        riskPage.appendChild(this.renderProjectCurveMatrix(curveRows));
         const lowerRow = createElement("div", "evm-project-details-lower-row");
         lowerRow.appendChild(renderRisks(dashboard.risks));
-        const stakeholders = createElement("section", "evm-card evm-stakeholder-card");
-        stakeholders.appendChild(createElement("div", "evm-section-title", "PARTES INTERESADAS"));
-        stakeholders.appendChild(createElement("div", "evm-empty", "Sin datos de partes interesadas."));
-        lowerRow.appendChild(stakeholders);
+        lowerRow.appendChild(renderMilestones(dashboard.milestones));
         riskPage.appendChild(lowerRow);
 
         const pages = [evmPage, riskPage];
@@ -1229,6 +1883,155 @@ export class Visual implements IVisual {
         carousel.appendChild(next);
         this.updateCarouselButtons(carousel);
         return carousel;
+    }
+
+    private renderProjectCurveMatrix(curveRows: CurveData[]): HTMLElement {
+        const card = createElement("section", "evm-card evm-project-curve-matrix-card");
+        type MatrixField = { key: keyof CurveData; label: string; title: string; kind: "week" | "money" | "index" | "time" };
+        const weekField: MatrixField = { key: "Semana", label: "SEMANA", title: "Semana del proyecto", kind: "week" };
+        const groups: Array<{ name: string; className: string; fields: MatrixField[] }> = [
+            {
+                name: "BASE",
+                className: "base",
+                fields: [
+                    weekField,
+                    { key: "BAC", label: "BAC", title: "Presupuesto a la conclusión", kind: "money" },
+                    { key: "SAC", label: "SAC", title: "Duración planificada", kind: "time" },
+                    { key: "ES", label: "ES", title: "Cronograma ganado", kind: "time" },
+                    { key: "AT", label: "AT", title: "Tiempo actual", kind: "time" },
+                    { key: "PV", label: "PV", title: "Valor planificado", kind: "money" },
+                    { key: "EV", label: "EV", title: "Valor ganado", kind: "money" },
+                    { key: "AC", label: "AC", title: "Costo actual", kind: "money" },
+                    { key: "CV", label: "CV", title: "Variación del costo", kind: "money" }
+                ]
+            },
+            {
+                name: "ÍNDICES",
+                className: "indices",
+                fields: [
+                    weekField,
+                    { key: "CPI", label: "CPI", title: "Índice de desempeño del costo", kind: "index" },
+                    { key: "SPI (w)", label: "SPI(W)", title: "Índice de desempeño del cronograma por valor", kind: "index" },
+                    { key: "SPI (t)", label: "SPI(T)", title: "Índice de desempeño del cronograma por tiempo", kind: "index" },
+                    { key: "TCPI", label: "TCPI", title: "Índice de desempeño requerido del costo", kind: "index" },
+                    { key: "TSPI (w)", label: "TSPI(W)", title: "Índice de desempeño requerido del cronograma por valor", kind: "index" },
+                    { key: "TSPI (t)", label: "TSPI(T)", title: "Índice de desempeño requerido del cronograma por tiempo", kind: "index" }
+                ]
+            },
+            {
+                name: "PROYECCIONES",
+                className: "projections",
+                fields: [
+                    weekField,
+                    { key: "EAC (c)", label: "EAC(C)", title: "Estimado de costo a la conclusión", kind: "money" },
+                    { key: "EAC (t)", label: "EAC(T)", title: "Estimado de tiempo a la conclusión", kind: "time" },
+                    { key: "IEAC (t)", label: "IEAC(T)", title: "Estimado independiente de tiempo a la conclusión", kind: "time" },
+                    { key: "VAC (c)", label: "VAC(C)", title: "Variación de costo a la conclusión", kind: "money" },
+                    { key: "VAC (t)", label: "VAC(T)", title: "Variación de tiempo a la conclusión", kind: "time" }
+                ]
+            },
+            {
+                name: "VARIACIONES",
+                className: "variations",
+                fields: [
+                    weekField,
+                    { key: "SV (w)", label: "SV(W)", title: "Variación del cronograma por valor", kind: "money" },
+                    { key: "SV (t)", label: "SV(T)", title: "Variación del cronograma por tiempo", kind: "time" },
+                    { key: "ETC (c)", label: "ETC(C)", title: "Costo restante estimado", kind: "money" },
+                    { key: "ETC (t)", label: "ETC(T)", title: "Tiempo restante estimado", kind: "time" }
+                ]
+            }
+        ];
+        let groupIndex = 0;
+        const title = createElement("div", "evm-section-title", "MATRIZ DE EVM");
+        const previous = createElement("button", "evm-project-curve-matrix-arrow", "‹");
+        const next = createElement("button", "evm-project-curve-matrix-arrow", "›");
+        const counter = createElement("span", "evm-project-curve-matrix-counter");
+        previous.type = "button";
+        next.type = "button";
+        previous.setAttribute("aria-label", "Ver grupo anterior de la matriz EVM");
+        next.setAttribute("aria-label", "Ver siguiente grupo de la matriz EVM");
+        const heading = createElement("div", "evm-project-curve-matrix-heading");
+        heading.appendChild(title);
+        const navigation = createElement("div", "evm-project-curve-matrix-navigation");
+        navigation.appendChild(previous);
+        navigation.appendChild(counter);
+        navigation.appendChild(next);
+        heading.appendChild(navigation);
+        card.appendChild(heading);
+
+        const tabs = createElement("div", "evm-project-curve-matrix-tabs");
+        const tabButtons = groups.map((group, index) => {
+            const button = createElement("button", `evm-project-curve-matrix-tab ${group.className}`, group.name);
+            button.type = "button";
+            button.addEventListener("click", () => {
+                groupIndex = index;
+                renderGroup();
+            });
+            tabs.appendChild(button);
+            return button;
+        });
+        card.appendChild(tabs);
+        const tableWrap = createElement("div", "evm-project-curve-matrix-wrap");
+        const visibleRows = [...curveRows]
+            .filter((row) => (numberValue(row.Semana) ?? 0) >= 1)
+            .sort((a, b) => (numberValue(a.Semana) ?? 0) - (numberValue(b.Semana) ?? 0));
+        const renderGroup = (): void => {
+            const group = groups[groupIndex];
+            const table = createElement("table", `evm-project-curve-matrix ${group.className}`);
+            const head = document.createElement("thead");
+            const headRow = document.createElement("tr");
+            group.fields.forEach((field) => {
+                const th = createElement("th", undefined, field.label);
+                th.title = field.title;
+                headRow.appendChild(th);
+            });
+            head.appendChild(headRow);
+            table.appendChild(head);
+            const body = document.createElement("tbody");
+            visibleRows.forEach((row, rowIndex) => {
+                const tr = document.createElement("tr");
+                if (rowIndex === visibleRows.length - 1) {
+                    tr.className = "current";
+                }
+                group.fields.forEach((field) => {
+                    const value = numberValue(row[field.key] as DataValue);
+                    let formatted = "—";
+                    if (value !== null) {
+                        formatted = field.kind === "money"
+                            ? `S/ ${Math.round(value).toLocaleString("en-US")}`
+                            : field.kind === "week"
+                                ? this.formatInteger(value)
+                                : value.toLocaleString("en-US", { minimumFractionDigits: field.kind === "index" ? 2 : 0, maximumFractionDigits: 2 });
+                    }
+                    const td = createElement("td", undefined, formatted);
+                    td.title = value === null ? "Sin dato" : `${field.title}: ${value.toLocaleString("en-US", { maximumFractionDigits: 4 })}`;
+                    tr.appendChild(td);
+                });
+                body.appendChild(tr);
+            });
+            table.appendChild(body);
+            tableWrap.replaceChildren(table);
+            tabButtons.forEach((button, index) => button.classList.toggle("active", index === groupIndex));
+            counter.textContent = `${groupIndex + 1} / ${groups.length}`;
+            previous.disabled = groupIndex === 0;
+            next.disabled = groupIndex === groups.length - 1;
+        };
+        previous.addEventListener("click", () => {
+            if (groupIndex > 0) {
+                groupIndex -= 1;
+                renderGroup();
+            }
+        });
+        next.addEventListener("click", () => {
+            if (groupIndex < groups.length - 1) {
+                groupIndex += 1;
+                renderGroup();
+            }
+        });
+        card.appendChild(tableWrap);
+        renderGroup();
+        return card;
     }
 
     private renderCarouselButton(direction: "prev" | "next", label: string, ariaLabel: string, pages: HTMLElement[]): HTMLButtonElement {
@@ -1276,7 +2079,9 @@ export class Visual implements IVisual {
         const carousel = pages[0]?.parentElement?.parentElement;
         if (carousel instanceof HTMLElement) {
             this.updateCarouselButtons(carousel);
-            carousel.closest(".evm-main")?.classList.toggle("evm-main--project-details", this.bodyCarouselIndex === 1);
+            const main = carousel.closest(".evm-main");
+            main?.classList.toggle("evm-main--project-details", main.classList.contains("evm-main--project") && this.bodyCarouselIndex === 1);
+            main?.classList.toggle("evm-main--portfolio-details", main.classList.contains("evm-main--pronied") && this.bodyCarouselIndex === 1);
         }
     }
 
@@ -1287,7 +2092,10 @@ export class Visual implements IVisual {
     }
 
     private updateCarouselButtons(carousel: HTMLElement): void {
-        const tooltip = this.bodyCarouselIndex === 0 ? "Ver Hitos & Riesgos" : "Volver a Desempeno";
+        const isPortfolio = carousel.classList.contains("evm-body-carousel--portfolio");
+        const tooltip = isPortfolio
+            ? (this.bodyCarouselIndex === 0 ? "Ver avance por unidad" : "Volver al resumen")
+            : (this.bodyCarouselIndex === 0 ? "Ver Hitos & Riesgos" : "Volver a Desempeno");
         carousel.querySelectorAll(".evm-carousel-button").forEach((button) => {
             button.setAttribute("aria-label", tooltip);
             button.setAttribute("title", tooltip);
