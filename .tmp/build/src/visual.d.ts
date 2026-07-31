@@ -15,6 +15,7 @@ export declare class Visual implements IVisual {
     private filterFocus;
     private readonly filterState;
     private readonly appliedFilterValues;
+    private navigatorProjectCatalog;
     private navigationDebugHidden;
     private pendingNavigationLevel;
     private navigationDebug;
@@ -110,6 +111,7 @@ export declare class Visual implements IVisual {
     private uniqueNavigatorValues;
     private uniqueFromProjects;
     private projectOptions;
+    private rememberNavigatorProjects;
     private matchesFilter;
     private navigatorText;
     private handleNavigationClick;
@@ -124,7 +126,9 @@ export declare class Visual implements IVisual {
     private toDebugText;
     private applyBasicFilter;
     private clearInternalFilter;
+    private selfFilterPropertyName;
     private clearAllInteractiveFilters;
+    private clearProjectDimensionFilters;
     private isSameFilterValue;
     private formatInteger;
     private openGaugeHistoryModal;
@@ -143,6 +147,7 @@ export declare class Visual implements IVisual {
     private gaugeDefinitionItems;
     private toggleGaugeSeries;
     private buildGaugeHistorySeries;
+    private gaugeHistoryWeekRange;
     private buildAggregateGaugeHistorySeries;
     private gaugeHistorySubtitle;
     private lastGaugeWeek;

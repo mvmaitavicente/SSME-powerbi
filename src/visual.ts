@@ -123,6 +123,7 @@ export class Visual implements IVisual {
         status: null
     };
     private readonly appliedFilterValues: { [propertyName: string]: string | null } = {};
+    private navigatorProjectCatalog: NavigatorProject[] = [];
     private navigationDebugHidden: boolean = false;
     private pendingNavigationLevel: DashboardLevel | null = null;
     private navigationDebug: NavigationDebugState = {
@@ -253,6 +254,9 @@ export class Visual implements IVisual {
             this.navigationDebug.lastError = null;
             this.navigationDebug.timestamp = new Date().toISOString();
             this.currentDashboardData = dashboard;
+            if (dashboard) {
+                this.rememberNavigatorProjects(dashboard.navigator?.projects ?? dashboard.projects);
+            }
             const root = document.createElement("div");
             root.className = "evm-dashboard";
             root.style.width = `${options.viewport.width}px`;
@@ -1942,59 +1946,41 @@ export class Visual implements IVisual {
                 ]
             }
         ];
-        let groupIndex = 0;
         const title = createElement("div", "evm-section-title", "MATRIZ DE EVM");
-        const previous = createElement("button", "evm-project-curve-matrix-arrow", "‹");
-        const next = createElement("button", "evm-project-curve-matrix-arrow", "›");
-        const counter = createElement("span", "evm-project-curve-matrix-counter");
-        previous.type = "button";
-        next.type = "button";
-        previous.setAttribute("aria-label", "Ver grupo anterior de la matriz EVM");
-        next.setAttribute("aria-label", "Ver siguiente grupo de la matriz EVM");
         const heading = createElement("div", "evm-project-curve-matrix-heading");
         heading.appendChild(title);
-        const navigation = createElement("div", "evm-project-curve-matrix-navigation");
-        navigation.appendChild(previous);
-        navigation.appendChild(counter);
-        navigation.appendChild(next);
-        heading.appendChild(navigation);
         card.appendChild(heading);
 
-        const tabs = createElement("div", "evm-project-curve-matrix-tabs");
-        const tabButtons = groups.map((group, index) => {
-            const button = createElement("button", `evm-project-curve-matrix-tab ${group.className}`, group.name);
-            button.type = "button";
-            button.addEventListener("click", () => {
-                groupIndex = index;
-                renderGroup();
-            });
-            tabs.appendChild(button);
-            return button;
-        });
-        card.appendChild(tabs);
         const tableWrap = createElement("div", "evm-project-curve-matrix-wrap");
         const visibleRows = [...curveRows]
             .filter((row) => (numberValue(row.Semana) ?? 0) >= 1)
             .sort((a, b) => (numberValue(a.Semana) ?? 0) - (numberValue(b.Semana) ?? 0));
-        const renderGroup = (): void => {
-            const group = groups[groupIndex];
-            const table = createElement("table", `evm-project-curve-matrix ${group.className}`);
-            const head = document.createElement("thead");
-            const headRow = document.createElement("tr");
-            group.fields.forEach((field) => {
+        const table = createElement("table", "evm-project-curve-matrix");
+        const head = document.createElement("thead");
+        const headRow = document.createElement("tr");
+        groups.forEach((group, groupIndex) => {
+            group.fields.forEach((field, fieldIndex) => {
+                if (groupIndex > 0 && fieldIndex === 0) {
+                    return;
+                }
                 const th = createElement("th", undefined, field.label);
                 th.title = field.title;
                 headRow.appendChild(th);
             });
-            head.appendChild(headRow);
-            table.appendChild(head);
-            const body = document.createElement("tbody");
-            visibleRows.forEach((row, rowIndex) => {
-                const tr = document.createElement("tr");
-                if (rowIndex === visibleRows.length - 1) {
-                    tr.className = "current";
-                }
-                group.fields.forEach((field) => {
+        });
+        head.appendChild(headRow);
+        table.appendChild(head);
+        const body = document.createElement("tbody");
+        visibleRows.forEach((row, rowIndex) => {
+            const tr = document.createElement("tr");
+            if (rowIndex === visibleRows.length - 1) {
+                tr.className = "current";
+            }
+            groups.forEach((group, groupIndex) => {
+                group.fields.forEach((field, fieldIndex) => {
+                    if (groupIndex > 0 && fieldIndex === 0) {
+                        return;
+                    }
                     const value = numberValue(row[field.key] as DataValue);
                     let formatted = "—";
                     if (value !== null) {
@@ -2008,29 +1994,12 @@ export class Visual implements IVisual {
                     td.title = value === null ? "Sin dato" : `${field.title}: ${value.toLocaleString("en-US", { maximumFractionDigits: 4 })}`;
                     tr.appendChild(td);
                 });
-                body.appendChild(tr);
             });
-            table.appendChild(body);
-            tableWrap.replaceChildren(table);
-            tabButtons.forEach((button, index) => button.classList.toggle("active", index === groupIndex));
-            counter.textContent = `${groupIndex + 1} / ${groups.length}`;
-            previous.disabled = groupIndex === 0;
-            next.disabled = groupIndex === groups.length - 1;
-        };
-        previous.addEventListener("click", () => {
-            if (groupIndex > 0) {
-                groupIndex -= 1;
-                renderGroup();
-            }
+            body.appendChild(tr);
         });
-        next.addEventListener("click", () => {
-            if (groupIndex < groups.length - 1) {
-                groupIndex += 1;
-                renderGroup();
-            }
-        });
+        table.appendChild(body);
+        tableWrap.appendChild(table);
         card.appendChild(tableWrap);
-        renderGroup();
         return card;
     }
 
@@ -2354,6 +2323,8 @@ export class Visual implements IVisual {
         panel.appendChild(this.renderFilterSelect("Unidad Gerencial", "unit", this.uniqueNavigatorValues("UnidadGerencial"), this.filterState.selectedUnit, (value) => {
             this.filterState.selectedUnit = value;
             this.filterState.selectedProjectId = null;
+            value ? this.applyBasicFilter("Dim_Intervenciones", "UnidadGerencial", [value], "unitFilter") : this.clearInternalFilter("unitFilter");
+            this.clearInternalFilter("projectFilter");
         }));
         panel.appendChild(this.renderFilterSelect("Región", "region", this.uniqueFromProjects(projects, "Region"), this.filterState.region, (value) => {
             this.filterState.region = value;
@@ -2371,9 +2342,19 @@ export class Visual implements IVisual {
             this.filterState.status = value;
             value ? this.applyBasicFilter("Dim_Intervenciones", "EstadoProyecto", [value], "statusFilter") : this.clearInternalFilter("statusFilter");
         }));
-        panel.appendChild(this.renderFilterSelect("Proyecto", "project", this.projectOptions(projects), this.filterState.selectedProjectId, (value) => {
+        const allProjects = this.navigatorProjectCatalog.length
+            ? this.navigatorProjectCatalog
+            : this.currentDashboardData?.navigator?.projects ?? this.currentDashboardData?.projects ?? [];
+        panel.appendChild(this.renderFilterSelect("Proyecto", "project", this.projectOptions(allProjects), this.filterState.selectedProjectId, (value) => {
+            if (!value) {
+                return;
+            }
+            this.clearProjectDimensionFilters();
             this.filterState.selectedProjectId = value;
-        }));
+            this.filterState.lastNavigableProjectId = value;
+            this.applyProjectFilter(value);
+            this.applyBasicFilter("Dim_Intervenciones", "IdIntervencion", [value], "projectFilter");
+        }, false));
 
         const clear = createElement("button", "evm-filter-clear", "Limpiar filtros");
         clear.type = "button";
@@ -2397,17 +2378,25 @@ export class Visual implements IVisual {
         key: string,
         options: Array<{ value: string; label: string }>,
         selectedValue: string | null,
-        onChange: (value: string | null) => void
+        onChange: (value: string | null) => void,
+        allowAll: boolean = true
     ): HTMLElement {
         const field = createElement("label", "evm-filter-field");
         field.appendChild(createElement("span", undefined, label));
         const select = createElement("select");
         select.setAttribute("data-filter-key", key);
-        select.appendChild(new Option("Todos", ""));
+        if (allowAll) {
+            select.appendChild(new Option("Todos", ""));
+        } else {
+            select.required = true;
+            select.setAttribute("aria-required", "true");
+        }
         options.forEach((option) => select.appendChild(new Option(option.label, option.value)));
-        select.value = selectedValue ?? "";
+        const hasSelectedOption = Boolean(selectedValue) && options.some((option) => option.value === selectedValue);
+        select.value = hasSelectedOption ? selectedValue as string : (allowAll ? "" : options[0]?.value ?? "");
         select.addEventListener("change", () => {
             onChange(select.value || null);
+            this.renderFilterPanelIntoRoot();
         });
         field.appendChild(select);
         return field;
@@ -2445,8 +2434,18 @@ export class Visual implements IVisual {
                 value: this.navigatorText(project.IdIntervencion),
                 label: this.navigatorText(project.NombreIntervencion) || this.navigatorText(project.IdIntervencion)
             }))
-            .filter((option) => option.value.length > 0)
-            .slice(0, 100);
+            .filter((option) => option.value.length > 0);
+    }
+
+    private rememberNavigatorProjects(projects: NavigatorProject[]): void {
+        const catalog = new Map<string, NavigatorProject>();
+        [...this.navigatorProjectCatalog, ...projects].forEach((project) => {
+            const projectId = this.getProjectId(project);
+            if (projectId) {
+                catalog.set(projectId, project);
+            }
+        });
+        this.navigatorProjectCatalog = Array.from(catalog.values());
     }
 
     private matchesFilter(value: unknown, filter: string | null): boolean {
@@ -2632,6 +2631,7 @@ export class Visual implements IVisual {
             filter
         });
         this.host.applyJsonFilter(filter, "internalFilters", propertyName, powerbi.FilterAction.merge);
+        this.host.applyJsonFilter(filter, "internalFilters", this.selfFilterPropertyName(propertyName), powerbi.FilterAction.merge);
         this.appliedFilterValues[propertyName] = nextValue === null ? null : String(nextValue);
     }
 
@@ -2643,13 +2643,26 @@ export class Visual implements IVisual {
             propertyName
         });
         this.host.applyJsonFilter(null as unknown as powerbi.IFilter, "internalFilters", propertyName, powerbi.FilterAction.remove);
+        this.host.applyJsonFilter(
+            null as unknown as powerbi.IFilter,
+            "internalFilters",
+            this.selfFilterPropertyName(propertyName),
+            powerbi.FilterAction.remove
+        );
         this.appliedFilterValues[propertyName] = null;
+    }
+
+    private selfFilterPropertyName(propertyName: string): string {
+        return propertyName === "projectFilter"
+            ? "selfProjectFilter"
+            : propertyName.replace(/Filter$/, "SelfFilter");
     }
 
     private clearAllInteractiveFilters(): void {
         this.host.applyJsonFilter(null as unknown as powerbi.IFilter, "general", "filter", powerbi.FilterAction.remove);
         this.host.applyJsonFilter(null as unknown as powerbi.IFilter, "general", "selfFilter", powerbi.FilterAction.remove);
-        ["regionFilter", "provinceFilter", "districtFilter", "statusFilter"].forEach((property) => this.clearInternalFilter(property));
+        ["unitFilter", "regionFilter", "provinceFilter", "districtFilter", "statusFilter", "projectFilter"]
+            .forEach((property) => this.clearInternalFilter(property));
         this.filterState.level = "PRONIED";
         this.filterState.selectedUnit = null;
         this.filterState.selectedProjectId = null;
@@ -2658,6 +2671,16 @@ export class Visual implements IVisual {
         this.filterState.district = null;
         this.filterState.status = null;
         this.closeFilterPanel();
+    }
+
+    private clearProjectDimensionFilters(): void {
+        ["unitFilter", "regionFilter", "provinceFilter", "districtFilter", "statusFilter"]
+            .forEach((property) => this.clearInternalFilter(property));
+        this.filterState.selectedUnit = null;
+        this.filterState.region = null;
+        this.filterState.province = null;
+        this.filterState.district = null;
+        this.filterState.status = null;
     }
 
     private isSameFilterValue(current: string | null, next: string | null): boolean {
@@ -2703,9 +2726,14 @@ export class Visual implements IVisual {
         }
 
         const aggregateRows = dashboard.context.Level === "PROYECTO" ? [] : this.windowAggregateGaugeRows(dashboard);
-        const series = dashboard.context.Level === "PROYECTO"
+        const rawSeries = dashboard.context.Level === "PROYECTO"
             ? this.buildGaugeHistorySeries(dashboard.gauges)
             : this.buildAggregateGaugeHistorySeries(aggregateRows);
+        const weekRange = this.gaugeHistoryWeekRange(dashboard, rawSeries);
+        const series = rawSeries.map((item) => ({
+            ...item,
+            points: item.points.filter((point) => point.week >= weekRange.min && point.week <= weekRange.max)
+        }));
         console.debug("Gauge history modal", {
             selectedGaugeKey: this.selectedGaugeKey,
             level: dashboard.context.Level,
@@ -2726,7 +2754,7 @@ export class Visual implements IVisual {
         });
 
         modal.appendChild(this.renderGaugeHistoryHeader());
-        modal.appendChild(this.renderGaugeHistoryBody(series));
+        modal.appendChild(this.renderGaugeHistoryBody(series, weekRange));
         overlay.appendChild(modal);
         this.rootElement.appendChild(overlay);
     }
@@ -2766,7 +2794,7 @@ export class Visual implements IVisual {
         return header;
     }
 
-    private renderGaugeHistoryBody(series: GaugeChartSeries[]): HTMLElement {
+    private renderGaugeHistoryBody(series: GaugeChartSeries[], weekRange: { min: number; max: number }): HTMLElement {
         const body = document.createElement("div");
         body.className = "gauge-history-modal-body";
 
@@ -2776,7 +2804,7 @@ export class Visual implements IVisual {
         chartWrap.className = "gauge-history-modal-chart";
         const tooltip = document.createElement("div");
         tooltip.className = "gauge-history-tooltip";
-        chartWrap.appendChild(this.renderGaugeHistoryChart(series, tooltip));
+        chartWrap.appendChild(this.renderGaugeHistoryChart(series, tooltip, weekRange));
         chartWrap.appendChild(tooltip);
         chartCard.appendChild(chartWrap);
         chartCard.appendChild(this.renderGaugeHistoryBottomLegend(series));
@@ -2785,7 +2813,11 @@ export class Visual implements IVisual {
         return body;
     }
 
-    private renderGaugeHistoryChart(series: GaugeChartSeries[], tooltip: HTMLElement): SVGSVGElement {
+    private renderGaugeHistoryChart(
+        series: GaugeChartSeries[],
+        tooltip: HTMLElement,
+        weekRange: { min: number; max: number }
+    ): SVGSVGElement {
         const width = 1220;
         const height = 760;
         const plot = { left: 92, top: 38, width: 1080, height: 610 };
@@ -2795,10 +2827,9 @@ export class Visual implements IVisual {
 
         const visibleSeries = series.filter((item) => this.visibleGaugeSeries.includes(item.key) && item.points.length);
         const allPoints = visibleSeries.flatMap((item) => item.points);
-        const allWeeks = allPoints.map((point) => point.week);
         const allValues = allPoints.map((point) => point.value);
-        const minWeek = allWeeks.length ? Math.min(...allWeeks) : 0;
-        const maxWeek = allWeeks.length ? Math.max(...allWeeks) : 1;
+        const minWeek = weekRange.min;
+        const maxWeek = weekRange.max;
         const rawYMax = Math.max(1.5, ...allValues);
         const yMax = rawYMax <= 1.5 ? 1.5 : Math.ceil((rawYMax * 1.05) / 0.25) * 0.25;
         const xSpan = Math.max(1, maxWeek - minWeek);
@@ -2830,10 +2861,6 @@ export class Visual implements IVisual {
             this.appendSvgLine(svg, plot.left, y, plot.left + plot.width, y, value === 0 ? "gauge-history-axis" : "gauge-history-grid");
             this.appendSvgText(svg, value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), plot.left - 14, y + 5, "end", "gauge-history-axis-label");
         }
-
-        const referenceY = yScale(1);
-        this.appendSvgLine(svg, plot.left, referenceY, plot.left + plot.width, referenceY, "gauge-history-reference-line");
-        this.appendSvgChip(svg, "Referencia 1.00", plot.left + plot.width - 184, referenceY - 34);
 
         const firstWeek = Math.ceil(minWeek);
         const lastWeek = Math.floor(maxWeek);
@@ -3057,6 +3084,29 @@ export class Visual implements IVisual {
                 }))
                 .filter((point): point is GaugeChartPoint => typeof point.value === "number" && Number.isFinite(point.value))
         }));
+    }
+
+    private gaugeHistoryWeekRange(
+        dashboard: ParsedDashboardData,
+        series: GaugeChartSeries[]
+    ): { min: number; max: number } {
+        if (dashboard.context.Level === "PROYECTO") {
+            const curve = adaptJsonDashboardData(dashboard).curve;
+            const references = curve.references;
+            const atWeek = numberValue(references.AT);
+            const gaugeWeeks = series
+                .flatMap((item) => item.points.map((point) => point.week))
+                .filter((week) => week >= 1);
+            const lastGaugeWeek = gaugeWeeks.length ? Math.max(...gaugeWeeks) : 1;
+            const max = Math.max(1, atWeek ?? lastGaugeWeek);
+            const min = Math.max(1, max - 5);
+            return { min, max };
+        }
+
+        const weeks = series.flatMap((item) => item.points.map((point) => point.week)).filter((week) => week >= 1);
+        const min = weeks.length ? Math.min(...weeks) : 1;
+        const max = weeks.length ? Math.max(...weeks) : min + 1;
+        return { min, max: Math.max(max, min + 1) };
     }
 
     private buildAggregateGaugeHistorySeries(rows: AggregateGaugeData[]): GaugeChartSeries[] {

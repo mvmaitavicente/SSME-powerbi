@@ -56,9 +56,23 @@
             "filter": true
           }
         },
+        "unitSelfFilter": {
+          "type": {
+            "filter": {
+              "selfFilter": true
+            }
+          }
+        },
         "regionFilter": {
           "type": {
             "filter": true
+          }
+        },
+        "regionSelfFilter": {
+          "type": {
+            "filter": {
+              "selfFilter": true
+            }
           }
         },
         "provinceFilter": {
@@ -66,14 +80,35 @@
             "filter": true
           }
         },
+        "provinceSelfFilter": {
+          "type": {
+            "filter": {
+              "selfFilter": true
+            }
+          }
+        },
         "districtFilter": {
           "type": {
             "filter": true
           }
         },
+        "districtSelfFilter": {
+          "type": {
+            "filter": {
+              "selfFilter": true
+            }
+          }
+        },
         "statusFilter": {
           "type": {
             "filter": true
+          }
+        },
+        "statusSelfFilter": {
+          "type": {
+            "filter": {
+              "selfFilter": true
+            }
           }
         },
         "projectFilter": {

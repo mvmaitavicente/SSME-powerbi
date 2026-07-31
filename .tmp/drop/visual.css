@@ -381,11 +381,13 @@
   bottom: 6px;
   left: 78px;
   z-index: 20;
-  width: 310px;
+  width: 390px;
   display: grid;
   grid-template-rows: auto repeat(6, auto) minmax(0, 1fr);
-  gap: 12px;
-  padding: 14px;
+  gap: 15px;
+  padding: 20px;
+  box-sizing: border-box;
+  overflow-y: auto;
 }
 .evm-filter-panel-header {
   display: flex;
@@ -398,34 +400,37 @@
   font-weight: 950;
 }
 .evm-filter-panel-header button {
+  width: 34px;
+  height: 34px;
   border: 1px solid #DDE3F0;
   border-radius: 6px;
   background: #FFFFFF;
   color: #001B8E;
-  font-size: 18px;
+  font-size: 21px;
   font-weight: 950;
   cursor: pointer;
 }
 .evm-filter-field {
   display: grid;
-  gap: 5px;
+  gap: 7px;
 }
 .evm-filter-field span {
   color: #001B8E;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 900;
   text-transform: uppercase;
 }
 .evm-filter-field select {
   width: 100%;
   min-width: 0;
-  padding: 8px 9px;
+  min-height: 44px;
+  padding: 10px 12px;
   border: 1px solid #C7D1E4;
   border-radius: 6px;
   color: #00145C;
   background: #FFFFFF;
   font: inherit;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 800;
 }
 .evm-dashboard-error {
@@ -5099,15 +5104,36 @@
 }
 /* Larger EVM matrix with vertical navigation beginning at week 1. */
 .evm-project-curve-matrix-wrap {
-  overflow-x: hidden;
+  overflow-x: auto;
   overflow-y: auto;
   scrollbar-color: #AFC3E3 #F2F5FA;
   scrollbar-width: thin;
+}
+.evm-project-curve-matrix {
+  width: max-content;
+  min-width: 100%;
+  height: auto;
+  table-layout: fixed;
+}
+.evm-project-curve-matrix th,
+.evm-project-curve-matrix td {
+  width: 118px;
+  min-width: 118px;
 }
 .evm-project-curve-matrix thead {
   position: sticky;
   z-index: 2;
   top: 0;
+}
+.evm-project-curve-matrix thead th:first-child,
+.evm-project-curve-matrix tbody td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  box-shadow: 1px 0 0 #CCD9EA;
+}
+.evm-project-curve-matrix thead th:first-child {
+  z-index: 5;
 }
 .evm-project-curve-matrix-heading > .evm-section-title {
   font-size: 25px;
@@ -5120,12 +5146,12 @@
 .evm-project-curve-matrix th {
   padding-top: 10px;
   padding-bottom: 10px;
-  font-size: 17px;
+  font-size: 19px;
 }
 .evm-project-curve-matrix td {
   padding-top: 9px;
   padding-bottom: 9px;
-  font-size: 16px;
+  font-size: 17px;
 }
 .evm-project-curve-matrix-counter {
   font-size: 14px;
