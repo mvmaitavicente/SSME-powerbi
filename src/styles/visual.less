@@ -6293,3 +6293,169 @@
 .evm-project-details-lower-row .evm-milestone-legend-copy > span {
     padding-left: 38px;
 }
+
+/* Standalone RIESGOS dashboard. Scoped to avoid affecting existing pages. */
+.evm-main--risk-dashboard { display:flex; flex-direction:column; gap:12px; min-width:0; padding:14px 18px 18px; overflow:auto; background:#F7F9FC; color:#00145C; }
+.evm-risk-dashboard-header { flex:0 0 auto; padding:10px 16px; border-radius:10px; background:linear-gradient(100deg,#001B8E,#1649B8); color:#fff; box-shadow:0 5px 14px rgba(0,27,142,.16); }
+.evm-risk-dashboard-header h1 { margin:0; font-size:clamp(20px,2vw,30px); font-weight:900; letter-spacing:.3px; }
+.evm-risk-dashboard-header p { margin:3px 0 0; font-size:clamp(11px,1vw,14px); opacity:.88; }
+.evm-risk-dashboard-kpis { display:grid; flex:0 0 auto; grid-template-columns:repeat(6,minmax(120px,1fr)); gap:10px; }
+.evm-risk-kpi,.evm-risk-chart-card { box-sizing:border-box; border:1px solid #E1E7F0; border-radius:10px; background:#fff; box-shadow:0 3px 10px rgba(15,42,90,.07); }
+.evm-risk-kpi { min-width:0; padding:12px 14px; border-top:4px solid #1769E8; }
+.evm-risk-kpi.high { border-top-color:#D92D20; }.evm-risk-kpi.medium { border-top-color:#E9A300; }.evm-risk-kpi.low { border-top-color:#22A559; }.evm-risk-kpi.materialized { border-top-color:#7A5AF8; }.evm-risk-kpi.status { border-top-color:#001B8E; }
+.evm-risk-kpi span { display:block; overflow:hidden; color:#667085; font-size:clamp(10px,.86vw,13px); font-weight:700; text-overflow:ellipsis; white-space:nowrap; }
+.evm-risk-kpi strong { display:block; margin-top:6px; overflow:hidden; color:#001B8E; font-size:clamp(20px,2vw,31px); font-weight:900; text-overflow:ellipsis; white-space:nowrap; }
+.evm-risk-dashboard-row2 { display:grid; flex:1 0 270px; grid-template-columns:minmax(0,3fr) minmax(280px,2fr); gap:12px; }
+.evm-risk-dashboard-row3 { display:grid; flex:1.15 0 330px; grid-template-columns:minmax(300px,1.45fr) repeat(2,minmax(190px,1fr)) minmax(220px,1.05fr); gap:12px; }
+.evm-risk-chart-card { display:flex; min-width:0; min-height:0; flex-direction:column; padding:12px; overflow:hidden; }
+.evm-risk-chart-card h2 { flex:0 0 auto; margin:0 0 8px; color:#001B8E; font-size:clamp(12px,1.05vw,16px); font-weight:900; text-align:center; }
+.evm-risk-chart-card>svg { width:100%; min-height:0; flex:1 1 auto; overflow:visible; }
+.evm-risk-chart-card .axis-label { fill:#667085; font-size:11px; }.evm-risk-chart-card .axis-title { fill:#344054; font-size:13px; font-weight:700; }.evm-risk-chart-card .donut-total { fill:#001B8E; font-size:28px; font-weight:900; }
+.evm-risk-chart-legend { display:flex; flex:0 0 auto; flex-wrap:wrap; justify-content:center; gap:6px 14px; color:#475467; font-size:11px; font-weight:700; }
+.evm-risk-chart-legend span { display:flex; align-items:center; gap:5px; }.evm-risk-chart-legend i { width:9px; height:9px; border-radius:50%; }
+.evm-risk-hbars { display:flex; min-height:0; flex:1 1 auto; flex-direction:column; justify-content:space-evenly; gap:7px; overflow:auto; }
+.evm-risk-hbar { display:grid; grid-template-columns:minmax(80px,1fr) minmax(80px,2fr) auto; align-items:center; gap:8px; color:#344054; font-size:11px; }.evm-risk-hbar>span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.evm-risk-hbar>strong { color:#001B8E; white-space:nowrap; }
+.evm-risk-hbar-track { height:10px; overflow:hidden; border-radius:999px; background:#EAF0FA; }.evm-risk-hbar-track i { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#1769E8,#69A2F5); }
+.evm-risk-levels { display:grid; grid-template-columns:repeat(3,1fr); gap:5px; font-size:10px; font-weight:800; text-align:center; }.evm-risk-levels span { padding:5px; border-radius:6px; }.evm-risk-levels .high { background:#FEE4E2;color:#B42318; }.evm-risk-levels .medium { background:#FEF0C7;color:#B54708; }.evm-risk-levels .low { background:#D1FADF;color:#067647; }.evm-risk-levels strong { grid-column:1/-1; color:#001B8E; }
+.evm-risk-vbars { display:flex; min-height:0; flex:1 1 auto; align-items:stretch; justify-content:space-around; gap:5px; padding:8px 3px 0; border-bottom:1px solid #D0D5DD; }
+.evm-risk-vbar { display:flex; min-width:22px; flex:1 1 0; flex-direction:column; align-items:center; justify-content:flex-end; gap:3px; }.evm-risk-vbar i { width:min(34px,75%); min-height:2px; border-radius:5px 5px 0 0; background:linear-gradient(#4B8CF1,#1769E8); }.evm-risk-vbar strong { color:#001B8E; font-size:10px; }.evm-risk-vbar span { width:100%; min-height:28px; overflow:hidden; color:#667085; font-size:9px; line-height:1.1; text-align:center; text-overflow:ellipsis; }
+.evm-risk-dashboard-empty { margin:auto; padding:24px; color:#667085; text-align:center; }
+@media(max-width:1100px){.evm-risk-dashboard-kpis{grid-template-columns:repeat(3,1fr)}.evm-risk-dashboard-row3{grid-template-columns:repeat(2,minmax(260px,1fr));}.evm-main--risk-dashboard{overflow:auto}}
+@media(max-width:720px){.evm-risk-dashboard-kpis{grid-template-columns:repeat(2,1fr)}.evm-risk-dashboard-row2,.evm-risk-dashboard-row3{grid-template-columns:1fr;}.evm-risk-dashboard-row2,.evm-risk-dashboard-row3{flex-basis:auto}.evm-risk-chart-card{min-height:260px}}
+
+/* RIESGOS reference composition, calibrated for a 2350 × 1350 visual canvas. */
+.evm-main--risk-dashboard {
+    display: grid;
+    height: 100%;
+    min-height: 0;
+    grid-template-rows: auto minmax(125px, 13fr) minmax(285px, 38fr) minmax(370px, 49fr);
+    gap: 12px;
+    padding: 10px 12px 12px;
+    box-sizing: border-box;
+    overflow: auto;
+}
+
+.evm-risk-dashboard-title {
+    margin: 2px 0 4px 12px;
+    color: #001B72;
+    font-family: "Segoe UI", sans-serif;
+    font-size: clamp(28px, 2.15vw, 46px);
+    font-weight: 900;
+    line-height: 1.05;
+    letter-spacing: .2px;
+}
+
+.evm-main--risk-dashboard .evm-risk-dashboard-kpis {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.evm-main--risk-dashboard .evm-risk-kpi {
+    display: grid;
+    grid-template-columns: clamp(42px, 4vw, 76px) minmax(0, 1fr);
+    align-items: center;
+    gap: clamp(8px, 1vw, 18px);
+    padding: clamp(10px, 1vw, 20px);
+    border-top: 1px solid #E1E7F0;
+    border-radius: 9px;
+}
+
+.evm-risk-kpi-icon {
+    display: grid !important;
+    width: clamp(40px, 3.4vw, 66px);
+    height: clamp(40px, 3.4vw, 66px);
+    place-items: center;
+    overflow: visible !important;
+    border: 4px solid currentColor;
+    border-radius: 50%;
+    color: #1653A5 !important;
+    font-size: clamp(25px, 2.1vw, 42px) !important;
+    font-weight: 900 !important;
+    line-height: 1;
+}
+
+.evm-risk-kpi.high .evm-risk-kpi-icon { border: 0; border-radius: 0; color: #F21B1B !important; font-size: clamp(42px, 3.2vw, 66px) !important; }
+.evm-risk-kpi.medium .evm-risk-kpi-icon { border: 0; background: #FFA000; color: #FFFFFF !important; }
+.evm-risk-kpi.low .evm-risk-kpi-icon { color: #218838 !important; }
+.evm-risk-kpi.materialized .evm-risk-kpi-icon { border: 0; background: #083D91; color: #FFFFFF !important; }
+.evm-risk-kpi.status .evm-risk-kpi-icon { border: 0; border-radius: 0; color: #FFAA00 !important; }
+.evm-risk-kpi-copy { min-width: 0; text-align: center; }
+.evm-risk-kpi-copy .evm-risk-kpi-label { color: #00145C; font-size: clamp(11px, .78vw, 17px); font-weight: 900; }
+.evm-risk-kpi-copy strong { margin-top: 4px; color: #00145C; font-size: clamp(27px, 2.25vw, 48px); line-height: 1; }
+.evm-risk-kpi.high .evm-risk-kpi-copy strong { color: #D71920; }
+.evm-risk-kpi.medium .evm-risk-kpi-copy strong { color: #F29B00; }
+.evm-risk-kpi.low .evm-risk-kpi-copy strong { color: #218838; }
+.evm-risk-kpi.status .evm-risk-kpi-copy strong { color: #E99000; font-size: clamp(18px, 1.5vw, 32px); }
+.evm-risk-kpi-copy small { display: block; margin-top: 7px; color: #00145C; font-size: clamp(9px, .62vw, 13px); font-weight: 800; }
+
+.evm-main--risk-dashboard .evm-risk-dashboard-row2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; min-height: 0; }
+.evm-main--risk-dashboard .evm-risk-dashboard-row3 { grid-template-columns: minmax(0, 50fr) minmax(0, 30fr) minmax(0, 20fr); gap: 12px; min-height: 0; }
+.evm-risk-dashboard-center-charts { display: grid; min-width: 0; min-height: 0; grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.evm-main--risk-dashboard .evm-risk-chart-card { padding: clamp(10px, .8vw, 18px); border-color: #D8E0EC; border-radius: 8px; }
+.evm-main--risk-dashboard .evm-risk-chart-card h2 { margin-bottom: 10px; color: #001B72; font-size: clamp(12px, .86vw, 18px); text-align: left; }
+.evm-main--risk-dashboard .evm-risk-chart-card .point-label { font-size: 10px; font-weight: 900; }
+.evm-main--risk-dashboard .evm-risk-chart-card .axis-tick {
+    fill: #00145C;
+    font-size: 12px;
+    font-weight: 800;
+}
+.evm-main--risk-dashboard .evm-risk-chart-card .evolution-legend-label {
+    fill: #00145C;
+    font-size: 12px;
+    font-weight: 800;
+}
+.evm-main--risk-dashboard .evm-risk-chart-card .evolution-month {
+    fill: #263A69;
+    font-size: 12px;
+    font-weight: 700;
+}
+.evm-main--risk-dashboard .evm-risk-chart-card .evolution-year {
+    fill: #00145C;
+    font-size: 12px;
+    font-weight: 900;
+}
+.evm-main--risk-dashboard .evm-risk-hbar { grid-template-columns: minmax(145px, 1.25fr) minmax(120px, 2fr) minmax(80px, auto); font-size: clamp(10px, .66vw, 14px); }
+.evm-main--risk-dashboard .evm-risk-hbar-track { height: clamp(9px, .65vw, 14px); border-radius: 1px; }
+.evm-main--risk-dashboard .evm-risk-hbar-track i { border-radius: 1px; background: #123E91; }
+
+.evm-risk-heatmap-body { display: grid; min-width: 0; min-height: 0; flex: 1 1 auto; grid-template-columns: minmax(0, 4fr) minmax(145px, 1fr); gap: 14px; }
+.evm-risk-heatmap-body > svg { width: 100%; height: 100%; min-height: 0; }
+.evm-risk-heatmap-body .evm-risk-levels { display: flex; min-width: 0; flex-direction: column; justify-content: center; gap: 12px; text-align: left; }
+.evm-risk-heatmap-body .evm-risk-levels::before { content: "NIVEL DE RIESGO"; color: #001B72; font-size: 12px; font-weight: 900; }
+.evm-risk-heatmap-body .evm-risk-levels span { padding: 7px 9px; font-size: clamp(10px, .66vw, 14px); }
+.evm-risk-heatmap-body .evm-risk-levels strong { display: grid; min-height: 92px; place-items: center; padding: 10px; border: 1px solid #DCE4F0; border-radius: 7px; background: #FFFFFF; font-size: clamp(12px, .8vw, 17px); text-align: center; }
+.evm-main--risk-dashboard .evm-risk-vbar i { width: min(54px, 70%); background: #174997; }
+.evm-main--risk-dashboard .evm-risk-vbar strong {
+    font-size: clamp(12px, .78vw, 17px);
+    font-weight: 900;
+}
+.evm-main--risk-dashboard .evm-risk-vbar span {
+    display: -webkit-box;
+    min-height: 48px;
+    overflow: hidden;
+    color: #263A69;
+    font-size: clamp(11px, .72vw, 16px);
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: normal;
+    text-overflow: ellipsis;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+.evm-main--risk-dashboard .evm-risk-donut-card { display: grid; grid-template-columns: minmax(120px, 1.15fr) minmax(105px, .85fr); grid-template-rows: auto minmax(0, 1fr); align-items: center; }
+.evm-main--risk-dashboard .evm-risk-donut-card h2 { grid-column: 1 / -1; }
+.evm-main--risk-dashboard .evm-risk-donut-card > svg { width: 100%; height: 100%; }
+.evm-main--risk-dashboard .evm-risk-donut-card .evm-risk-chart-legend { flex-direction: column; justify-content: center; gap: clamp(12px, 1.4vh, 24px); font-size: clamp(10px, .66vw, 14px); }
+
+@media (max-width: 1500px) {
+    .evm-main--risk-dashboard .evm-risk-kpi { grid-template-columns: 42px minmax(0, 1fr); }
+    .evm-main--risk-dashboard .evm-risk-dashboard-row3 { grid-template-columns: minmax(360px, 1.5fr) minmax(300px, 1fr); }
+    .evm-main--risk-dashboard .evm-risk-donut-card { grid-column: 1 / -1; min-height: 280px; }
+}
+
+@media (max-width: 980px) {
+    .evm-main--risk-dashboard { height: auto; min-width: 700px; grid-template-rows: auto; }
+    .evm-main--risk-dashboard .evm-risk-dashboard-kpis { grid-template-columns: repeat(3, 1fr); }
+    .evm-main--risk-dashboard .evm-risk-dashboard-row3 { grid-template-columns: 1fr; }
+    .evm-risk-dashboard-center-charts { min-height: 520px; }
+}

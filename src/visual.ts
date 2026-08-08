@@ -12,6 +12,7 @@ import { renderHeader, renderSidebar } from "./renderers/headerRenderer";
 import { renderMilestones } from "./renderers/milestoneRenderer";
 import { renderPerformance } from "./renderers/performanceRenderer";
 import { renderRisks } from "./renderers/riskRenderer";
+import { renderRiskDashboard } from "./renderers/riskDashboardRenderer";
 import { renderPortfolioDashboard } from "./portfolioSummary/Dashboard";
 import { VisualFormattingSettingsModel } from "./settings";
 import { AggregateCurveData, AggregateGaugeData, CurveData, CurveHistoryPoint, CurveReferences, DashboardData, DashboardLevel, DataValue, GaugeChartPoint, GaugeChartSeries, GaugeData, GaugeHistoryRow, GaugeMetricKey, NavigatorProject, ParsedDashboardData, PortfolioSummaryData, ProjectHeader, RenderCurveData, RiskItem, SummaryData, UnitProjectSummaryData, UnitSummaryData, VisualPalette } from "./types";
@@ -125,6 +126,7 @@ export class Visual implements IVisual {
     private readonly appliedFilterValues: { [propertyName: string]: string | null } = {};
     private navigatorProjectCatalog: NavigatorProject[] = [];
     private navigationDebugHidden: boolean = false;
+    private readonly navigationDebugPanelEnabled: boolean = false;
     private pendingNavigationLevel: DashboardLevel | null = null;
     private navigationDebug: NavigationDebugState = {
         clickCount: 0,
@@ -281,6 +283,7 @@ export class Visual implements IVisual {
                     canOpenUnit: Boolean(sidebarUnit),
                     canOpenProject: Boolean(sidebarProject),
                     onOpenPronied: () => this.openProniedDashboard(),
+                    onOpenRisks: () => this.openRiskDashboard(),
                     onOpenUnit: () => this.openUnitDashboard(sidebarUnit ?? undefined),
                     onOpenProject: () => {
                         const sidebarProjectItem = sidebarProject ? this.findNavigatorProjectById(sidebarProject) : null;
@@ -325,6 +328,11 @@ export class Visual implements IVisual {
 
     private renderNavigationDebugPanel(): void {
         if (!this.rootElement) {
+            return;
+        }
+
+        if (!this.navigationDebugPanelEnabled) {
+            this.rootElement.querySelector(".evm-navigation-debug-panel")?.remove();
             return;
         }
 
@@ -665,6 +673,8 @@ export class Visual implements IVisual {
                 return this.renderUnitDashboard(dashboard, viewport);
             case "PROYECTO":
                 return this.renderProjectDashboard(dashboard, viewport);
+            case "RIESGOS":
+                return renderRiskDashboard(dashboard.riskDashboard);
             default:
                 return this.renderDashboardError(`Nivel no reconocido: ${dashboard.context.Level}`);
         }
@@ -2200,6 +2210,16 @@ export class Visual implements IVisual {
         this.pendingNavigationLevel = "PRONIED";
         this.clearGeneralNavigationFilters();
         this.applyLevelFilter("PRONIED");
+    }
+
+    private openRiskDashboard(): void {
+        console.debug("Navegando a RIESGOS");
+        this.filterState.level = "RIESGOS";
+        this.filterState.selectedUnit = null;
+        this.filterState.selectedProjectId = null;
+        this.pendingNavigationLevel = "RIESGOS";
+        this.clearGeneralNavigationFilters();
+        this.applyLevelFilter("RIESGOS");
     }
 
     private openUnitDashboard(unit?: string): void {

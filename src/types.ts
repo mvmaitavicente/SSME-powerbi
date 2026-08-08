@@ -196,7 +196,7 @@ export interface JsonTablePayload {
     data: unknown[][];
 }
 
-export type DashboardLevel = "PRONIED" | "UNIDAD" | "PROYECTO";
+export type DashboardLevel = "PRONIED" | "UNIDAD" | "PROYECTO" | "RIESGOS";
 
 export interface NavigatorJsonPayload {
     schemaVersion?: string;
@@ -253,6 +253,25 @@ export interface DashboardJsonPayload {
     milestones?: JsonTablePayload;
     risks?: JsonTablePayload;
     portfolioSummary?: JsonTablePayload;
+    evolution?: JsonTablePayload;
+    categories?: JsonTablePayload;
+    heatmap?: JsonTablePayload;
+    responsible?: JsonTablePayload;
+    response?: JsonTablePayload;
+    detail?: JsonTablePayload;
+}
+
+export type RiskDashboardRow = Record<string, unknown>;
+
+export interface RiskDashboardData {
+    summary: RiskDashboardRow[];
+    evolution: RiskDashboardRow[];
+    categories: RiskDashboardRow[];
+    heatmap: RiskDashboardRow[];
+    units: RiskDashboardRow[];
+    responsible: RiskDashboardRow[];
+    response: RiskDashboardRow[];
+    detail: RiskDashboardRow[];
 }
 
 export interface SummaryData {
@@ -463,4 +482,5 @@ export interface ParsedDashboardData {
     projects: UnitProjectSummaryData[];
     risks: RiskItem[];
     milestones: MilestoneItem[];
+    riskDashboard: RiskDashboardData | null;
 }

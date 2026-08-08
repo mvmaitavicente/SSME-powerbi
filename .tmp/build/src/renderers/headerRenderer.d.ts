@@ -5,6 +5,7 @@ export interface SidebarOptions {
     canOpenUnit: boolean;
     canOpenProject: boolean;
     onOpenPronied: () => void;
+    onOpenRisks: () => void;
     onOpenUnit: () => void;
     onOpenProject: () => void;
     onProjectView: (view: "summary" | "milestones" | "risks") => void;

@@ -9,6 +9,7 @@ export interface SidebarOptions {
     canOpenUnit: boolean;
     canOpenProject: boolean;
     onOpenPronied: () => void;
+    onOpenRisks: () => void;
     onOpenUnit: () => void;
     onOpenProject: () => void;
     onProjectView: (view: "summary" | "milestones" | "risks") => void;
@@ -26,6 +27,7 @@ export function renderSidebar(options: SidebarOptions): HTMLElement {
     const menu = createElement("nav", "evm-menu");
     menu.appendChild(createElement("div", "evm-menu-group-label", "Navegación"));
     menu.appendChild(renderSidebarButton("▦", "PRONIED", options.activeLevel === "PRONIED", false, options.onOpenPronied));
+    menu.appendChild(renderSidebarButton("⚠", "RIESGOS", options.activeLevel === "RIESGOS", false, options.onOpenRisks, "Abrir tablero de riesgos"));
     menu.appendChild(renderSidebarButton("☷", "UNIDAD", options.activeLevel === "UNIDAD", false, options.onOpenUnit, options.canOpenUnit ? "Abrir unidad" : "Seleccione una unidad"));
     menu.appendChild(renderSidebarButton("▣", "PROYECTO", options.activeLevel === "PROYECTO", false, options.onOpenProject, options.canOpenProject ? "Abrir proyecto" : "Seleccione un proyecto"));
 

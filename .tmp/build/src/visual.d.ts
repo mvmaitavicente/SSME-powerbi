@@ -17,6 +17,7 @@ export declare class Visual implements IVisual {
     private readonly appliedFilterValues;
     private navigatorProjectCatalog;
     private navigationDebugHidden;
+    private readonly navigationDebugPanelEnabled;
     private pendingNavigationLevel;
     private navigationDebug;
     private isGaugeHistoryModalOpen;
@@ -97,6 +98,7 @@ export declare class Visual implements IVisual {
     private getProjectUnit;
     private handleProjectClick;
     private openProniedDashboard;
+    private openRiskDashboard;
     private openUnitDashboard;
     private disableProjectNavigation;
     private openProjectDashboard;

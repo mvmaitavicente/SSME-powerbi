@@ -1,7 +1,7 @@
 "use strict";
 
 import powerbi from "powerbi-visuals-api";
-import { AggregateCurveData, AggregateGaugeData, CurrentSnapshot, CurveData, CurveHistoryPoint, CurveReferences, DashboardContextData, DashboardData, DashboardJsonPayload, DashboardLevel, DataValue, FieldValueMap, GaugeData, GaugeHistory, GaugeHistoryRow, JsonTablePayload, MilestoneItem, NavigatorData, NavigatorJsonPayload, NavigatorProject, ParsedDashboardData, ParserDebugData, PerformanceData, PortfolioSummaryData, ProjectData, ProjectHeader, RenderCurveData, RiskItem, SummaryData, UnitProjectSummaryData, UnitSummaryData } from "./types";
+import { AggregateCurveData, AggregateGaugeData, CurrentSnapshot, CurveData, CurveHistoryPoint, CurveReferences, DashboardContextData, DashboardData, DashboardJsonPayload, DashboardLevel, DataValue, FieldValueMap, GaugeData, GaugeHistory, GaugeHistoryRow, JsonTablePayload, MilestoneItem, NavigatorData, NavigatorJsonPayload, NavigatorProject, ParsedDashboardData, ParserDebugData, PerformanceData, PortfolioSummaryData, ProjectData, ProjectHeader, RenderCurveData, RiskDashboardData, RiskDashboardRow, RiskItem, SummaryData, UnitProjectSummaryData, UnitSummaryData } from "./types";
 
 type DataViewTable = powerbi.DataViewTable;
 type DataViewMetadataColumn = powerbi.DataViewMetadataColumn;
@@ -333,6 +333,9 @@ function normalizeDashboardLevel(value: unknown): DashboardLevel {
         case "PROYECTO":
             return "PROYECTO";
 
+        case "RIESGOS":
+            return "RIESGOS";
+
         default:
             return "PRONIED";
     }
@@ -468,6 +471,8 @@ function parseNavigatorDashboardRow(
                 return parseUnitDashboardPayload(payload, contextDebug.context, navigator, debugBase);
             case "PROYECTO":
                 return parseProjectDashboardPayload(payload, contextDebug.context, navigator, debugBase);
+            case "RIESGOS":
+                return parseRiskDashboardPayload(payload, contextDebug.context, navigator, debugBase);
             default:
                 return null;
         }
@@ -475,6 +480,24 @@ function parseNavigatorDashboardRow(
         console.error("No se pudo interpretar JSON Navigator/Dashboard.", error);
         return null;
     }
+}
+
+function parseRiskDashboardPayload(
+    payload: DashboardJsonPayload,
+    context: DashboardContextData,
+    navigator: NavigatorData,
+    debugBase: ParserDebugBase
+): ParsedDashboardData | null {
+    return parseDashboardPayload(payload, context.ProjectId || "__json_dashboard_risks__", context, navigator, {
+        ...debugBase,
+        beforeLegacyLevel: null,
+        legacyParsedLevel: null,
+        legacyContextLevel: null,
+        legacyParsedObject: "",
+        parserUsed: "parseRiskDashboardPayload",
+        fallbackUsed: false,
+        cachedDashboardUsed: false
+    });
 }
 
 function parseProniedDashboardPayload(
@@ -607,6 +630,16 @@ function parseDashboardPayload(
     const milestoneRows = payload.milestone || payload.milestones
         ? jsonTableToObjects<Record<string, unknown>>((payload.milestone || payload.milestones) as JsonTablePayload)
         : [];
+    const riskDashboard: RiskDashboardData | null = context.Level === "RIESGOS" ? {
+        summary: summaryRows,
+        evolution: jsonRows(payload.evolution),
+        categories: jsonRows(payload.categories),
+        heatmap: jsonRows(payload.heatmap),
+        units: jsonRows(payload.units),
+        responsible: jsonRows(payload.responsible),
+        response: jsonRows(payload.response),
+        detail: jsonRows(payload.detail)
+    } : null;
 
     validateJsonTableRowCount(payload.summary, "JSON summary");
     validateJsonTableRowCount(payload.project, "JSON project");
@@ -684,7 +717,8 @@ function parseDashboardPayload(
         portfolioSummary: normalizedPortfolioSummary,
         projects: normalizedProjects,
         risks: normalizedRisks,
-        milestones: normalizedMilestones
+        milestones: normalizedMilestones,
+        riskDashboard
     };
 
     if (finalParsed.debug) {
@@ -733,7 +767,18 @@ function validateDashboardPayload(payload: DashboardJsonPayload, level: Dashboar
         return Boolean(payload.project && payload.gauges && payload.curve);
     }
 
+    if (level === "RIESGOS") {
+        // RIESGOS arrives through the existing jsonDashboard role. Do not reject
+        // the complete dashboard because an individual chart table is omitted or
+        // empty; parseDashboardPayload already represents those blocks as [].
+        return true;
+    }
+
     return false;
+}
+
+function jsonRows(table?: JsonTablePayload): RiskDashboardRow[] {
+    return table ? jsonTableToObjects<RiskDashboardRow>(table) : [];
 }
 
 function normalizeSummary(row: Record<string, unknown> | null): SummaryData | null {
