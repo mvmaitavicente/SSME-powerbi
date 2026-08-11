@@ -11,8 +11,8 @@ interface TimelinePosition {
 
 const timeline = {
     width: 960,
-    startX: 70,
-    endX: 890,
+    startX: 105,
+    endX: 855,
     firstRowY: 35,
     connectorEndOffset: 48,
     nameOffset: 78,
@@ -27,7 +27,7 @@ export function renderMilestones(milestones: MilestoneItem[]): HTMLElement {
 
     const ordered = [...milestones].sort((a, b) => (numberValue(a.OrdenHito) ?? 0) - (numberValue(b.OrdenHito) ?? 0));
     const wrap = createElement("div", "milestone-svg-wrap");
-    const pageSize = 5;
+    const pageSize = 4;
     const pageCount = Math.max(1, Math.ceil(ordered.length / pageSize));
     let pageIndex = 0;
     const renderPage = (): void => {

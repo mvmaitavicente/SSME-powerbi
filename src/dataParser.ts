@@ -883,8 +883,8 @@ function normalizeAggregateCurve(row: Record<string, unknown>): AggregateCurveDa
         CPI: readNullableNumber(row, ["CPI"]),
         SPIW: readNullableNumber(row, ["SPIW", "SPI (w)", "SPI"]),
         TSPIT: readNullableNumber(row, ["TSPIT", "TSPI (t)"]),
-        EACC: readNullableNumber(row, ["EACC", "EAC (c)"]),
-        EACT: readNullableNumber(row, ["EACT", "EAC (t)"]),
+        EACC: readFirstNumericValue(row, ["EACC", "EAC (c)", "EACCosto"]),
+        EACT: readFirstNumericValue(row, ["EACT", "EAC (t)", "EACTiempo"]),
         VACC: readNullableNumber(row, ["VACC", "VAC (c)"]),
         VACT: readNullableNumber(row, ["VACT", "VAC (t)"])
     };
@@ -900,6 +900,8 @@ function normalizeUnitSummary(row: Record<string, unknown>): UnitSummaryData {
             "UnidadGerencial",
             "Unidad"
         )),
+        Semana: readNullableNumber(row, ["OrdenSemana", "OrdenSemanaEV", "Semana", "SemanaProyecto"]),
+        AT: readNullableNumber(row, ["AT"]),
         CantidadProyectos: readNullableNumber(row, ["CantidadProyectos", "Cantidad Proyectos", "Proyectos"]),
         BAC: readNullableNumber(row, ["BAC"]),
         PV: readNullableNumber(row, ["PV"]),
@@ -1323,6 +1325,19 @@ function readNullableNumber(row: Record<string, unknown>, keys: string[]): numbe
         }
     }
 
+    return null;
+}
+
+function readFirstNumericValue(row: Record<string, unknown>, keys: string[]): number | null {
+    for (const key of keys) {
+        if (!Object.prototype.hasOwnProperty.call(row, key)) {
+            continue;
+        }
+        const value = toNullableNumber(row[key]);
+        if (value !== null) {
+            return value;
+        }
+    }
     return null;
 }
 

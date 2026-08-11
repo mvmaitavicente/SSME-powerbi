@@ -25,21 +25,13 @@ export function renderSidebar(options: SidebarOptions): HTMLElement {
     });
 
     const menu = createElement("nav", "evm-menu");
-    menu.appendChild(createElement("div", "evm-menu-group-label", "Navegación"));
-    menu.appendChild(renderSidebarButton("▦", "PRONIED", options.activeLevel === "PRONIED", false, options.onOpenPronied));
-    menu.appendChild(renderSidebarButton("⚠", "RIESGOS", options.activeLevel === "RIESGOS", false, options.onOpenRisks, "Abrir tablero de riesgos"));
-    menu.appendChild(renderSidebarButton("☷", "UNIDAD", options.activeLevel === "UNIDAD", false, options.onOpenUnit, options.canOpenUnit ? "Abrir unidad" : "Seleccione una unidad"));
-    menu.appendChild(renderSidebarButton("▣", "PROYECTO", options.activeLevel === "PROYECTO", false, options.onOpenProject, options.canOpenProject ? "Abrir proyecto" : "Seleccione un proyecto"));
-
-    menu.appendChild(createElement("div", "evm-menu-group-label evm-menu-group-label--project", "Proyecto"));
-    const disableProjectViews = options.activeLevel !== "PROYECTO";
-    menu.appendChild(renderSidebarButton("⌂", "Resumen", options.projectViewActive === "summary" && !disableProjectViews, disableProjectViews, () => options.onProjectView("summary"), disableProjectViews ? "Disponible en nivel PROYECTO" : "Ver Curva S"));
-    menu.appendChild(renderSidebarButton("◇", "Hitos", options.projectViewActive === "milestones" && !disableProjectViews, disableProjectViews, () => options.onProjectView("milestones"), disableProjectViews ? "Disponible en nivel PROYECTO" : "Ver Hitos"));
-    menu.appendChild(renderSidebarButton("△", "Riesgos", options.projectViewActive === "risks" && !disableProjectViews, disableProjectViews, () => options.onProjectView("risks"), disableProjectViews ? "Disponible en nivel PROYECTO" : "Ver Riesgos"));
+    menu.appendChild(renderSidebarButton("▦", "Alta Dirección", options.activeLevel === "PRONIED", false, options.onOpenPronied));
+    menu.appendChild(renderSidebarButton("☷", "Unidad Gerencial", options.activeLevel === "UNIDAD", false, options.onOpenUnit, options.canOpenUnit ? "Abrir Unidad Gerencial" : "Seleccione una unidad"));
+    menu.appendChild(renderSidebarButton("▣", "Proyectos", options.activeLevel === "PROYECTO", false, options.onOpenProject, options.canOpenProject ? "Abrir Proyectos" : "Seleccione un proyecto"));
+    menu.appendChild(renderSidebarButton("⚠", "Riesgos", options.activeLevel === "RIESGOS", false, options.onOpenRisks, "Abrir tablero de riesgos"));
 
     const footer = createElement("div", "evm-menu-footer");
     footer.appendChild(renderSidebarButton("⚙", "Filtros", false, false, options.onOpenFilters, "Abrir filtros"));
-    footer.appendChild(renderSidebarButton("ⓘ", "Explicación", false, true, () => undefined, "Explicación"));
 
     sidebar.appendChild(menu);
     sidebar.appendChild(footer);

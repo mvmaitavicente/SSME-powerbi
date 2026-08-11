@@ -1440,6 +1440,9 @@
   font-size: 16px;
   font-weight: 900;
 }
+.evm-curve-svg .evm-eac-label.cost-projection {
+  fill: #FF1E1E;
+}
 .evm-curve-svg .evm-current-week-label {
   fill: #FF9800;
   font-size: 16px;
@@ -1467,6 +1470,20 @@
   fill: #FF1E1E;
   font-size: 16px;
   font-weight: 900;
+}
+.evm-vac-line.favorable {
+  stroke: #5B21B6;
+}
+.evm-vac-arrowhead.favorable,
+.evm-curve-svg .evm-vac-label.favorable {
+  fill: #5B21B6;
+}
+.evm-vac-line.neutral {
+  stroke: #1D4DFF;
+}
+.evm-vac-arrowhead.neutral,
+.evm-curve-svg .evm-vac-label.neutral {
+  fill: #1D4DFF;
 }
 .evm-performance-card {
   display: grid;
@@ -5279,6 +5296,101 @@
 }
 .evm-project-details-lower-row .evm-milestone-legend-copy > span {
   padding-left: 38px;
+}
+/* Milestone carousel: four items per page, controls beside the title and a clean legend. */
+.evm-project-details-lower-row .evm-milestone-heading {
+  justify-content: center;
+  gap: 16px;
+}
+.evm-project-details-lower-row .evm-milestone-title {
+  flex: 0 1 auto;
+  padding: 0;
+}
+.evm-project-details-lower-row .evm-milestone-carousel-nav {
+  position: static;
+  flex: 0 0 auto;
+  gap: 9px;
+  transform: none;
+}
+.evm-project-details-lower-row .evm-milestone-carousel-nav button {
+  width: 42px;
+  height: 42px;
+  padding: 0 0 5px;
+  border-width: 2px;
+  border-radius: 10px;
+  font-size: 37px;
+  line-height: 1;
+}
+.evm-project-details-lower-row .evm-milestone-carousel-nav span {
+  min-width: 40px;
+  font-size: 15px;
+  text-align: center;
+}
+.evm-project-details-lower-row .evm-milestone-legend {
+  height: auto;
+  min-height: 122px;
+  padding: 11px 14px;
+  gap: 9px;
+}
+.evm-project-details-lower-row .evm-milestone-legend-title {
+  margin: 0;
+  font-size: 21px;
+  line-height: 1;
+}
+.evm-project-details-lower-row .evm-milestone-legend-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  align-items: stretch;
+}
+.evm-project-details-lower-row .evm-milestone-legend-item {
+  min-width: 0;
+  padding: 5px 14px;
+  border-right: 1px solid #E0E6F0;
+}
+.evm-project-details-lower-row .evm-milestone-legend-item:last-child {
+  border-right: 0;
+}
+.evm-project-details-lower-row .evm-milestone-legend-copy {
+  width: 100%;
+}
+.evm-project-details-lower-row .evm-milestone-legend-copy strong {
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.1;
+}
+.evm-project-details-lower-row .evm-milestone-legend-copy > span {
+  margin-top: 5px;
+  padding-left: 35px;
+  font-size: 18px;
+  line-height: 1.2;
+}
+.evm-project-details-lower-row .evm-milestone-legend-icon {
+  width: 28px;
+  height: 28px;
+  margin-right: 7px;
+}
+.evm-project-details-lower-row .evm-milestone-legend-icon.done::after {
+  left: 8px;
+  top: 7px;
+  width: 10px;
+  height: 7px;
+  border-width: 0 0 3px 3px;
+}
+.evm-project-details-lower-row .evm-milestone-legend-icon.active,
+.evm-project-details-lower-row .evm-milestone-legend-icon.pending {
+  border-width: 3px;
+}
+.evm-project-details-lower-row .evm-milestone-legend-icon.late::before {
+  left: 4px;
+  top: 4px;
+  width: 20px;
+  height: 20px;
+  border-width: 0 0 3px 3px;
+}
+.evm-project-details-lower-row .evm-milestone-legend-icon.late::after {
+  left: 11px;
+  top: 3px;
+  font-size: 16px;
 }
 /* Standalone RIESGOS dashboard. Scoped to avoid affecting existing pages. */
 .evm-main--risk-dashboard {

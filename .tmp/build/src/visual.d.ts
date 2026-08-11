@@ -75,6 +75,8 @@ export declare class Visual implements IVisual {
     private currentAggregateCurvePoint;
     private findAggregateRowByCutoffDate;
     private lastAggregateValue;
+    private unitsAtWeek;
+    private aggregateValueAtWeek;
     private renderAggregateCurve;
     private drawAggregateCurveSvg;
     private renderUnitsSection;

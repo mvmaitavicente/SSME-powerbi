@@ -719,7 +719,7 @@ export class Visual implements IVisual {
 
         const summaryPage = createElement("div", "evm-body-carousel-page evm-body-carousel-page--evm");
         const left = createElement("div", "evm-left-column");
-        const curveCard = renderCurve(this.buildAggregateRenderCurve(dashboard), palette);
+        const curveCard = renderCurve(this.buildAggregateRenderCurve(dashboard), palette, { portfolio: true });
         curveCard.classList.add("evm-portfolio-curve-card");
         const curveTitle = curveCard.querySelector(".evm-section-title");
         if (curveTitle instanceof HTMLElement) {
@@ -733,7 +733,8 @@ export class Visual implements IVisual {
         summaryPage.appendChild(right);
 
         const unitsPage = createElement("div", "evm-body-carousel-page evm-body-carousel-page--portfolio-units");
-        unitsPage.appendChild(this.renderUnitProgressPanel(dashboard.units));
+        const portfolioAt = this.lastAggregateValue(dashboard.aggregateCurve, (row) => row.AT);
+        unitsPage.appendChild(this.renderUnitProgressPanel(this.unitsAtWeek(dashboard.units, portfolioAt)));
         unitsPage.appendChild(this.renderPortfolioRiskSection(dashboard.risks));
 
         const pages = [summaryPage, unitsPage];
@@ -1233,8 +1234,8 @@ export class Visual implements IVisual {
     private renderUnitDashboard(dashboard: ParsedDashboardData, viewport: powerbi.IViewport): HTMLElement {
         const main = createElement("main", "evm-main");
         main.style.minWidth = `${Math.min(780, Math.max(0, viewport.width - 92))}px`;
-        const unitName = text(dashboard.context.Unit, "UGEO");
-        main.appendChild(renderHeader(this.portfolioHeaderData(`${unitName} \u2014 Portafolio ${unitName}`, dashboard), { titleLabel: null }));
+        const unitName = text(this.resolveUnitForNavigation(dashboard), "UGEO");
+        main.appendChild(renderHeader(this.portfolioHeaderData(`TABLERO UNIDAD GERENCIAL - ${unitName}`, dashboard), { titleLabel: null }));
         main.appendChild(this.renderPortfolioGaugeSection(dashboard));
         main.appendChild(this.renderPortfolioBody(this.buildAggregateRenderCurve(dashboard), this.renderProjectsPanel(dashboard.projects)));
         return main;
@@ -1628,20 +1629,33 @@ export class Visual implements IVisual {
             EV: row.EV,
             AC: row.AC
         }));
+        const at = this.lastAggregateValue(orderedRows, (row) => row.AT);
+        const eacCostAt = this.aggregateValueAtWeek(orderedRows, at, (row) => row.EACC);
+        const eacTimeAt = this.aggregateValueAtWeek(orderedRows, at, (row) => row.EACT);
+        const vacCostAt = this.aggregateValueAtWeek(orderedRows, at, (row) => row.VACC);
+        const vacTimeAt = this.aggregateValueAtWeek(orderedRows, at, (row) => row.VACT);
         const references: CurveReferences = {
             BAC: this.lastAggregateValue(orderedRows, (row) => row.BAC),
             SAC: this.lastAggregateValue(orderedRows, (row) => row.SAC),
-            AT: this.lastAggregateValue(orderedRows, (row) => row.AT),
+            AT: at,
             ES: this.lastAggregateValue(orderedRows, (row) => row.ES),
-            EACC: this.lastAggregateValue(orderedRows, (row) => row.EACC),
-            EACT: this.lastAggregateValue(orderedRows, (row) => row.EACT),
-            VACC: this.lastAggregateValue(orderedRows, (row) => row.VACC),
-            VACT: this.lastAggregateValue(orderedRows, (row) => row.VACT),
+            EACC: eacCostAt,
+            EACT: eacTimeAt,
+            VACC: vacCostAt,
+            VACT: vacTimeAt,
             SPIT: this.lastAggregateValue(orderedRows, (row) => numberValue(row["SPI (t)"] as DataValue) ?? numberValue(row.SPIT as DataValue)),
             TSPIT: this.lastAggregateValue(orderedRows, (row) => row.TSPIT),
             FechaEstado: dashboard.context.CutoffDate
         };
         const current = this.currentAggregateCurvePoint(orderedRows, references, dashboard.context.CutoffDate);
+
+        console.debug("Portfolio EAC values at AT", {
+            AT: at,
+            EACC: eacCostAt,
+            EACT: eacTimeAt,
+            VACC: vacCostAt,
+            VACT: vacTimeAt
+        });
 
         return {
             history,
@@ -1691,6 +1705,45 @@ export class Visual implements IVisual {
             }
         }
         return null;
+    }
+
+    private unitsAtWeek(units: UnitSummaryData[], at: number | null): UnitSummaryData[] {
+        if (at === null || !units.some((unit) => unit.Semana !== null)) {
+            return units;
+        }
+        const rowsAt = units.filter((unit) => unit.Semana !== null && Math.abs(unit.Semana - at) < 0.000001);
+        if (!rowsAt.length) {
+            return units;
+        }
+
+        const grouped = new Map<string, UnitSummaryData>();
+        rowsAt.forEach((unit) => {
+            const key = unit.UnidadGerencial.trim().toLowerCase();
+            const existing = grouped.get(key);
+            if (!existing) {
+                grouped.set(key, { ...unit });
+                return;
+            }
+            const merged = { ...existing } as UnitSummaryData;
+            Object.entries(unit).forEach(([field, value]) => {
+                if ((merged[field] === null || merged[field] === undefined || merged[field] === "") && value !== null && value !== undefined && value !== "") {
+                    merged[field] = value;
+                }
+            });
+            grouped.set(key, merged);
+        });
+        return [...grouped.values()];
+    }
+
+    private aggregateValueAtWeek(rows: AggregateCurveData[], week: number | null, accessor: (row: AggregateCurveData) => number | null): number | null {
+        if (week === null) {
+            return null;
+        }
+        const values = rows
+            .filter((row) => Math.abs(row.OrdenSemana - week) < 0.000001)
+            .map(accessor)
+            .filter((value): value is number => value !== null && Number.isFinite(value));
+        return values.find((value) => Math.abs(value) >= 0.000001) ?? values[0] ?? null;
     }
 
     private renderAggregateCurve(curve: AggregateCurveData[]): HTMLElement {

@@ -267,6 +267,8 @@ export interface SummaryData {
 }
 export interface UnitSummaryData extends Record<string, unknown> {
     UnidadGerencial: string;
+    Semana: number | null;
+    AT: number | null;
     CantidadProyectos: number | null;
     BAC: number | null;
     PV: number | null;

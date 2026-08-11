@@ -1,7 +1,7 @@
 "use strict";
 
 import { DataValue, PerformanceData } from "../types";
-import { createElement, currency, date, percent, percentRatio, svgElement, text } from "../utils/format";
+import { createElement, currency, date, numberValue, percent, percentRatio, svgElement, text } from "../utils/format";
 
 type PerformanceIcon = "clock" | "calendar" | "check" | "money" | "coins" | "chart";
 
@@ -16,6 +16,9 @@ const iconColors: Record<PerformanceIcon, string> = {
 
 export function renderPerformance(data: PerformanceData): HTMLElement {
     const card = createElement("section", "evm-card evm-performance-card");
+    const projectedCostLabel = (numberValue(data.SobreCostoProyectadoVAC) ?? 0) < 0
+        ? "Ahorro Proyectado"
+        : "Sobre Costo Proyectado";
     card.appendChild(createElement("div", "evm-section-title", "Desempeno del Proyecto"));
 
     card.appendChild(progressRow("clock", "Plazo Consumido", data.PlazoConsumidoPct, `${percent(data.PlazoConsumidoPct)}`, "Plazo Restante", `${text(data.PlazoRestanteSemanas)} sem.`));
@@ -23,7 +26,7 @@ export function renderPerformance(data: PerformanceData): HTMLElement {
     card.appendChild(metricPair("check", "Retraso Proyectado", `${text(data.RetrasoProyectadoSemanas)} semanas`, "Termino Proyectado", date(data.TerminoProyectado), true));
     card.appendChild(progressRow("money", "Presupuesto Consumido", data.PresupuestoConsumidoPct, `${percent(data.PresupuestoConsumidoPct)}`, "Presupuesto Restante", currency(data.PresupuestoRestante)));
     card.appendChild(metricPair("coins", "Presupuesto Programado (BAC)", currency(data.PresupuestoProgramadoBAC), "Costo Estimado al Termino (EAC)", currency(data.CostoEstimadoTerminoEAC)));
-    card.appendChild(metricSingle("chart", "Sobre Costo Proyectado", `${currency(data.SobreCostoProyectadoVAC)} (${percent(data.SobreCostoProyectadoPct)})`, true));
+    card.appendChild(metricSingle("chart", projectedCostLabel, `${currency(data.SobreCostoProyectadoVAC)} (${percent(data.SobreCostoProyectadoPct)})`, true));
 
     return card;
 }
