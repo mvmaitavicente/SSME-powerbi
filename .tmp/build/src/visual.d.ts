@@ -19,6 +19,8 @@ export declare class Visual implements IVisual {
     private navigationDebugHidden;
     private readonly navigationDebugPanelEnabled;
     private pendingNavigationLevel;
+    private pendingProjectSelectionId;
+    private defaultProjectId;
     private navigationDebug;
     private isGaugeHistoryModalOpen;
     private bodyCarouselIndex;
@@ -111,8 +113,13 @@ export declare class Visual implements IVisual {
     private closeFilterPanel;
     private renderFilterPanelIntoRoot;
     private renderFilterPanel;
+    private renderUnitProjectTreeFilter;
+    private openAdvancedProjectSearch;
+    private applyProjectFromAdvancedSearch;
     private renderFilterSelect;
     private filteredNavigatorProjects;
+    private navigatorProjectsForOptions;
+    private reconcileProjectSelection;
     private uniqueNavigatorValues;
     private uniqueFromProjects;
     private projectOptions;
@@ -132,6 +139,7 @@ export declare class Visual implements IVisual {
     private applyBasicFilter;
     private clearInternalFilter;
     private selfFilterPropertyName;
+    private restoreDefaultProjectFilters;
     private clearAllInteractiveFilters;
     private clearProjectDimensionFilters;
     private isSameFilterValue;

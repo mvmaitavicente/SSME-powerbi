@@ -31,6 +31,7 @@ interface SeriesCallout {
 
 interface CurveRenderOptions {
     portfolio?: boolean;
+    showYearBracket?: boolean;
 }
 
 interface LineSegment {
@@ -118,7 +119,7 @@ function curveLayout(rawWidth: number, rawHeight: number): CurveLayout {
     const left = 128;
     const top = 54;
     const right = 172;
-    const bottom = 102;
+    const bottom = 130;
     return {
         width,
         height,
@@ -126,7 +127,7 @@ function curveLayout(rawWidth: number, rawHeight: number): CurveLayout {
             left,
             top,
             width: Math.max(690, width - left - right),
-            height: Math.max(450, height - top - bottom)
+            height: Math.max(360, height - top - bottom)
         }
     };
 }
@@ -170,7 +171,7 @@ function drawCurve(svg: SVGSVGElement, curve: RenderCurveData, palette: VisualPa
         yMax: yDomain.max,
         source: "curve-only"
     });
-    drawAxes(svg, axisMinWeek, axisMaxWeek, yDomain, xScale, yScale, eacWeek);
+    drawAxes(svg, axisMinWeek, axisMaxWeek, yDomain, xScale, referenceXScale, yScale, eacWeek, references, Boolean(options.portfolio), Boolean(options.showYearBracket));
     drawBacLine(svg, references, yScale);
     drawAcProjection(svg, currentPoint, references, referenceXScale, yScale, referenceYScale);
     drawEacCostLine(svg, references, referenceXScale, referenceYScale);
@@ -198,7 +199,7 @@ function drawCurve(svg: SVGSVGElement, curve: RenderCurveData, palette: VisualPa
     drawEacTimeLine(svg, references, referenceXScale, referenceYScale);
     drawCurrentValueLabels(svg, pointsToDraw, references, xScale, referenceXScale, yScale, referenceYScale, visualOffsets, segments, atWeek, options);
     drawCurrentLine(svg, references, xScale);
-    drawTimelineMarkerLabels(svg, references, referenceXScale);
+    drawTimelineMarkerLabels(svg, references, referenceXScale, true);
     drawVacCost(svg, references, xScale, yScale, referenceYScale);
     drawVacTime(svg, references, referenceXScale);
 }
@@ -233,7 +234,7 @@ function spacedEacCostYScale(yScale: (value: number) => number, references: Curv
     return (value: number): number => Math.abs(value - eacCost) < 0.000001 ? spacedEacY : yScale(value);
 }
 
-function drawAxes(svg: SVGSVGElement, minWeek: number, maxWeek: number, yDomain: AxisDomain, xScale: (week: number) => number, yScale: (value: number) => number, eacWeek: number | null): void {
+function drawAxes(svg: SVGSVGElement, minWeek: number, maxWeek: number, yDomain: AxisDomain, xScale: (week: number) => number, referenceXScale: (week: number) => number, yScale: (value: number) => number, eacWeek: number | null, references: CurveReferences, portfolio: boolean, showYearBracket: boolean): void {
     addText(svg, "Costo (S/)", plot.left - 86, plot.top - 18, "start", "evm-axis-title");
 
     for (let index = 0; index <= 4; index++) {
@@ -259,7 +260,10 @@ function drawAxes(svg: SVGSVGElement, minWeek: number, maxWeek: number, yDomain:
         drawnTicks.add(key);
         const x = xScale(week);
         drawLine(svg, x, plot.top + plot.height, x, plot.top + plot.height + 8, "evm-axis-tick");
-        addText(svg, formatWeek(week), x, plot.top + plot.height + 32, "middle", "evm-axis-label");
+        const referenceMarker = timelineMarkers(references, xScale)
+            .find((marker) => Math.abs(marker.week - week) < 0.000001);
+        const tickClass = referenceMarker?.className ?? "evm-axis-label";
+        addText(svg, formatWeek(week), x, plot.top + plot.height + 32, "middle", tickClass);
     };
 
     addXTick(minWeek);
@@ -268,7 +272,24 @@ function drawAxes(svg: SVGSVGElement, minWeek: number, maxWeek: number, yDomain:
         addXTick(week);
     }
     addXTick(maxWeek);
-    addText(svg, "Tiempo (Sem.)", xScale(minWeek), plot.top + plot.height + 68, "middle", "evm-axis-title");
+    if (portfolio && eacWeek !== null && !drawnTicks.has(formatWeek(eacWeek))) {
+        const x = referenceXScale(eacWeek);
+        drawLine(svg, x, plot.top + plot.height, x, plot.top + plot.height + 8, "evm-axis-tick");
+        addText(svg, formatWeek(eacWeek), x, plot.top + plot.height + 32, "middle", "evm-eac-label");
+    }
+    if (showYearBracket) {
+        const yearCenter = plot.left + (plot.width / 2);
+        const yearLineY = plot.top + plot.height + 68;
+        const yearLineStart = plot.left + 8;
+        const yearLineEnd = plot.left + plot.width - 8;
+        drawLine(svg, yearLineStart, yearLineY, yearLineEnd, yearLineY, "evm-axis-year-line");
+        drawLine(svg, yearLineStart, yearLineY, yearLineStart, yearLineY + 18, "evm-axis-year-boundary");
+        drawLine(svg, yearLineEnd, yearLineY, yearLineEnd, yearLineY + 18, "evm-axis-year-boundary");
+        addText(svg, "Tiempo (Sem.)", yearLineStart, yearLineY + 39, "start", "evm-axis-time-caption");
+        addText(svg, "2026", yearCenter, yearLineY + 39, "middle", "evm-axis-year");
+    } else {
+        addText(svg, "Tiempo (Sem.)", xScale(minWeek), plot.top + plot.height + 68, "middle", "evm-axis-title");
+    }
 }
 
 function timelineMarkers(references: CurveReferences, xScale: (week: number) => number): TimelineMarker[] {
@@ -283,7 +304,7 @@ function timelineMarkers(references: CurveReferences, xScale: (week: number) => 
         .map((marker) => ({ ...marker, x: xScale(marker.week) }));
 }
 
-function drawTimelineMarkerLabels(svg: SVGSVGElement, references: CurveReferences, xScale: (week: number) => number): void {
+function drawTimelineMarkerLabels(svg: SVGSVGElement, references: CurveReferences, xScale: (week: number) => number, alignWithReferenceLines: boolean = false): void {
     const markers = timelineMarkers(references, xScale);
     const groups = new Map<string, TimelineMarker[]>();
     markers.forEach((marker) => {
@@ -294,14 +315,14 @@ function drawTimelineMarkerLabels(svg: SVGSVGElement, references: CurveReference
     const orderedGroups = [...groups.values()]
         .map((group) => [...group].sort((a, b) => a.priority - b.priority))
         .sort((a, b) => a[0].x - b[0].x);
-    const labelPositions = timelineLabelPositions(orderedGroups);
+    const labelPositions = alignWithReferenceLines
+        ? new Map(orderedGroups.map((group) => [group, group[0].x]))
+        : timelineLabelPositions(orderedGroups);
     orderedGroups
         .forEach((group) => {
             const x = labelPositions.get(group) ?? group[0].x;
             const labelY = plot.top + plot.height + 50;
-            const valueY = plot.top + plot.height + 74;
             drawGroupedMarkerLabel(svg, group, x, labelY);
-            addText(svg, formatWeek(group[0].week), x, valueY, "middle", group[0].className);
         });
 }
 

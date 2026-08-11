@@ -129,6 +129,8 @@ export class Visual implements IVisual {
     private navigationDebugHidden: boolean = false;
     private readonly navigationDebugPanelEnabled: boolean = false;
     private pendingNavigationLevel: DashboardLevel | null = null;
+    private pendingProjectSelectionId: string | null = null;
+    private defaultProjectId: string | null = null;
     private navigationDebug: NavigationDebugState = {
         clickCount: 0,
         updateCount: 0,
@@ -269,7 +271,13 @@ export class Visual implements IVisual {
             this.rootElement = root;
 
             if (dashboard) {
-                this.syncFilterStateFromDashboard(dashboard);
+                const receivedProjectId = dashboard.context.ProjectId
+                    ?? this.navigatorText(dashboard.project?.IdIntervencion)
+                    ?? null;
+                if (!this.pendingProjectSelectionId || receivedProjectId === this.pendingProjectSelectionId) {
+                    this.pendingProjectSelectionId = null;
+                    this.syncFilterStateFromDashboard(dashboard);
+                }
                 const sidebarUnit = this.resolveUnitForNavigation(dashboard);
                 const sidebarProject = this.resolveProjectForNavigation(dashboard);
                 console.debug("Update posterior a navegación", {
@@ -299,7 +307,7 @@ export class Visual implements IVisual {
                     onOpenFilters: () => this.openFilterPanel()
                 }));
                 root.appendChild(this.renderCurrentDashboard(dashboard, options.viewport));
-                if (this.filterPanelOpen) {
+                if (this.filterPanelOpen && dashboard.context.Level !== "PROYECTO") {
                     root.appendChild(this.renderFilterPanel());
                 }
             } else {
@@ -687,8 +695,15 @@ export class Visual implements IVisual {
         const main = document.createElement("main");
         main.className = "evm-main evm-main--project";
         main.classList.toggle("evm-main--project-details", this.bodyCarouselIndex === 1);
+        main.classList.add("evm-main--project-filters-open");
         main.style.minWidth = `${Math.min(780, Math.max(0, viewport.width - 92))}px`;
-        main.appendChild(renderHeader(projectDashboard.header));
+        main.appendChild(renderHeader(projectDashboard.header, {
+            titleLabel: "TABLERO PROYECTOS -",
+            subtitle: "Sistema de Seguimiento, Monitoreo y Evaluación - SSME"
+        }));
+        const filterPanel = this.renderFilterPanel();
+        filterPanel.classList.add("evm-filter-panel--project-inline");
+        main.appendChild(filterPanel);
         const gaugeGrid = renderGaugeGrid(projectDashboard.gauges, palette, (key) => this.openGaugeHistoryModal(key));
         gaugeGrid.classList.add("evm-project-gauge-grid");
         main.appendChild(gaugeGrid);
@@ -721,7 +736,7 @@ export class Visual implements IVisual {
 
         const summaryPage = createElement("div", "evm-body-carousel-page evm-body-carousel-page--evm");
         const left = createElement("div", "evm-left-column");
-        const curveCard = renderCurve(this.buildAggregateRenderCurve(dashboard), palette, { portfolio: true });
+        const curveCard = renderCurve(this.buildAggregateRenderCurve(dashboard), palette, { portfolio: true, showYearBracket: true });
         curveCard.classList.add("evm-portfolio-curve-card");
         const curveTitle = curveCard.querySelector(".evm-section-title");
         if (curveTitle instanceof HTMLElement) {
@@ -1237,9 +1252,19 @@ export class Visual implements IVisual {
         const main = createElement("main", "evm-main");
         main.style.minWidth = `${Math.min(780, Math.max(0, viewport.width - 92))}px`;
         const unitName = text(this.resolveUnitForNavigation(dashboard), "UGEO");
-        main.appendChild(renderHeader(this.portfolioHeaderData(`TABLERO UNIDAD GERENCIAL - ${unitName}`, dashboard), { titleLabel: null }));
+        main.appendChild(renderHeader(
+            this.portfolioHeaderData(`TABLERO UNIDAD GERENCIAL - ${unitName}`, dashboard),
+            {
+                titleLabel: null,
+                subtitle: "Sistema de Seguimiento, Monitoreo y Evaluación - SSME"
+            }
+        ));
         main.appendChild(this.renderPortfolioGaugeSection(dashboard));
-        main.appendChild(this.renderPortfolioBody(this.buildAggregateRenderCurve(dashboard), this.renderProjectsPanel(dashboard.projects)));
+        main.appendChild(this.renderPortfolioBody(
+            this.buildAggregateRenderCurve(dashboard),
+            renderPortfolioDashboard(dashboard.portfolioSummary),
+            unitName
+        ));
         return main;
     }
 
@@ -1356,14 +1381,21 @@ export class Visual implements IVisual {
         };
     }
 
-    private renderPortfolioBody(curve: RenderCurveData, sidePanel: HTMLElement): HTMLElement {
+    private renderPortfolioBody(curve: RenderCurveData, sidePanel: HTMLElement, unitName: string): HTMLElement {
         const carousel = createElement("section", "evm-body-carousel");
         const viewport = createElement("div", "evm-body-carousel-viewport");
         const page = createElement("div", "evm-body-carousel-page evm-body-carousel-page--evm active");
         const left = createElement("div", "evm-left-column");
         const right = createElement("div", "evm-right-column");
 
-        left.appendChild(renderCurve(curve, palette));
+        const curveCard = renderCurve(curve, palette, { portfolio: true, showYearBracket: true });
+        curveCard.classList.add("evm-portfolio-curve-card");
+        const curveTitle = curveCard.querySelector(".evm-section-title");
+        if (curveTitle instanceof HTMLElement) {
+            curveTitle.textContent = `CURVA S - ${unitName}`;
+            curveTitle.insertAdjacentElement("afterend", this.renderPortfolioCurveLegend());
+        }
+        left.appendChild(curveCard);
         right.appendChild(sidePanel);
         page.appendChild(left);
         page.appendChild(right);
@@ -2344,6 +2376,10 @@ export class Visual implements IVisual {
     }
 
     private syncFilterStateFromDashboard(dashboard: ParsedDashboardData): void {
+        const dashboardProjectId = dashboard.context.ProjectId ?? (this.navigatorText(dashboard.project?.IdIntervencion) || null);
+        if (dashboard.context.Level === "PROYECTO" && !this.defaultProjectId && dashboardProjectId) {
+            this.defaultProjectId = dashboardProjectId;
+        }
         this.filterState.level = dashboard.context.Level;
         this.filterState.selectedUnit = dashboard.context.Unit ?? this.filterState.selectedUnit;
         this.filterState.selectedProjectId = dashboard.context.ProjectId ?? this.filterState.selectedProjectId;
@@ -2579,6 +2615,7 @@ export class Visual implements IVisual {
         this.filterPanelOpen = false;
         this.filterFocus = null;
         this.rootElement?.querySelector(".evm-filter-panel")?.remove();
+        this.rootElement?.querySelector(".evm-main--project")?.classList.remove("evm-main--project-filters-open");
     }
 
     private renderFilterPanelIntoRoot(): void {
@@ -2586,6 +2623,17 @@ export class Visual implements IVisual {
             return;
         }
         this.rootElement.querySelector(".evm-filter-panel")?.remove();
+        if (this.currentDashboardData.context.Level === "PROYECTO") {
+            const main = this.rootElement.querySelector(".evm-main--project");
+            const header = main?.querySelector(":scope > .evm-header");
+            if (main instanceof HTMLElement && header instanceof HTMLElement) {
+                const panel = this.renderFilterPanel();
+                panel.classList.add("evm-filter-panel--project-inline");
+                header.insertAdjacentElement("afterend", panel);
+                main.classList.add("evm-main--project-filters-open");
+            }
+            return;
+        }
         this.rootElement.appendChild(this.renderFilterPanel());
     }
 
@@ -2600,46 +2648,50 @@ export class Visual implements IVisual {
         header.appendChild(close);
         panel.appendChild(header);
 
-        const projects = this.filteredNavigatorProjects();
-        panel.appendChild(this.renderFilterSelect("Unidad Gerencial", "unit", this.uniqueNavigatorValues("UnidadGerencial"), this.filterState.selectedUnit, (value) => {
-            this.filterState.selectedUnit = value;
-            this.filterState.selectedProjectId = null;
-            value ? this.applyBasicFilter("Dim_Intervenciones", "UnidadGerencial", [value], "unitFilter") : this.clearInternalFilter("unitFilter");
-            this.clearInternalFilter("projectFilter");
-        }));
-        panel.appendChild(this.renderFilterSelect("Región", "region", this.uniqueFromProjects(projects, "Region"), this.filterState.region, (value) => {
-            this.filterState.region = value;
-            value ? this.applyBasicFilter("Dim_Intervenciones", "Region", [value], "regionFilter") : this.clearInternalFilter("regionFilter");
-        }));
-        panel.appendChild(this.renderFilterSelect("Provincia", "province", this.uniqueFromProjects(projects, "Provincia"), this.filterState.province, (value) => {
-            this.filterState.province = value;
-            value ? this.applyBasicFilter("Dim_Intervenciones", "Provincia", [value], "provinceFilter") : this.clearInternalFilter("provinceFilter");
-        }));
-        panel.appendChild(this.renderFilterSelect("Distrito", "district", this.uniqueFromProjects(projects, "Distrito"), this.filterState.district, (value) => {
-            this.filterState.district = value;
-            value ? this.applyBasicFilter("Dim_Intervenciones", "Distrito", [value], "districtFilter") : this.clearInternalFilter("districtFilter");
-        }));
-        panel.appendChild(this.renderFilterSelect("Estado", "status", this.uniqueFromProjects(projects, "EstadoProyecto"), this.filterState.status, (value) => {
-            this.filterState.status = value;
-            value ? this.applyBasicFilter("Dim_Intervenciones", "EstadoProyecto", [value], "statusFilter") : this.clearInternalFilter("statusFilter");
-        }));
-        const allProjects = this.navigatorProjectCatalog.length
+        panel.appendChild(this.renderUnitProjectTreeFilter());
+        const projectCatalog = this.navigatorProjectCatalog.length
             ? this.navigatorProjectCatalog
             : this.currentDashboardData?.navigator?.projects ?? this.currentDashboardData?.projects ?? [];
-        panel.appendChild(this.renderFilterSelect("Proyecto", "project", this.projectOptions(allProjects), this.filterState.selectedProjectId, (value) => {
-            if (!value) {
-                return;
+        const selectedProject = projectCatalog.find((project) => this.getProjectId(project) === this.filterState.selectedProjectId);
+        const cuiOptions = Array.from(new Set(projectCatalog
+            .map((project) => this.navigatorText(project.Cui ?? project.CUI))
+            .filter(Boolean)))
+            .sort((a, b) => a.localeCompare(b))
+            .map((value) => ({ value, label: value }));
+        panel.appendChild(this.renderFilterSelect("CUI", "cui", cuiOptions, this.navigatorText(selectedProject?.Cui ?? selectedProject?.CUI) || null, (value) => {
+            const project = projectCatalog.find((item) => this.navigatorText(item.Cui ?? item.CUI) === value);
+            if (project) {
+                this.applyProjectFromAdvancedSearch(project);
             }
-            this.clearProjectDimensionFilters();
-            this.filterState.selectedProjectId = value;
-            this.filterState.lastNavigableProjectId = value;
-            this.applyProjectFilter(value);
-            this.applyBasicFilter("Dim_Intervenciones", "IdIntervencion", [value], "projectFilter");
-        }, false));
-
-        const clear = createElement("button", "evm-filter-clear", "Limpiar filtros");
+        }, false, true));
+        panel.appendChild(this.renderFilterSelect("Región", "region", this.uniqueFromProjects(this.navigatorProjectsForOptions("region"), "Region"), this.filterState.region, (value) => {
+            this.filterState.region = value;
+            value ? this.applyBasicFilter("Dim_Intervenciones", "Region", [value], "regionFilter") : this.clearInternalFilter("regionFilter");
+            this.reconcileProjectSelection();
+        }, true, true));
+        panel.appendChild(this.renderFilterSelect("Provincia", "province", this.uniqueFromProjects(this.navigatorProjectsForOptions("province"), "Provincia"), this.filterState.province, (value) => {
+            this.filterState.province = value;
+            value ? this.applyBasicFilter("Dim_Intervenciones", "Provincia", [value], "provinceFilter") : this.clearInternalFilter("provinceFilter");
+            this.reconcileProjectSelection();
+        }, true, true));
+        panel.appendChild(this.renderFilterSelect("Distrito", "district", this.uniqueFromProjects(this.navigatorProjectsForOptions("district"), "Distrito"), this.filterState.district, (value) => {
+            this.filterState.district = value;
+            value ? this.applyBasicFilter("Dim_Intervenciones", "Distrito", [value], "districtFilter") : this.clearInternalFilter("districtFilter");
+            this.reconcileProjectSelection();
+        }, true, true));
+        const clear = createElement(
+            "button",
+            "evm-filter-clear",
+            this.currentDashboardData?.context.Level === "PROYECTO" ? "BUSCADOR AVANZADO" : "Limpiar filtros"
+        );
         clear.type = "button";
-        clear.addEventListener("click", () => this.clearAllInteractiveFilters());
+        clear.addEventListener("click", () => {
+            if (this.currentDashboardData?.context.Level === "PROYECTO") {
+                this.openAdvancedProjectSearch();
+            } else {
+                this.clearAllInteractiveFilters();
+            }
+        });
         panel.appendChild(clear);
 
         if (this.filterFocus) {
@@ -2654,18 +2706,394 @@ export class Visual implements IVisual {
         return panel;
     }
 
+    private renderUnitProjectTreeFilter(): HTMLElement {
+        const field = createElement("label", "evm-filter-field evm-unit-project-filter");
+        field.appendChild(createElement("span", undefined, "UNIDAD GERENCIAL - PROYECTOS"));
+        const control = createElement("div", "evm-unit-project-control");
+        const projects = this.navigatorProjectCatalog.length
+            ? this.navigatorProjectCatalog
+            : this.currentDashboardData?.navigator?.projects ?? this.currentDashboardData?.projects ?? [];
+        const selectedProject = projects.find((project) => this.getProjectId(project) === this.filterState.selectedProjectId);
+        const trigger = createElement(
+            "button",
+            "evm-unit-project-trigger",
+            selectedProject
+                ? `${this.navigatorText(selectedProject.UnidadGerencial)} — ${this.navigatorText(selectedProject.NombreIntervencion)}`
+                : "Seleccione una UG y proyecto"
+        );
+        trigger.type = "button";
+        trigger.setAttribute("aria-haspopup", "listbox");
+        trigger.setAttribute("aria-expanded", "false");
+
+        const menu = createElement("div", "evm-unit-project-menu");
+        menu.hidden = true;
+        menu.setAttribute("role", "listbox");
+        const search = document.createElement("input");
+        search.type = "search";
+        search.className = "evm-unit-project-search";
+        search.placeholder = "Buscar unidad o proyecto...";
+        search.setAttribute("aria-label", "Buscar unidad gerencial o proyecto");
+        menu.appendChild(search);
+        const grouped = new Map<string, NavigatorProject[]>();
+        const searchableGroups: Array<{
+            group: HTMLElement;
+            children: HTMLElement;
+            toggle: HTMLElement;
+            unit: string;
+            projects: Array<{ button: HTMLElement; label: string }>;
+        }> = [];
+        projects.forEach((project) => {
+            const unit = this.navigatorText(project.UnidadGerencial) || "Sin Unidad Gerencial";
+            const group = grouped.get(unit) ?? [];
+            group.push(project);
+            grouped.set(unit, group);
+        });
+
+        const selectProject = (project: NavigatorProject, unit: string): void => {
+            const projectId = this.getProjectId(project);
+            if (!projectId) {
+                return;
+            }
+            this.filterState.selectedUnit = unit;
+            this.filterState.selectedProjectId = projectId;
+            this.filterState.lastNavigableUnit = unit;
+            this.filterState.lastNavigableProjectId = projectId;
+            this.filterState.region = this.navigatorText(project.Region) || null;
+            this.filterState.province = this.navigatorText(project.Provincia) || null;
+            this.filterState.district = this.navigatorText(project.Distrito) || null;
+            this.filterState.status = this.navigatorText(project.EstadoProyecto) || null;
+            this.pendingProjectSelectionId = projectId;
+            ["unitFilter", "regionFilter", "provinceFilter", "districtFilter", "statusFilter"]
+                .forEach((property) => this.clearInternalFilter(property));
+            this.applyProjectFilter(projectId);
+            this.applyBasicFilter("Dim_Intervenciones", "IdIntervencion", [projectId], "projectFilter");
+            menu.hidden = true;
+            trigger.setAttribute("aria-expanded", "false");
+            this.renderFilterPanelIntoRoot();
+        };
+
+        Array.from(grouped.entries())
+            .sort(([unitA], [unitB]) => unitA.localeCompare(unitB))
+            .forEach(([unit, unitProjects]) => {
+                const group = createElement("div", "evm-unit-project-group");
+                const groupHeader = createElement("div", "evm-unit-project-group-header");
+                const toggle = createElement("button", "evm-unit-project-toggle", "⌄");
+                toggle.type = "button";
+                const unitSelected = unit === this.filterState.selectedUnit;
+                const unitButton = createElement("button", "evm-unit-project-unit", `${unitSelected ? "◉" : "○"} ${unit}`);
+                unitButton.type = "button";
+                groupHeader.appendChild(toggle);
+                groupHeader.appendChild(unitButton);
+                group.appendChild(groupHeader);
+
+                const children = createElement("div", "evm-unit-project-children");
+                const searchableProjects: Array<{ button: HTMLElement; label: string }> = [];
+                unitProjects
+                    .sort((a, b) => this.navigatorText(a.NombreIntervencion).localeCompare(this.navigatorText(b.NombreIntervencion)))
+                    .forEach((project) => {
+                        const projectId = this.getProjectId(project);
+                        if (!projectId) {
+                            return;
+                        }
+                        const selected = projectId === this.filterState.selectedProjectId;
+                        const projectButton = createElement(
+                            "button",
+                            `evm-unit-project-option${selected ? " selected" : ""}`,
+                            `${selected ? "◉" : "○"} ${this.navigatorText(project.NombreIntervencion) || projectId}`
+                        );
+                        projectButton.type = "button";
+                        projectButton.setAttribute("role", "option");
+                        projectButton.setAttribute("aria-selected", selected ? "true" : "false");
+                        projectButton.addEventListener("click", () => selectProject(project, unit));
+                        children.appendChild(projectButton);
+                        searchableProjects.push({
+                            button: projectButton,
+                            label: this.navigatorText(project.NombreIntervencion).toLocaleLowerCase("es")
+                        });
+                    });
+                group.appendChild(children);
+                toggle.addEventListener("click", () => {
+                    children.hidden = !children.hidden;
+                    toggle.textContent = children.hidden ? "›" : "⌄";
+                });
+                unitButton.addEventListener("click", () => {
+                    const firstProject = unitProjects[0];
+                    if (firstProject) selectProject(firstProject, unit);
+                });
+                menu.appendChild(group);
+                searchableGroups.push({
+                    group,
+                    children,
+                    toggle,
+                    unit: unit.toLocaleLowerCase("es"),
+                    projects: searchableProjects
+                });
+            });
+
+        search.addEventListener("input", () => {
+            const query = search.value.trim().toLocaleLowerCase("es");
+            searchableGroups.forEach((item) => {
+                const unitMatches = !query || item.unit.includes(query);
+                let visibleProjects = 0;
+                item.projects.forEach((project) => {
+                    const visible = unitMatches || project.label.includes(query);
+                    project.button.hidden = !visible;
+                    if (visible) visibleProjects += 1;
+                });
+                item.group.hidden = visibleProjects === 0;
+                if (query && visibleProjects > 0) {
+                    item.children.hidden = false;
+                    item.toggle.textContent = "⌄";
+                }
+            });
+        });
+
+        if (!grouped.size) {
+            menu.appendChild(createElement("div", "evm-unit-project-empty", "No hay proyectos para los filtros seleccionados."));
+        }
+        trigger.addEventListener("click", () => {
+            menu.hidden = !menu.hidden;
+            trigger.setAttribute("aria-expanded", menu.hidden ? "false" : "true");
+            if (!menu.hidden) {
+                window.setTimeout(() => search.focus(), 0);
+            }
+        });
+        control.addEventListener("focusout", (event: FocusEvent) => {
+            if (!(event.relatedTarget instanceof Node) || !control.contains(event.relatedTarget)) {
+                menu.hidden = true;
+                trigger.setAttribute("aria-expanded", "false");
+            }
+        });
+        control.appendChild(trigger);
+        control.appendChild(menu);
+        field.appendChild(control);
+        return field;
+    }
+
+    private openAdvancedProjectSearch(): void {
+        const host = this.rootElement;
+        if (!host) {
+            return;
+        }
+        host.querySelector(".evm-advanced-search-overlay")?.remove();
+        const projects = this.navigatorProjectCatalog.length
+            ? this.navigatorProjectCatalog
+            : this.currentDashboardData?.navigator?.projects ?? this.currentDashboardData?.projects ?? [];
+        let selectedProjectId = this.filterState.selectedProjectId;
+
+        const overlay = createElement("div", "evm-advanced-search-overlay");
+        const modal = createElement("section", "evm-advanced-search-modal evm-card");
+        modal.setAttribute("role", "dialog");
+        modal.setAttribute("aria-modal", "true");
+        modal.setAttribute("aria-label", "Buscador avanzado de proyectos");
+        const header = createElement("header", "evm-advanced-search-header");
+        header.appendChild(createElement("h2", undefined, "BUSCAR PROYECTO"));
+        const close = createElement("button", undefined, "×");
+        close.type = "button";
+        close.setAttribute("aria-label", "Cerrar buscador avanzado");
+        header.appendChild(close);
+        modal.appendChild(header);
+
+        const query = document.createElement("input");
+        query.type = "search";
+        query.className = "evm-advanced-search-query";
+        query.placeholder = "Buscar por nombre de proyecto, CUI o código único...";
+        modal.appendChild(query);
+        modal.appendChild(createElement("div", "evm-advanced-search-subtitle", "⌕  FILTROS AVANZADOS"));
+
+        const filterGrid = createElement("div", "evm-advanced-search-filters");
+        const selectors: Record<string, HTMLSelectElement> = {};
+        const addFilter = (label: string, key: string, field: keyof NavigatorProject): void => {
+            const wrapper = createElement("label");
+            wrapper.appendChild(createElement("span", undefined, label));
+            const select = document.createElement("select");
+            select.appendChild(new Option(label === "Unidad Gerencial" ? "Todas" : "Todos", ""));
+            this.uniqueFromProjects(projects, field).forEach((option) => select.appendChild(new Option(option.label, option.value)));
+            selectors[key] = select;
+            wrapper.appendChild(select);
+            filterGrid.appendChild(wrapper);
+        };
+        addFilter("Unidad Gerencial", "unit", "UnidadGerencial");
+        addFilter("Región", "region", "Region");
+        addFilter("Provincia", "province", "Provincia");
+        addFilter("Distrito", "district", "Distrito");
+        addFilter("Estado", "status", "EstadoProyecto");
+        const filterDefinitions: Array<{ key: string; field: keyof NavigatorProject; allLabel: string }> = [
+            { key: "unit", field: "UnidadGerencial", allLabel: "Todas" },
+            { key: "region", field: "Region", allLabel: "Todos" },
+            { key: "province", field: "Provincia", allLabel: "Todos" },
+            { key: "district", field: "Distrito", allLabel: "Todos" },
+            { key: "status", field: "EstadoProyecto", allLabel: "Todos" }
+        ];
+        modal.appendChild(filterGrid);
+
+        const toolbar = createElement("div", "evm-advanced-search-toolbar");
+        const count = createElement("span");
+        const clearFilters = createElement("button", "evm-advanced-search-clear", "Limpiar filtros");
+        clearFilters.type = "button";
+        toolbar.appendChild(count);
+        toolbar.appendChild(clearFilters);
+        modal.appendChild(toolbar);
+
+        const results = createElement("div", "evm-advanced-search-results");
+        const table = createElement("table");
+        const head = document.createElement("thead");
+        const headRow = document.createElement("tr");
+        ["", "UNIDAD GERENCIAL", "CUI", "PROYECTO", "UBICACIÓN", "ESTADO"].forEach((label) => headRow.appendChild(createElement("th", undefined, label)));
+        head.appendChild(headRow);
+        table.appendChild(head);
+        const body = document.createElement("tbody");
+        table.appendChild(body);
+        results.appendChild(table);
+        modal.appendChild(results);
+
+        const footer = createElement("footer", "evm-advanced-search-footer");
+        const cancel = createElement("button", "secondary", "Cancelar");
+        const apply = createElement("button", "primary", "Aplicar proyecto");
+        cancel.type = "button";
+        apply.type = "button";
+        footer.appendChild(cancel);
+        footer.appendChild(apply);
+        modal.appendChild(footer);
+
+        const renderResults = (): void => {
+            const searchText = query.value.trim().toLocaleLowerCase("es");
+            const filtered = projects.filter((project) => {
+                const searchable = [project.NombreIntervencion, project.Cui, project.CUI, project.IdIntervencion]
+                    .map((value) => this.navigatorText(value).toLocaleLowerCase("es"))
+                    .join(" ");
+                return (!searchText || searchable.includes(searchText))
+                    && this.matchesFilter(project.UnidadGerencial, selectors.unit.value || null)
+                    && this.matchesFilter(project.Region, selectors.region.value || null)
+                    && this.matchesFilter(project.Provincia, selectors.province.value || null)
+                    && this.matchesFilter(project.Distrito, selectors.district.value || null)
+                    && this.matchesFilter(project.EstadoProyecto, selectors.status.value || null);
+            });
+            count.textContent = `${filtered.length} proyecto${filtered.length === 1 ? "" : "s"} encontrado${filtered.length === 1 ? "" : "s"}`;
+            body.replaceChildren();
+            filtered.forEach((project) => {
+                const projectId = this.getProjectId(project);
+                if (!projectId) return;
+                const row = document.createElement("tr");
+                row.classList.toggle("selected", projectId === selectedProjectId);
+                const radioCell = document.createElement("td");
+                const radio = document.createElement("input");
+                radio.type = "radio";
+                radio.name = "advanced-project-selection";
+                radio.checked = projectId === selectedProjectId;
+                radioCell.appendChild(radio);
+                row.appendChild(radioCell);
+                row.appendChild(createElement("td", undefined, this.navigatorText(project.UnidadGerencial)));
+                row.appendChild(createElement("td", undefined, this.navigatorText(project.Cui ?? project.CUI) || "—"));
+                row.appendChild(createElement("td", undefined, this.navigatorText(project.NombreIntervencion) || projectId));
+                row.appendChild(createElement("td", undefined, [project.Region, project.Provincia, project.Distrito].map((value) => this.navigatorText(value)).filter(Boolean).join(" / ")));
+                const statusCell = document.createElement("td");
+                const statusLabel = this.navigatorText(project.EstadoProyecto) || "Sin estado";
+                const normalizedStatus = statusLabel.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es");
+                const statusTone = normalizedStatus.includes("critic")
+                    ? "critical"
+                    : normalizedStatus.includes("riesgo")
+                        ? "risk"
+                        : normalizedStatus.includes("estable")
+                            ? "stable"
+                            : "neutral";
+                statusCell.appendChild(createElement("span", `evm-advanced-search-status ${statusTone}`, statusLabel));
+                row.appendChild(statusCell);
+                const selectRow = (): void => {
+                    selectedProjectId = projectId;
+                    renderResults();
+                };
+                radio.addEventListener("change", selectRow);
+                row.addEventListener("click", (event) => {
+                    if (event.target !== radio) selectRow();
+                });
+                body.appendChild(row);
+            });
+            apply.toggleAttribute("disabled", !selectedProjectId || !filtered.some((project) => this.getProjectId(project) === selectedProjectId));
+        };
+
+        const refreshSelectorOptions = (preferredKey?: string): void => {
+            const orderedDefinitions = preferredKey
+                ? [...filterDefinitions.filter((definition) => definition.key !== preferredKey), ...filterDefinitions.filter((definition) => definition.key === preferredKey)]
+                : filterDefinitions;
+            orderedDefinitions.forEach((definition) => {
+                const select = selectors[definition.key];
+                const currentValue = select.value;
+                const compatibleProjects = projects.filter((project) => filterDefinitions.every((other) => (
+                    other.key === definition.key || this.matchesFilter(project[other.field], selectors[other.key].value || null)
+                )));
+                const options = this.uniqueFromProjects(compatibleProjects, definition.field);
+                select.replaceChildren(new Option(definition.allLabel, ""));
+                options.forEach((option) => select.appendChild(new Option(option.label, option.value)));
+                select.value = options.some((option) => option.value === currentValue) ? currentValue : "";
+            });
+        };
+
+        const closeModal = (): void => overlay.remove();
+        query.addEventListener("input", renderResults);
+        filterDefinitions.forEach((definition) => selectors[definition.key].addEventListener("change", () => {
+            refreshSelectorOptions(definition.key);
+            renderResults();
+        }));
+        clearFilters.addEventListener("click", () => {
+            query.value = "";
+            Object.values(selectors).forEach((select) => { select.value = ""; });
+            refreshSelectorOptions();
+            renderResults();
+        });
+        close.addEventListener("click", closeModal);
+        cancel.addEventListener("click", closeModal);
+        overlay.addEventListener("click", (event) => {
+            if (event.target === overlay) closeModal();
+        });
+        apply.addEventListener("click", () => {
+            const project = projects.find((item) => this.getProjectId(item) === selectedProjectId);
+            if (!project) return;
+            this.applyProjectFromAdvancedSearch(project);
+            closeModal();
+        });
+
+        refreshSelectorOptions();
+        renderResults();
+        overlay.appendChild(modal);
+        host.appendChild(overlay);
+        window.setTimeout(() => query.focus(), 0);
+    }
+
+    private applyProjectFromAdvancedSearch(project: NavigatorProject): void {
+        const projectId = this.getProjectId(project);
+        if (!projectId) return;
+        const unit = this.navigatorText(project.UnidadGerencial) || null;
+        this.filterState.selectedUnit = unit;
+        this.filterState.selectedProjectId = projectId;
+        this.filterState.lastNavigableUnit = unit ?? this.filterState.lastNavigableUnit;
+        this.filterState.lastNavigableProjectId = projectId;
+        this.filterState.region = this.navigatorText(project.Region) || null;
+        this.filterState.province = this.navigatorText(project.Provincia) || null;
+        this.filterState.district = this.navigatorText(project.Distrito) || null;
+        this.filterState.status = this.navigatorText(project.EstadoProyecto) || null;
+        this.pendingProjectSelectionId = projectId;
+        ["unitFilter", "regionFilter", "provinceFilter", "districtFilter", "statusFilter"]
+            .forEach((property) => this.clearInternalFilter(property));
+        this.applyProjectFilter(projectId);
+        this.applyBasicFilter("Dim_Intervenciones", "IdIntervencion", [projectId], "projectFilter");
+        this.renderFilterPanelIntoRoot();
+    }
+
     private renderFilterSelect(
         label: string,
         key: string,
         options: Array<{ value: string; label: string }>,
         selectedValue: string | null,
         onChange: (value: string | null) => void,
-        allowAll: boolean = true
+        allowAll: boolean = true,
+        disabled: boolean = false
     ): HTMLElement {
         const field = createElement("label", "evm-filter-field");
         field.appendChild(createElement("span", undefined, label));
         const select = createElement("select");
         select.setAttribute("data-filter-key", key);
+        select.disabled = disabled;
         if (allowAll) {
             select.appendChild(new Option("Todos", ""));
         } else {
@@ -2684,14 +3112,38 @@ export class Visual implements IVisual {
     }
 
     private filteredNavigatorProjects(): NavigatorProject[] {
-        const projects = this.currentDashboardData?.navigator?.projects ?? [];
+        return this.navigatorProjectsForOptions(null);
+    }
+
+    private navigatorProjectsForOptions(excludedFilter: "unit" | "region" | "province" | "district" | "status" | null): NavigatorProject[] {
+        const projects = this.navigatorProjectCatalog.length
+            ? this.navigatorProjectCatalog
+            : this.currentDashboardData?.navigator?.projects ?? this.currentDashboardData?.projects ?? [];
         return projects.filter((project) => {
-            return this.matchesFilter(project.UnidadGerencial, this.filterState.selectedUnit)
-                && this.matchesFilter(project.Region, this.filterState.region)
-                && this.matchesFilter(project.Provincia, this.filterState.province)
-                && this.matchesFilter(project.Distrito, this.filterState.district)
-                && this.matchesFilter(project.EstadoProyecto, this.filterState.status);
+            return (excludedFilter === "unit" || this.matchesFilter(project.UnidadGerencial, this.filterState.selectedUnit))
+                && (excludedFilter === "region" || this.matchesFilter(project.Region, this.filterState.region))
+                && (excludedFilter === "province" || this.matchesFilter(project.Provincia, this.filterState.province))
+                && (excludedFilter === "district" || this.matchesFilter(project.Distrito, this.filterState.district))
+                && (excludedFilter === "status" || this.matchesFilter(project.EstadoProyecto, this.filterState.status));
         });
+    }
+
+    private reconcileProjectSelection(): void {
+        const availableProjects = this.projectOptions(this.navigatorProjectsForOptions(null));
+        const currentIsAvailable = availableProjects.some((project) => project.value === this.filterState.selectedProjectId);
+        if (currentIsAvailable) {
+            return;
+        }
+
+        const nextProject = availableProjects[0]?.value ?? null;
+        this.filterState.selectedProjectId = nextProject;
+        this.filterState.lastNavigableProjectId = nextProject ?? this.filterState.lastNavigableProjectId;
+        if (nextProject) {
+            this.applyProjectFilter(nextProject);
+            this.applyBasicFilter("Dim_Intervenciones", "IdIntervencion", [nextProject], "projectFilter");
+        } else {
+            this.clearInternalFilter("projectFilter");
+        }
     }
 
     private uniqueNavigatorValues(key: keyof NavigatorProject): Array<{ value: string; label: string }> {
@@ -2715,7 +3167,8 @@ export class Visual implements IVisual {
                 value: this.navigatorText(project.IdIntervencion),
                 label: this.navigatorText(project.NombreIntervencion) || this.navigatorText(project.IdIntervencion)
             }))
-            .filter((option) => option.value.length > 0);
+            .filter((option) => option.value.length > 0)
+            .sort((a, b) => a.label.localeCompare(b.label));
     }
 
     private rememberNavigatorProjects(projects: NavigatorProject[]): void {
@@ -2937,6 +3390,35 @@ export class Visual implements IVisual {
         return propertyName === "projectFilter"
             ? "selfProjectFilter"
             : propertyName.replace(/Filter$/, "SelfFilter");
+    }
+
+    private restoreDefaultProjectFilters(): void {
+        const projectId = this.defaultProjectId;
+        if (!projectId) {
+            return;
+        }
+        const project = this.navigatorProjectCatalog.find((item) => this.getProjectId(item) === projectId)
+            ?? this.currentDashboardData?.navigator?.projects.find((item) => this.getProjectId(item) === projectId)
+            ?? null;
+        if (!project) {
+            return;
+        }
+
+        const unit = this.navigatorText(project.UnidadGerencial) || null;
+        this.filterState.selectedUnit = unit;
+        this.filterState.selectedProjectId = projectId;
+        this.filterState.lastNavigableUnit = unit ?? this.filterState.lastNavigableUnit;
+        this.filterState.lastNavigableProjectId = projectId;
+        this.filterState.region = this.navigatorText(project.Region) || null;
+        this.filterState.province = this.navigatorText(project.Provincia) || null;
+        this.filterState.district = this.navigatorText(project.Distrito) || null;
+        this.filterState.status = this.navigatorText(project.EstadoProyecto) || null;
+        this.pendingProjectSelectionId = projectId;
+        ["unitFilter", "regionFilter", "provinceFilter", "districtFilter", "statusFilter"]
+            .forEach((property) => this.clearInternalFilter(property));
+        this.applyProjectFilter(projectId);
+        this.applyBasicFilter("Dim_Intervenciones", "IdIntervencion", [projectId], "projectFilter");
+        this.renderFilterPanelIntoRoot();
     }
 
     private clearAllInteractiveFilters(): void {
