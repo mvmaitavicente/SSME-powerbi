@@ -5724,6 +5724,7 @@
 }
 
 .evm-project-curve-matrix-card {
+    position: relative;
     display: flex;
     min-width: 0;
     min-height: 0;
@@ -6115,8 +6116,8 @@
 
 .evm-project-curve-matrix th,
 .evm-project-curve-matrix td {
-    width: 118px;
-    min-width: 118px;
+    width: 126px;
+    min-width: 126px;
 }
 
 .evm-project-curve-matrix thead {
@@ -6138,7 +6139,8 @@
 }
 
 .evm-project-curve-matrix-heading > .evm-section-title {
-    font-size: 25px;
+    font-size: 22px;
+    line-height: 1.05;
 }
 
 .evm-project-curve-matrix-tab {
@@ -6148,19 +6150,216 @@
 }
 
 .evm-project-curve-matrix th {
-    padding-top: 10px;
-    padding-bottom: 10px;
-    font-size: 19px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    font-size: 21px;
 }
 
 .evm-project-curve-matrix td {
-    padding-top: 9px;
-    padding-bottom: 9px;
-    font-size: 17px;
+    padding-top: 11px;
+    padding-bottom: 11px;
+    font-size: 20px;
 }
 
 .evm-project-curve-matrix-counter {
     font-size: 14px;
+}
+
+.evm-project-curve-configure-button {
+    padding: 9px 15px;
+    border: 1px solid #B9C9E2;
+    border-radius: 7px;
+    background: #FFFFFF;
+    color: #001B8E;
+    font: 800 16px "Segoe UI", sans-serif;
+    cursor: pointer;
+}
+
+.evm-project-curve-configure-button:hover {
+    background: #EEF4FF;
+    border-color: #7EA4E5;
+}
+
+.evm-project-curve-heading-actions {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.evm-project-curve-download-button {
+    border-color: #1769E8;
+    background: #1769E8;
+    color: #FFFFFF;
+}
+
+.evm-project-curve-download-button:hover {
+    border-color: #0F55BE;
+    background: #0F55BE;
+}
+
+.evm-project-curve-column-overlay {
+    position: absolute;
+    z-index: 100;
+    inset: 0;
+    display: flex;
+    justify-content: flex-end;
+    padding: 24px 24px 18px;
+    background: rgba(7, 22, 79, .12);
+    box-sizing: border-box;
+}
+
+.evm-project-curve-column-panel {
+    position: relative;
+    display: flex;
+    width: 340px;
+    max-width: calc(100% - 20px);
+    min-height: 0;
+    flex-direction: column;
+    padding: 13px;
+    border: 1px solid #CAD7EA;
+    border-radius: 9px;
+    background: #FFFFFF;
+    box-shadow: 0 10px 30px rgba(7, 22, 79, .22);
+    box-sizing: border-box;
+}
+
+.evm-project-curve-column-resize-handle {
+    position: absolute;
+    z-index: 2;
+    left: -3px;
+    bottom: -3px;
+    width: 24px;
+    height: 24px;
+    cursor: nesw-resize;
+    touch-action: none;
+}
+
+.evm-project-curve-column-resize-handle::before,
+.evm-project-curve-column-resize-handle::after {
+    position: absolute;
+    left: 5px;
+    bottom: 5px;
+    width: 10px;
+    height: 2px;
+    border-radius: 2px;
+    background: #7184A4;
+    content: "";
+    transform: rotate(45deg);
+    transform-origin: left center;
+}
+
+.evm-project-curve-column-resize-handle::after {
+    left: 10px;
+    bottom: 4px;
+    width: 7px;
+}
+
+.evm-project-curve-column-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    color: #172B4D;
+    font-size: 20px;
+}
+
+.evm-project-curve-column-header button {
+    padding: 0 3px;
+    border: 0;
+    background: transparent;
+    color: #52688F;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.evm-project-curve-column-search {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid #D5DEEB;
+    border-radius: 6px;
+    color: #172B4D;
+    font: 17px "Segoe UI", sans-serif;
+    box-sizing: border-box;
+}
+
+.evm-project-curve-column-actions {
+    display: flex;
+    gap: 14px;
+    padding: 10px 0 8px;
+}
+
+.evm-project-curve-column-actions button {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #175CD3;
+    font: 800 16px "Segoe UI", sans-serif;
+    cursor: pointer;
+}
+
+.evm-project-curve-column-list {
+    flex: 1 1 auto;
+    min-height: 90px;
+    overflow-y: auto;
+    border-top: 1px solid #EDF0F5;
+    border-bottom: 1px solid #EDF0F5;
+}
+
+.evm-project-curve-column-option {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 3px 4px;
+    color: #243B64;
+    font-size: 17px;
+    font-weight: 650;
+    cursor: pointer;
+}
+
+.evm-project-curve-column-option input {
+    width: 15px;
+    height: 15px;
+    accent-color: #3F5AEF;
+}
+
+.evm-project-curve-column-option.mandatory {
+    background: #F5F8FD;
+    cursor: default;
+}
+
+.evm-project-curve-column-option small {
+    color: #7184A4;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.evm-project-curve-column-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 12px;
+}
+
+.evm-project-curve-column-footer button {
+    padding: 8px 14px;
+    border-radius: 6px;
+    font: 800 17px "Segoe UI", sans-serif;
+    cursor: pointer;
+}
+
+.evm-project-curve-column-footer .secondary {
+    border: 1px solid #CAD4E2;
+    background: #FFFFFF;
+    color: #243B64;
+}
+
+.evm-project-curve-column-footer .primary {
+    border: 1px solid #3F5AEF;
+    background: #3F5AEF;
+    color: #FFFFFF;
 }
 
 /* Keep both lower legends aligned and give Risks breathing room. */
@@ -6242,7 +6441,7 @@
 }
 
 .evm-project-details-lower-row .evm-timeline-svg .evm-milestone-name {
-    font-size: 16px;
+    font-size: 15px;
 }
 
 .evm-project-details-lower-row .evm-timeline-svg .evm-milestone-date-text {

@@ -3,6 +3,7 @@
 import powerbi from "powerbi-visuals-api";
 import { FormattingSettingsService } from "powerbi-visuals-utils-formattingmodel";
 import { BasicFilter } from "powerbi-models";
+import * as XLSX from "xlsx";
 import "./styles/visual.less";
 
 import { adaptJsonDashboardData, parseDashboardJsonData } from "./dataParser";
@@ -179,6 +180,7 @@ export class Visual implements IVisual {
     };
     private isGaugeHistoryModalOpen: boolean = false;
     private bodyCarouselIndex: number = 0;
+    private matrixVisibleColumns: Set<keyof CurveData> | null = null;
     private selectedGaugeKey: GaugeMetricKey | null = null;
     private visibleGaugeSeries: GaugeMetricKey[] = ["CPI", "SPI (w)", "TCPI", "TSPI (w)"];
     private readonly handleGaugeModalKeydown = (event: KeyboardEvent): void => {
@@ -1978,11 +1980,11 @@ export class Visual implements IVisual {
                 fields: [
                     weekField,
                     { key: "CPI", label: "CPI", title: "Índice de desempeño del costo", kind: "index" },
-                    { key: "SPI (w)", label: "SPI(W)", title: "Índice de desempeño del cronograma por valor", kind: "index" },
-                    { key: "SPI (t)", label: "SPI(T)", title: "Índice de desempeño del cronograma por tiempo", kind: "index" },
+                    { key: "SPI (w)", label: "SPI (w)", title: "Índice de desempeño del cronograma por valor", kind: "index" },
+                    { key: "SPI (t)", label: "SPI (t)", title: "Índice de desempeño del cronograma por tiempo", kind: "index" },
                     { key: "TCPI", label: "TCPI", title: "Índice de desempeño requerido del costo", kind: "index" },
-                    { key: "TSPI (w)", label: "TSPI(W)", title: "Índice de desempeño requerido del cronograma por valor", kind: "index" },
-                    { key: "TSPI (t)", label: "TSPI(T)", title: "Índice de desempeño requerido del cronograma por tiempo", kind: "index" }
+                    { key: "TSPI (w)", label: "TSPI (w)", title: "Índice de desempeño requerido del cronograma por valor", kind: "index" },
+                    { key: "TSPI (t)", label: "TSPI (t)", title: "Índice de desempeño requerido del cronograma por tiempo", kind: "index" }
                 ]
             },
             {
@@ -1990,11 +1992,11 @@ export class Visual implements IVisual {
                 className: "projections",
                 fields: [
                     weekField,
-                    { key: "EAC (c)", label: "EAC(C)", title: "Estimado de costo a la conclusión", kind: "money" },
-                    { key: "EAC (t)", label: "EAC(T)", title: "Estimado de tiempo a la conclusión", kind: "time" },
-                    { key: "IEAC (t)", label: "IEAC(T)", title: "Estimado independiente de tiempo a la conclusión", kind: "time" },
-                    { key: "VAC (c)", label: "VAC(C)", title: "Variación de costo a la conclusión", kind: "money" },
-                    { key: "VAC (t)", label: "VAC(T)", title: "Variación de tiempo a la conclusión", kind: "time" }
+                    { key: "EAC (c)", label: "EAC (c)", title: "Estimado de costo a la conclusión", kind: "money" },
+                    { key: "EAC (t)", label: "EAC (t)", title: "Estimado de tiempo a la conclusión", kind: "time" },
+                    { key: "IEAC (t)", label: "IEAC (t)", title: "Estimado independiente de tiempo a la conclusión", kind: "time" },
+                    { key: "VAC (c)", label: "VAC (c)", title: "Variación de costo a la conclusión", kind: "money" },
+                    { key: "VAC (t)", label: "VAC (t)", title: "Variación de tiempo a la conclusión", kind: "time" }
                 ]
             },
             {
@@ -2002,21 +2004,221 @@ export class Visual implements IVisual {
                 className: "variations",
                 fields: [
                     weekField,
-                    { key: "SV (w)", label: "SV(W)", title: "Variación del cronograma por valor", kind: "money" },
-                    { key: "SV (t)", label: "SV(T)", title: "Variación del cronograma por tiempo", kind: "time" },
-                    { key: "ETC (c)", label: "ETC(C)", title: "Costo restante estimado", kind: "money" },
-                    { key: "ETC (t)", label: "ETC(T)", title: "Tiempo restante estimado", kind: "time" }
+                    { key: "SV (w)", label: "SV (w)", title: "Variación del cronograma por valor", kind: "money" },
+                    { key: "SV (t)", label: "SV (t)", title: "Variación del cronograma por tiempo", kind: "time" },
+                    { key: "ETC (c)", label: "ETC (c)", title: "Costo restante estimado", kind: "money" },
+                    { key: "ETC (t)", label: "ETC (t)", title: "Tiempo restante estimado", kind: "time" }
                 ]
             }
         ];
+        const allFields = Array.from(
+            new Map(groups.flatMap((group) => group.fields).map((field) => [field.key, field])).values()
+        );
+        const isColumnVisible = (field: MatrixField): boolean => (
+            field.key === "Semana" || this.matrixVisibleColumns === null || this.matrixVisibleColumns.has(field.key)
+        );
         const title = createElement("div", "evm-section-title", "MATRIZ DE EVM");
         const heading = createElement("div", "evm-project-curve-matrix-heading");
         heading.appendChild(title);
+        const configureButton = document.createElement("button");
+        configureButton.type = "button";
+        configureButton.className = "evm-project-curve-configure-button";
+        configureButton.textContent = "⚙ Configurar columnas";
+        configureButton.addEventListener("click", () => {
+            const overlayHost = this.rootElement ?? this.target;
+            const existing = overlayHost.querySelector(".evm-project-curve-column-overlay");
+            if (existing) {
+                existing.remove();
+                return;
+            }
+
+            const draft = new Set<keyof CurveData>(
+                this.matrixVisibleColumns ?? allFields.filter((field) => field.key !== "Semana").map((field) => field.key)
+            );
+            const overlay = createElement("div", "evm-project-curve-column-overlay");
+            const panel = createElement("section", "evm-project-curve-column-panel");
+            panel.setAttribute("role", "dialog");
+            panel.setAttribute("aria-label", "Configurar columnas de la matriz EVM");
+
+            const panelHeader = createElement("header", "evm-project-curve-column-header");
+            panelHeader.appendChild(createElement("strong", undefined, "Configurar columnas"));
+            const closeButton = createElement("button", undefined, "×");
+            closeButton.setAttribute("aria-label", "Cerrar");
+            panelHeader.appendChild(closeButton);
+            panel.appendChild(panelHeader);
+
+            const search = document.createElement("input");
+            search.type = "search";
+            search.className = "evm-project-curve-column-search";
+            search.placeholder = "Buscar columnas...";
+            panel.appendChild(search);
+
+            const actions = createElement("div", "evm-project-curve-column-actions");
+            const selectAll = createElement("button", undefined, "Seleccionar todo");
+            const clearSelection = createElement("button", undefined, "Limpiar selección");
+            actions.appendChild(selectAll);
+            actions.appendChild(clearSelection);
+            panel.appendChild(actions);
+
+            const list = createElement("div", "evm-project-curve-column-list");
+            panel.appendChild(list);
+
+            const renderOptions = (): void => {
+                const query = search.value.trim().toLocaleLowerCase("es");
+                list.replaceChildren();
+                allFields
+                    .filter((field) => !query || field.label.toLocaleLowerCase("es").includes(query))
+                    .forEach((field) => {
+                        const option = createElement("label", `evm-project-curve-column-option${field.key === "Semana" ? " mandatory" : ""}`);
+                        const checkbox = document.createElement("input");
+                        checkbox.type = "checkbox";
+                        checkbox.checked = field.key === "Semana" || draft.has(field.key);
+                        checkbox.disabled = field.key === "Semana";
+                        checkbox.addEventListener("change", () => {
+                            if (checkbox.checked) {
+                                draft.add(field.key);
+                            } else {
+                                draft.delete(field.key);
+                            }
+                        });
+                        option.appendChild(checkbox);
+                        option.appendChild(createElement("span", undefined, field.label));
+                        if (field.key === "Semana") {
+                            option.appendChild(createElement("small", undefined, "Siempre visible"));
+                        }
+                        list.appendChild(option);
+                    });
+            };
+
+            search.addEventListener("input", renderOptions);
+            selectAll.addEventListener("click", () => {
+                allFields.forEach((field) => {
+                    if (field.key !== "Semana") draft.add(field.key);
+                });
+                renderOptions();
+            });
+            clearSelection.addEventListener("click", () => {
+                draft.clear();
+                renderOptions();
+            });
+
+            const footer = createElement("footer", "evm-project-curve-column-footer");
+            const cancelButton = createElement("button", "secondary", "Cancelar");
+            const applyButton = createElement("button", "primary", "Aplicar");
+            footer.appendChild(cancelButton);
+            footer.appendChild(applyButton);
+            panel.appendChild(footer);
+
+            const resizeHandle = createElement("div", "evm-project-curve-column-resize-handle");
+            resizeHandle.title = "Arrastrar para cambiar el tamaño";
+            resizeHandle.setAttribute("aria-label", "Cambiar tamaño del panel");
+            resizeHandle.addEventListener("pointerdown", (event: PointerEvent) => {
+                event.preventDefault();
+                const startX = event.clientX;
+                const startY = event.clientY;
+                const startWidth = panel.getBoundingClientRect().width;
+                const startHeight = panel.getBoundingClientRect().height;
+                resizeHandle.setPointerCapture(event.pointerId);
+
+                const resize = (moveEvent: PointerEvent): void => {
+                    const maxWidth = Math.max(340, overlay.clientWidth - 28);
+                    const maxHeight = Math.max(300, overlay.clientHeight - 12);
+                    const width = Math.min(maxWidth, Math.max(340, startWidth + startX - moveEvent.clientX));
+                    const height = Math.min(maxHeight, Math.max(300, startHeight + moveEvent.clientY - startY));
+                    panel.style.width = `${width}px`;
+                    panel.style.height = `${height}px`;
+                };
+                const stopResize = (): void => {
+                    resizeHandle.removeEventListener("pointermove", resize);
+                    resizeHandle.removeEventListener("pointerup", stopResize);
+                    resizeHandle.removeEventListener("pointercancel", stopResize);
+                };
+
+                resizeHandle.addEventListener("pointermove", resize);
+                resizeHandle.addEventListener("pointerup", stopResize);
+                resizeHandle.addEventListener("pointercancel", stopResize);
+            });
+            panel.appendChild(resizeHandle);
+
+            const closePanel = (): void => overlay.remove();
+            closeButton.addEventListener("click", closePanel);
+            cancelButton.addEventListener("click", closePanel);
+            applyButton.addEventListener("click", (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.matrixVisibleColumns = new Set(draft);
+                const updatedCard = this.renderProjectCurveMatrix(curveRows);
+                closePanel();
+                card.replaceWith(updatedCard);
+            });
+            overlay.addEventListener("click", (event) => {
+                if (event.target === overlay) closePanel();
+            });
+
+            renderOptions();
+            overlay.appendChild(panel);
+            overlayHost.appendChild(overlay);
+            search.focus();
+        });
+        const downloadButton = document.createElement("button");
+        downloadButton.type = "button";
+        downloadButton.className = "evm-project-curve-configure-button evm-project-curve-download-button";
+        downloadButton.textContent = "⇩ Descargar Excel";
+        downloadButton.addEventListener("click", async () => {
+            const exportFields = allFields.filter(isColumnVisible);
+            const sheetRows: Array<Array<string | number>> = [
+                exportFields.map((field) => field.label),
+                ...visibleRows.map((row) => exportFields.map((field) => numberValue(row[field.key] as DataValue) ?? ""))
+            ];
+            const worksheet = XLSX.utils.aoa_to_sheet(sheetRows);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Matriz EVM");
+            const content = XLSX.write(workbook, { bookType: "xlsx", type: "base64" }) as string;
+            const originalLabel = downloadButton.textContent;
+            downloadButton.disabled = true;
+            downloadButton.textContent = "Preparando...";
+            try {
+                const status = await this.host.downloadService.exportStatus();
+                if (status !== powerbi.PrivilegeStatus.Allowed) {
+                    throw new Error(`Descarga no permitida por Power BI: ${status}`);
+                }
+                const result = await this.host.downloadService.exportVisualsContentExtended(
+                    content,
+                    "matriz-evm.xlsx",
+                    "base64",
+                    "Matriz EVM en Excel"
+                );
+                if (!result.downloadCompleted) {
+                    throw new Error("Power BI no completó la descarga.");
+                }
+            } catch (error) {
+                console.error("No se pudo descargar la matriz EVM.", error);
+                downloadButton.textContent = "Descarga no disponible";
+                window.setTimeout(() => {
+                    downloadButton.textContent = originalLabel;
+                }, 2500);
+            } finally {
+                downloadButton.disabled = false;
+                if (downloadButton.textContent === "Preparando...") {
+                    downloadButton.textContent = originalLabel;
+                }
+            }
+        });
+        const headingActions = createElement("div", "evm-project-curve-heading-actions");
+        headingActions.appendChild(downloadButton);
+        headingActions.appendChild(configureButton);
+        heading.appendChild(headingActions);
         card.appendChild(heading);
 
         const tableWrap = createElement("div", "evm-project-curve-matrix-wrap");
+        const atWeek = curveRows
+            .map((row) => numberValue(row.AT))
+            .find((value): value is number => value !== null);
         const visibleRows = [...curveRows]
-            .filter((row) => (numberValue(row.Semana) ?? 0) >= 1)
+            .filter((row) => {
+                const week = numberValue(row.Semana);
+                return week !== null && week >= 1 && (atWeek === undefined || week <= atWeek);
+            })
             .sort((a, b) => (numberValue(a.Semana) ?? 0) - (numberValue(b.Semana) ?? 0));
         const table = createElement("table", "evm-project-curve-matrix");
         const head = document.createElement("thead");
@@ -2024,6 +2226,9 @@ export class Visual implements IVisual {
         groups.forEach((group, groupIndex) => {
             group.fields.forEach((field, fieldIndex) => {
                 if (groupIndex > 0 && fieldIndex === 0) {
+                    return;
+                }
+                if (!isColumnVisible(field)) {
                     return;
                 }
                 const th = createElement("th", undefined, field.label);
@@ -2042,6 +2247,9 @@ export class Visual implements IVisual {
             groups.forEach((group, groupIndex) => {
                 group.fields.forEach((field, fieldIndex) => {
                     if (groupIndex > 0 && fieldIndex === 0) {
+                        return;
+                    }
+                    if (!isColumnVisible(field)) {
                         return;
                     }
                     const value = numberValue(row[field.key] as DataValue);
