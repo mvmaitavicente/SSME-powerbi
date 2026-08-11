@@ -23,6 +23,7 @@ export declare class Visual implements IVisual {
     private defaultProjectId;
     private navigationDebug;
     private isGaugeHistoryModalOpen;
+    private sidebarExpanded;
     private bodyCarouselIndex;
     private matrixVisibleColumns;
     private selectedGaugeKey;

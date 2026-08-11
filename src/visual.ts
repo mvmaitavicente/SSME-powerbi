@@ -181,6 +181,7 @@ export class Visual implements IVisual {
         timestamp: new Date().toISOString()
     };
     private isGaugeHistoryModalOpen: boolean = false;
+    private sidebarExpanded: boolean = true;
     private bodyCarouselIndex: number = 0;
     private matrixVisibleColumns: Set<keyof CurveData> | null = null;
     private selectedGaugeKey: GaugeMetricKey | null = null;
@@ -265,6 +266,7 @@ export class Visual implements IVisual {
             }
             const root = document.createElement("div");
             root.className = "evm-dashboard";
+            root.classList.toggle("sidebar-expanded", this.sidebarExpanded);
             root.style.width = `${options.viewport.width}px`;
             root.style.height = `${options.viewport.height}px`;
             root.style.position = "relative";
@@ -288,6 +290,7 @@ export class Visual implements IVisual {
                     sidebarProject
                 });
                 root.appendChild(renderSidebar({
+                    expanded: this.sidebarExpanded,
                     activeLevel: dashboard.context.Level,
                     projectViewActive: this.bodyCarouselIndex === 1 ? "milestones" : "summary",
                     canOpenUnit: Boolean(sidebarUnit),
@@ -304,7 +307,12 @@ export class Visual implements IVisual {
                         this.disableProjectNavigation(sidebarProject ?? null);
                     },
                     onProjectView: (view) => this.openProjectView(view),
-                    onOpenFilters: () => this.openFilterPanel()
+                    onOpenFilters: () => this.openFilterPanel(),
+                    onToggle: () => {
+                        this.sidebarExpanded = !this.sidebarExpanded;
+                        root.classList.toggle("sidebar-expanded", this.sidebarExpanded);
+                        return this.sidebarExpanded;
+                    }
                 }));
                 root.appendChild(this.renderCurrentDashboard(dashboard, options.viewport));
                 if (this.filterPanelOpen && dashboard.context.Level !== "PROYECTO") {

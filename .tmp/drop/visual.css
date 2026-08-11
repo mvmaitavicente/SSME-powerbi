@@ -16,6 +16,9 @@
   height: 100%;
   min-height: 0;
 }
+.evm-dashboard.sidebar-expanded {
+  grid-template-columns: 238px minmax(0, 1fr);
+}
 .evm-card {
   background: #FFFFFF;
   border: 1px solid #DDE3F0;
@@ -33,6 +36,40 @@
   border: 1px solid #DDE3F0;
   border-radius: 8px;
   pointer-events: auto;
+}
+.evm-sidebar-brand,
+.evm-sidebar-toggle {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: center;
+  justify-items: center;
+  min-height: 42px;
+  padding: 7px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #001B8E;
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.evm-sidebar-brand {
+  margin-bottom: 8px;
+}
+.evm-sidebar-brand strong,
+.evm-sidebar-toggle span:not(.evm-menu-icon) {
+  display: none;
+}
+.evm-sidebar.expanded .evm-sidebar-brand,
+.evm-sidebar.expanded .evm-sidebar-toggle {
+  grid-template-columns: 32px minmax(0, 1fr);
+  justify-items: start;
+  text-align: left;
+}
+.evm-sidebar.expanded .evm-sidebar-brand strong,
+.evm-sidebar.expanded .evm-sidebar-toggle span:not(.evm-menu-icon) {
+  display: inline;
 }
 .evm-logo {
   display: none;
@@ -74,6 +111,17 @@
 }
 .evm-menu-item span:not(.evm-menu-icon) {
   display: none;
+}
+.evm-sidebar.expanded .evm-menu-item {
+  grid-template-columns: 32px minmax(0, 1fr);
+  justify-items: start;
+  min-height: 42px;
+  padding: 8px 10px;
+  font-size: 18px;
+  text-align: left;
+}
+.evm-sidebar.expanded .evm-menu-item span:not(.evm-menu-icon) {
+  display: inline;
 }
 .evm-menu-item.active,
 .evm-menu-item.sidebar-item--active {

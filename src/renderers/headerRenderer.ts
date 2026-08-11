@@ -4,6 +4,7 @@ import { DashboardLevel, ProjectHeader } from "../types";
 import { createElement, date, text } from "../utils/format";
 
 export interface SidebarOptions {
+    expanded: boolean;
     activeLevel: DashboardLevel;
     projectViewActive: "summary" | "milestones" | "risks";
     canOpenUnit: boolean;
@@ -14,15 +15,24 @@ export interface SidebarOptions {
     onOpenProject: () => void;
     onProjectView: (view: "summary" | "milestones" | "risks") => void;
     onOpenFilters: () => void;
+    onToggle: () => boolean;
 }
 
 export function renderSidebar(options: SidebarOptions): HTMLElement {
-    const sidebar = createElement("aside", "evm-sidebar");
+    const sidebar = createElement("aside", `evm-sidebar${options.expanded ? " expanded" : ""}`);
     console.debug("Sidebar renderizado", {
         level: options.activeLevel,
         canOpenUnit: options.canOpenUnit,
         canOpenProject: options.canOpenProject
     });
+
+    const brand = createElement("button", "evm-sidebar-brand");
+    brand.type = "button";
+    brand.setAttribute("aria-label", options.expanded ? "Contraer menú" : "Expandir menú");
+    brand.setAttribute("aria-expanded", String(options.expanded));
+    brand.appendChild(createElement("span", "evm-menu-icon", "▣"));
+    const brandLabel = createElement("strong", undefined, options.expanded ? "Contraer menú" : "Expandir menú");
+    brand.appendChild(brandLabel);
 
     const menu = createElement("nav", "evm-menu");
     menu.appendChild(renderSidebarButton("▦", "Alta Dirección", options.activeLevel === "PRONIED", false, options.onOpenPronied));
@@ -33,6 +43,16 @@ export function renderSidebar(options: SidebarOptions): HTMLElement {
     const footer = createElement("div", "evm-menu-footer");
     footer.appendChild(renderSidebarButton("⚙", "Filtros", false, false, options.onOpenFilters, "Abrir filtros"));
 
+    const toggleSidebar = (): void => {
+        const expanded = options.onToggle();
+        sidebar.classList.toggle("expanded", expanded);
+        brand.setAttribute("aria-label", expanded ? "Contraer menú" : "Expandir menú");
+        brand.setAttribute("aria-expanded", String(expanded));
+        brandLabel.textContent = expanded ? "Contraer menú" : "Expandir menú";
+    };
+    brand.addEventListener("click", toggleSidebar);
+
+    sidebar.appendChild(brand);
     sidebar.appendChild(menu);
     sidebar.appendChild(footer);
     return sidebar;
