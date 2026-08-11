@@ -55,7 +55,7 @@
     background: transparent;
     color: #001B8E;
     font-family: inherit;
-    font-size: 18px;
+    font-size: 19px;
     font-weight: 900;
     cursor: pointer;
 }
@@ -133,7 +133,7 @@
     justify-items: start;
     min-height: 42px;
     padding: 8px 10px;
-    font-size: 18px;
+    font-size: 19px;
     text-align: left;
 }
 
@@ -850,6 +850,7 @@
 }
 
 .evm-advanced-search-filters label {
+    position: relative;
     display: grid;
     gap: 6px;
 }
@@ -860,7 +861,23 @@
     font-weight: 850;
 }
 
-.evm-advanced-search-filters select {
+.evm-advanced-search-native-select {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.evm-advanced-search-select {
+    position: relative;
+    min-width: 0;
+}
+
+.evm-advanced-search-select-trigger {
+    position: relative;
+    width: 100%;
     min-width: 0;
     padding: 10px 11px;
     border: 1px solid #C9D4E5;
@@ -868,6 +885,63 @@
     background: #FFFFFF;
     color: #172B4D;
     font: 700 17px "Segoe UI", sans-serif;
+    text-align: left;
+    cursor: pointer;
+}
+
+.evm-advanced-search-select-trigger::after {
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    content: "⌄";
+    transform: translateY(-55%);
+}
+
+.evm-advanced-search-select-trigger[aria-expanded="true"] {
+    border-color: #1769E8;
+    box-shadow: 0 0 0 2px rgba(23, 105, 232, .12);
+}
+
+.evm-advanced-search-select-menu {
+    position: absolute;
+    z-index: 40;
+    top: calc(100% + 4px);
+    left: 0;
+    width: 100%;
+    max-height: 210px;
+    padding: 4px;
+    overflow-y: auto;
+    border: 1px solid #C9D4E5;
+    border-radius: 6px;
+    background: #FFFFFF;
+    box-shadow: 0 10px 24px rgba(0, 27, 142, .18);
+    box-sizing: border-box;
+}
+
+.evm-advanced-search-select-menu[hidden] {
+    display: none;
+}
+
+.evm-advanced-search-select-option {
+    display: block;
+    width: 100%;
+    padding: 8px 9px;
+    border: 0;
+    border-radius: 4px;
+    background: #FFFFFF;
+    color: #172B4D;
+    font: 700 15px "Segoe UI", sans-serif;
+    text-align: left;
+    cursor: pointer;
+}
+
+.evm-advanced-search-select-option:hover {
+    background: #EEF4FF;
+}
+
+.evm-advanced-search-select-option.selected {
+    background: #1769E8;
+    color: #FFFFFF;
 }
 
 .evm-advanced-search-toolbar {

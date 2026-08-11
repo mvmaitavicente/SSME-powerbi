@@ -125,6 +125,7 @@ export class Visual implements IVisual {
         status: null
     };
     private readonly appliedFilterValues: { [propertyName: string]: string | null } = {};
+    private generalNavigationFilterValue: string | null = null;
     private navigatorProjectCatalog: NavigatorProject[] = [];
     private navigationDebugHidden: boolean = false;
     private readonly navigationDebugPanelEnabled: boolean = false;
@@ -2513,7 +2514,6 @@ export class Visual implements IVisual {
         this.filterState.selectedUnit = null;
         this.filterState.selectedProjectId = null;
         this.pendingNavigationLevel = "PRONIED";
-        this.clearGeneralNavigationFilters();
         this.applyLevelFilter("PRONIED");
     }
 
@@ -2523,7 +2523,6 @@ export class Visual implements IVisual {
         this.filterState.selectedUnit = null;
         this.filterState.selectedProjectId = null;
         this.pendingNavigationLevel = "RIESGOS";
-        this.clearGeneralNavigationFilters();
         this.applyLevelFilter("RIESGOS");
     }
 
@@ -2544,7 +2543,6 @@ export class Visual implements IVisual {
         this.filterState.lastNavigableUnit = selectedUnit;
         this.filterState.selectedProjectId = null;
         this.pendingNavigationLevel = "UNIDAD";
-        this.clearGeneralNavigationFilters();
         this.applyLevelFilter("UNIDAD");
     }
 
@@ -2774,7 +2772,6 @@ export class Visual implements IVisual {
             ["unitFilter", "regionFilter", "provinceFilter", "districtFilter", "statusFilter"]
                 .forEach((property) => this.clearInternalFilter(property));
             this.applyProjectFilter(projectId);
-            this.applyBasicFilter("Dim_Intervenciones", "IdIntervencion", [projectId], "projectFilter");
             menu.hidden = true;
             trigger.setAttribute("aria-expanded", "false");
             this.renderFilterPanelIntoRoot();
@@ -2911,14 +2908,61 @@ export class Visual implements IVisual {
 
         const filterGrid = createElement("div", "evm-advanced-search-filters");
         const selectors: Record<string, HTMLSelectElement> = {};
+        const dropdowns: Record<string, { sync: () => void; close: () => void }> = {};
         const addFilter = (label: string, key: string, field: keyof NavigatorProject): void => {
             const wrapper = createElement("label");
             wrapper.appendChild(createElement("span", undefined, label));
             const select = document.createElement("select");
+            select.className = "evm-advanced-search-native-select";
             select.appendChild(new Option(label === "Unidad Gerencial" ? "Todas" : "Todos", ""));
             this.uniqueFromProjects(projects, field).forEach((option) => select.appendChild(new Option(option.label, option.value)));
             selectors[key] = select;
             wrapper.appendChild(select);
+            const control = createElement("div", "evm-advanced-search-select");
+            const trigger = createElement("button", "evm-advanced-search-select-trigger");
+            trigger.type = "button";
+            trigger.setAttribute("aria-haspopup", "listbox");
+            trigger.setAttribute("aria-expanded", "false");
+            const menu = createElement("div", "evm-advanced-search-select-menu");
+            menu.hidden = true;
+            menu.setAttribute("role", "listbox");
+            const closeMenu = (): void => {
+                menu.hidden = true;
+                trigger.setAttribute("aria-expanded", "false");
+            };
+            const syncMenu = (): void => {
+                const selectedOption = select.options[select.selectedIndex] ?? select.options[0];
+                trigger.textContent = selectedOption?.text ?? "";
+                menu.replaceChildren();
+                Array.from(select.options).forEach((option) => {
+                    const item = createElement("button", `evm-advanced-search-select-option${option.value === select.value ? " selected" : ""}`, option.text);
+                    item.type = "button";
+                    item.setAttribute("role", "option");
+                    item.setAttribute("aria-selected", String(option.value === select.value));
+                    item.addEventListener("click", (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        select.value = option.value;
+                        syncMenu();
+                        closeMenu();
+                        select.dispatchEvent(new Event("change", { bubbles: true }));
+                    });
+                    menu.appendChild(item);
+                });
+            };
+            trigger.addEventListener("click", (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                const willOpen = menu.hidden;
+                Object.values(dropdowns).forEach((dropdown) => dropdown.close());
+                menu.hidden = !willOpen;
+                trigger.setAttribute("aria-expanded", String(willOpen));
+            });
+            control.appendChild(trigger);
+            control.appendChild(menu);
+            wrapper.appendChild(control);
+            dropdowns[key] = { sync: syncMenu, close: closeMenu };
+            syncMenu();
             filterGrid.appendChild(wrapper);
         };
         addFilter("Unidad Gerencial", "unit", "UnidadGerencial");
@@ -3034,6 +3078,7 @@ export class Visual implements IVisual {
                 select.replaceChildren(new Option(definition.allLabel, ""));
                 options.forEach((option) => select.appendChild(new Option(option.label, option.value)));
                 select.value = options.some((option) => option.value === currentValue) ? currentValue : "";
+                dropdowns[definition.key].sync();
             });
         };
 
@@ -3052,6 +3097,7 @@ export class Visual implements IVisual {
         close.addEventListener("click", closeModal);
         cancel.addEventListener("click", closeModal);
         overlay.addEventListener("click", (event) => {
+            Object.values(dropdowns).forEach((dropdown) => dropdown.close());
             if (event.target === overlay) closeModal();
         });
         apply.addEventListener("click", () => {
@@ -3084,7 +3130,6 @@ export class Visual implements IVisual {
         ["unitFilter", "regionFilter", "provinceFilter", "districtFilter", "statusFilter"]
             .forEach((property) => this.clearInternalFilter(property));
         this.applyProjectFilter(projectId);
-        this.applyBasicFilter("Dim_Intervenciones", "IdIntervencion", [projectId], "projectFilter");
         this.renderFilterPanelIntoRoot();
     }
 
@@ -3242,6 +3287,10 @@ export class Visual implements IVisual {
     }
 
     private applyLevelFilter(level: DashboardLevel): void {
+        const filterSignature = `level:${level}`;
+        if (this.generalNavigationFilterValue === filterSignature) {
+            return;
+        }
         const filter = new BasicFilter(
             {
                 table: "Dim_NivelDashboard",
@@ -3255,11 +3304,16 @@ export class Visual implements IVisual {
 
         this.host.applyJsonFilter(filterJson as powerbi.IFilter, "general", "filter", powerbi.FilterAction.merge);
         this.host.applyJsonFilter(filterJson as powerbi.IFilter, "general", "selfFilter", powerbi.FilterAction.merge);
+        this.generalNavigationFilterValue = filterSignature;
     }
 
     private clearGeneralNavigationFilters(): void {
+        if (this.generalNavigationFilterValue === null) {
+            return;
+        }
         this.host.applyJsonFilter(null as unknown as powerbi.IFilter, "general", "filter", powerbi.FilterAction.remove);
         this.host.applyJsonFilter(null as unknown as powerbi.IFilter, "general", "selfFilter", powerbi.FilterAction.remove);
+        this.generalNavigationFilterValue = null;
     }
 
     private applyProjectFilter(projectId: string): void {
@@ -3268,6 +3322,10 @@ export class Visual implements IVisual {
             this.navigationDebug.lastError = "IdIntervencion vacío";
             this.navigationDebug.lastAction = "Navegación cancelada";
             this.renderNavigationDebugPanel();
+            return;
+        }
+        const filterSignature = `project:${cleanProjectId}`;
+        if (this.generalNavigationFilterValue === filterSignature) {
             return;
         }
 
@@ -3283,6 +3341,7 @@ export class Visual implements IVisual {
 
         this.host.applyJsonFilter(projectFilterJson as powerbi.IFilter, "general", "filter", powerbi.FilterAction.merge);
         this.host.applyJsonFilter(projectFilterJson as powerbi.IFilter, "general", "selfFilter", powerbi.FilterAction.merge);
+        this.generalNavigationFilterValue = filterSignature;
     }
 
     private testProjectNavigationFilter(projectId: string): void {
@@ -3377,8 +3436,8 @@ export class Visual implements IVisual {
         this.appliedFilterValues[propertyName] = nextValue === null ? null : String(nextValue);
     }
 
-    private clearInternalFilter(propertyName: string, force: boolean = true): void {
-        if (!force && this.appliedFilterValues[propertyName] === null) {
+    private clearInternalFilter(propertyName: string, force: boolean = false): void {
+        if (!force && this.appliedFilterValues[propertyName] == null) {
             return;
         }
         console.debug("Limpiando filtro", {
@@ -3425,13 +3484,13 @@ export class Visual implements IVisual {
         ["unitFilter", "regionFilter", "provinceFilter", "districtFilter", "statusFilter"]
             .forEach((property) => this.clearInternalFilter(property));
         this.applyProjectFilter(projectId);
-        this.applyBasicFilter("Dim_Intervenciones", "IdIntervencion", [projectId], "projectFilter");
         this.renderFilterPanelIntoRoot();
     }
 
     private clearAllInteractiveFilters(): void {
         this.host.applyJsonFilter(null as unknown as powerbi.IFilter, "general", "filter", powerbi.FilterAction.remove);
         this.host.applyJsonFilter(null as unknown as powerbi.IFilter, "general", "selfFilter", powerbi.FilterAction.remove);
+        this.generalNavigationFilterValue = null;
         ["unitFilter", "regionFilter", "provinceFilter", "districtFilter", "statusFilter", "projectFilter"]
             .forEach((property) => this.clearInternalFilter(property));
         this.filterState.level = "PRONIED";

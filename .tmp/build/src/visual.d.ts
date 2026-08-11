@@ -15,6 +15,7 @@ export declare class Visual implements IVisual {
     private filterFocus;
     private readonly filterState;
     private readonly appliedFilterValues;
+    private generalNavigationFilterValue;
     private navigatorProjectCatalog;
     private navigationDebugHidden;
     private readonly navigationDebugPanelEnabled;
