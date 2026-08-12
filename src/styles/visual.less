@@ -22,6 +22,35 @@
     grid-template-columns: 238px minmax(0, 1fr);
 }
 
+.evm-filter-loading {
+    position: absolute;
+    z-index: 500;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: rgba(247, 249, 252, .62);
+    color: #001B8E;
+    font-size: 18px;
+    font-weight: 900;
+    backdrop-filter: blur(1px);
+    cursor: wait;
+}
+
+.evm-filter-loading-spinner {
+    width: 28px;
+    height: 28px;
+    border: 4px solid rgba(0, 27, 142, .18);
+    border-top-color: #1769E8;
+    border-radius: 50%;
+    animation: evm-filter-loading-spin .72s linear infinite;
+}
+
+@keyframes evm-filter-loading-spin {
+    to { transform: rotate(360deg); }
+}
+
 .evm-card {
     background: #FFFFFF;
     border: 1px solid #DDE3F0;
@@ -179,12 +208,12 @@
 }
 
 .evm-main--project.evm-main--project-filters-open {
-    grid-template-rows: 98px 82px 349px minmax(0, 1fr);
+    grid-template-rows: 98px 94px 349px minmax(0, 1fr);
     gap: 12px;
 }
 
 .evm-main--project-details.evm-main--project-filters-open {
-    grid-template-rows: 98px 82px minmax(0, 1fr);
+    grid-template-rows: 98px 94px minmax(0, 1fr);
 }
 
 .evm-main--portfolio-details {
@@ -570,12 +599,12 @@
     z-index: 20;
     display: grid;
     width: 100%;
-    height: 82px;
-    grid-template-columns: minmax(250px, 2fr) repeat(4, minmax(90px, 1fr)) 160px;
+    height: 94px;
+    grid-template-columns: minmax(360px, 2.1fr) minmax(115px, .75fr) repeat(3, minmax(130px, 1fr)) 210px;
     grid-template-rows: minmax(0, 1fr);
     align-items: end;
-    gap: 7px;
-    padding: 7px 8px;
+    gap: 10px;
+    padding: 9px 10px;
     overflow: visible;
 }
 
@@ -584,20 +613,22 @@
 }
 
 .evm-filter-panel--project-inline .evm-filter-field {
-    gap: 5px;
+    gap: 7px;
 }
 
 .evm-filter-panel--project-inline .evm-filter-field span {
     overflow: hidden;
-    font-size: 16px;
+    font-size: 18px;
+    font-weight: 950;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .evm-filter-panel--project-inline .evm-filter-field select {
-    min-height: 39px;
-    padding: 7px 8px;
-    font-size: 16px;
+    min-height: 45px;
+    padding: 8px 10px;
+    font-size: 18px;
+    font-weight: 850;
 }
 
 .evm-filter-panel--project-inline .evm-filter-field select:disabled {
@@ -609,12 +640,24 @@
 }
 
 .evm-filter-panel--project-inline .evm-filter-clear {
-    min-height: 39px;
+    width: 100%;
+    min-width: 0;
+    min-height: 45px;
     margin: 0;
-    padding: 7px 8px;
-    font-size: 14px;
+    padding: 8px 12px;
+    border: 1.5px solid #1769E8;
+    border-radius: 6px;
+    background: #FFFFFF;
+    color: #0F55BE;
+    font-size: 18px;
+    font-weight: 900;
     line-height: 1;
+    box-sizing: border-box;
     white-space: nowrap;
+}
+
+.evm-filter-panel--project-inline .evm-filter-clear:hover {
+    background: #EEF4FF;
 }
 
 .evm-unit-project-filter {
@@ -630,14 +673,14 @@
 .evm-unit-project-trigger {
     position: relative;
     width: 100%;
-    min-height: 39px;
-    padding: 7px 30px 7px 9px;
+    min-height: 45px;
+    padding: 8px 32px 8px 11px;
     overflow: hidden;
     border: 1px solid #C7D1E4;
     border-radius: 6px;
     background: #FFFFFF;
     color: #00145C;
-    font: 800 15px "Segoe UI", sans-serif;
+    font: 850 18px "Segoe UI", sans-serif;
     text-align: left;
     text-overflow: ellipsis;
     white-space: nowrap;

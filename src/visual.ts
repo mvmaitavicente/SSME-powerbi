@@ -132,6 +132,8 @@ export class Visual implements IVisual {
     private pendingNavigationLevel: DashboardLevel | null = null;
     private pendingProjectSelectionId: string | null = null;
     private defaultProjectId: string | null = null;
+    private preferredProjectInitialized: boolean = false;
+    private readonly preferredProjectCui: string = "254895";
     private navigationDebug: NavigationDebugState = {
         clickCount: 0,
         updateCount: 0,
@@ -183,6 +185,9 @@ export class Visual implements IVisual {
     };
     private isGaugeHistoryModalOpen: boolean = false;
     private sidebarExpanded: boolean = true;
+    private filterLoading: boolean = false;
+    private filterLoadingTimer: number | null = null;
+    private filterLoadingSafetyTimer: number | null = null;
     private bodyCarouselIndex: number = 0;
     private matrixVisibleColumns: Set<keyof CurveData> | null = null;
     private selectedGaugeKey: GaugeMetricKey | null = null;
@@ -328,11 +333,14 @@ export class Visual implements IVisual {
 
             this.renderNavigationDebugPanel();
             this.target.appendChild(root);
+            this.finishFilterLoading();
+            this.initializePreferredProject(dashboard);
             if (this.isGaugeHistoryModalOpen) {
                 this.renderGaugeHistoryModal();
             }
             this.events.renderingFinished(options);
         } catch (error) {
+            this.finishFilterLoading();
             this.navigationDebug.lastAction = "Error al interpretar JSON Dashboard";
             this.navigationDebug.lastError = error instanceof Error ? error.message : String(error);
             this.navigationDebug.timestamp = new Date().toISOString();
@@ -2624,6 +2632,72 @@ export class Visual implements IVisual {
         this.rootElement?.querySelector(".evm-main--project")?.classList.remove("evm-main--project-filters-open");
     }
 
+    private initializePreferredProject(dashboard: ParsedDashboardData | null): void {
+        if (!dashboard || dashboard.context.Level !== "PROYECTO" || this.preferredProjectInitialized) {
+            return;
+        }
+        const projects = this.navigatorProjectCatalog.length
+            ? this.navigatorProjectCatalog
+            : dashboard.navigator?.projects ?? dashboard.projects;
+        const preferredProject = projects.find((project) => (
+            this.navigatorText(project.Cui ?? project.CUI).trim() === this.preferredProjectCui
+        ));
+        if (!preferredProject) {
+            return;
+        }
+        const preferredProjectId = this.getProjectId(preferredProject);
+        if (!preferredProjectId) {
+            return;
+        }
+        this.preferredProjectInitialized = true;
+        this.defaultProjectId = preferredProjectId;
+        const currentProjectId = dashboard.context.ProjectId
+            ?? this.navigatorText(dashboard.project?.IdIntervencion)
+            ?? this.filterState.selectedProjectId;
+        if (currentProjectId === preferredProjectId) {
+            this.filterState.selectedProjectId = preferredProjectId;
+            return;
+        }
+        window.setTimeout(() => this.applyProjectFromAdvancedSearch(preferredProject), 0);
+    }
+
+    private beginFilterLoading(): void {
+        if (this.filterLoading) {
+            return;
+        }
+        this.filterLoading = true;
+        this.rootElement?.setAttribute("aria-busy", "true");
+        this.filterLoadingTimer = window.setTimeout(() => {
+            if (!this.filterLoading || !this.rootElement?.isConnected) {
+                return;
+            }
+            if (this.rootElement.querySelector(".evm-filter-loading")) {
+                return;
+            }
+            const overlay = createElement("div", "evm-filter-loading");
+            overlay.setAttribute("role", "status");
+            overlay.setAttribute("aria-live", "polite");
+            overlay.appendChild(createElement("span", "evm-filter-loading-spinner"));
+            overlay.appendChild(createElement("strong", undefined, "Actualizando…"));
+            this.rootElement.appendChild(overlay);
+        }, 150);
+        this.filterLoadingSafetyTimer = window.setTimeout(() => this.finishFilterLoading(), 15000);
+    }
+
+    private finishFilterLoading(): void {
+        this.filterLoading = false;
+        if (this.filterLoadingTimer !== null) {
+            window.clearTimeout(this.filterLoadingTimer);
+            this.filterLoadingTimer = null;
+        }
+        if (this.filterLoadingSafetyTimer !== null) {
+            window.clearTimeout(this.filterLoadingSafetyTimer);
+            this.filterLoadingSafetyTimer = null;
+        }
+        this.rootElement?.removeAttribute("aria-busy");
+        this.rootElement?.querySelector(".evm-filter-loading")?.remove();
+    }
+
     private renderFilterPanelIntoRoot(): void {
         if (!this.rootElement || !this.currentDashboardData) {
             return;
@@ -2688,7 +2762,7 @@ export class Visual implements IVisual {
         const clear = createElement(
             "button",
             "evm-filter-clear",
-            this.currentDashboardData?.context.Level === "PROYECTO" ? "BUSCADOR AVANZADO" : "Limpiar filtros"
+            this.currentDashboardData?.context.Level === "PROYECTO" ? "⌕  Cambiar proyecto" : "Limpiar filtros"
         );
         clear.type = "button";
         clear.addEventListener("click", () => {
@@ -3302,6 +3376,7 @@ export class Visual implements IVisual {
 
         const filterJson = filter.toJSON();
 
+        this.beginFilterLoading();
         this.host.applyJsonFilter(filterJson as powerbi.IFilter, "general", "filter", powerbi.FilterAction.merge);
         this.host.applyJsonFilter(filterJson as powerbi.IFilter, "general", "selfFilter", powerbi.FilterAction.merge);
         this.generalNavigationFilterValue = filterSignature;
@@ -3311,6 +3386,7 @@ export class Visual implements IVisual {
         if (this.generalNavigationFilterValue === null) {
             return;
         }
+        this.beginFilterLoading();
         this.host.applyJsonFilter(null as unknown as powerbi.IFilter, "general", "filter", powerbi.FilterAction.remove);
         this.host.applyJsonFilter(null as unknown as powerbi.IFilter, "general", "selfFilter", powerbi.FilterAction.remove);
         this.generalNavigationFilterValue = null;
@@ -3339,6 +3415,7 @@ export class Visual implements IVisual {
         );
         const projectFilterJson = projectFilter.toJSON();
 
+        this.beginFilterLoading();
         this.host.applyJsonFilter(projectFilterJson as powerbi.IFilter, "general", "filter", powerbi.FilterAction.merge);
         this.host.applyJsonFilter(projectFilterJson as powerbi.IFilter, "general", "selfFilter", powerbi.FilterAction.merge);
         this.generalNavigationFilterValue = filterSignature;
@@ -3431,6 +3508,7 @@ export class Visual implements IVisual {
             propertyName,
             filter
         });
+        this.beginFilterLoading();
         this.host.applyJsonFilter(filter, "internalFilters", propertyName, powerbi.FilterAction.merge);
         this.host.applyJsonFilter(filter, "internalFilters", this.selfFilterPropertyName(propertyName), powerbi.FilterAction.merge);
         this.appliedFilterValues[propertyName] = nextValue === null ? null : String(nextValue);
@@ -3443,6 +3521,7 @@ export class Visual implements IVisual {
         console.debug("Limpiando filtro", {
             propertyName
         });
+        this.beginFilterLoading();
         this.host.applyJsonFilter(null as unknown as powerbi.IFilter, "internalFilters", propertyName, powerbi.FilterAction.remove);
         this.host.applyJsonFilter(
             null as unknown as powerbi.IFilter,
@@ -3488,6 +3567,7 @@ export class Visual implements IVisual {
     }
 
     private clearAllInteractiveFilters(): void {
+        this.beginFilterLoading();
         this.host.applyJsonFilter(null as unknown as powerbi.IFilter, "general", "filter", powerbi.FilterAction.remove);
         this.host.applyJsonFilter(null as unknown as powerbi.IFilter, "general", "selfFilter", powerbi.FilterAction.remove);
         this.generalNavigationFilterValue = null;

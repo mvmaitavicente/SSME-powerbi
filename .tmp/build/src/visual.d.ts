@@ -22,9 +22,14 @@ export declare class Visual implements IVisual {
     private pendingNavigationLevel;
     private pendingProjectSelectionId;
     private defaultProjectId;
+    private preferredProjectInitialized;
+    private readonly preferredProjectCui;
     private navigationDebug;
     private isGaugeHistoryModalOpen;
     private sidebarExpanded;
+    private filterLoading;
+    private filterLoadingTimer;
+    private filterLoadingSafetyTimer;
     private bodyCarouselIndex;
     private matrixVisibleColumns;
     private selectedGaugeKey;
@@ -113,6 +118,9 @@ export declare class Visual implements IVisual {
     private openProjectSelector;
     private openFilterPanel;
     private closeFilterPanel;
+    private initializePreferredProject;
+    private beginFilterLoading;
+    private finishFilterLoading;
     private renderFilterPanelIntoRoot;
     private renderFilterPanel;
     private renderUnitProjectTreeFilter;
