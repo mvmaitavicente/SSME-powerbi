@@ -3,7 +3,6 @@
 import powerbi from "powerbi-visuals-api";
 import { FormattingSettingsService } from "powerbi-visuals-utils-formattingmodel";
 import { BasicFilter } from "powerbi-models";
-import * as XLSX from "xlsx";
 import "./styles/visual.less";
 
 import { adaptJsonDashboardData, parseDashboardJsonData } from "./dataParser";
@@ -598,6 +597,124 @@ export class Visual implements IVisual {
         return "#64748B";
     }
 
+    private attachMatrixCopyMenu(matrix: HTMLElement, headerSelector: string, rowSelector: string, cellSelector: string): void {
+        const clearAltHover = (): void => matrix.classList.remove("evm-matrix-alt-active");
+        matrix.addEventListener("keydown", (event: KeyboardEvent) => {
+            if (event.key === "Alt") {
+                matrix.classList.add("evm-matrix-alt-active");
+            }
+        });
+        matrix.addEventListener("keyup", (event: KeyboardEvent) => {
+            if (event.key === "Alt") {
+                clearAltHover();
+            }
+        });
+        matrix.addEventListener("pointermove", clearAltHover);
+        window.addEventListener("blur", clearAltHover, { once: true });
+        matrix.addEventListener("contextmenu", (event: MouseEvent) => {
+            const target = event.target instanceof Element ? event.target.closest(cellSelector) : null;
+            if (!(target instanceof HTMLElement) || !matrix.contains(target)) return;
+            const row = target.parentElement;
+            if (!row || row.matches(headerSelector)) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const clean = (element: Element | null): string => (element?.textContent ?? "").trim().replace(/\s+/g, " ");
+            const header = matrix.querySelector(headerSelector);
+            const headers = header ? Array.from(header.children).map(clean) : [];
+            const rows = Array.from(matrix.querySelectorAll(rowSelector));
+            const rowValues = Array.from(row.children).map(clean);
+            const columnIndex = Array.from(row.children).indexOf(target);
+            const columnValues = rows.map((item) => clean(item.children[columnIndex] ?? null));
+            const tableText = [headers, ...rows.map((item) => Array.from(item.children).map(clean))].map((values) => values.join("\t")).join("\n");
+            this.rootElement?.querySelector(".evm-matrix-copy-menu")?.remove();
+            if (!this.rootElement) return;
+            const menu = createElement("div", "evm-matrix-copy-menu");
+            const actions: Array<[string, string]> = [
+                ["Copiar valor seleccionado", clean(target)],
+                ["Copiar fila", `${headers.join("\t")}\n${rowValues.join("\t")}`],
+                ["Copiar columna", [headers[columnIndex] ?? "", ...columnValues].join("\n")],
+                ["Copiar tabla", tableText]
+            ];
+            actions.forEach(([label, content]) => {
+                const button = createElement("button", undefined, label);
+                button.type = "button";
+                button.addEventListener("click", () => {
+                    this.copyMatrixText(content);
+                    menu.remove();
+                });
+                menu.appendChild(button);
+            });
+            const rootRect = this.rootElement.getBoundingClientRect();
+            menu.style.left = `${Math.max(6, Math.min(event.clientX - rootRect.left, rootRect.width - 230))}px`;
+            menu.style.top = `${Math.max(6, Math.min(event.clientY - rootRect.top, rootRect.height - 170))}px`;
+            this.rootElement.appendChild(menu);
+            const closeMenu = (): void => {
+                menu.remove();
+                document.removeEventListener("pointerdown", closeWhenOutside, true);
+                document.removeEventListener("keydown", closeWithEscape, true);
+            };
+            const closeWhenOutside = (pointerEvent: PointerEvent): void => {
+                if (pointerEvent.target instanceof Node && menu.contains(pointerEvent.target)) {
+                    return;
+                }
+                closeMenu();
+            };
+            const closeWithEscape = (keyEvent: KeyboardEvent): void => {
+                if (keyEvent.key !== "Escape") return;
+                keyEvent.preventDefault();
+                closeMenu();
+                target.focus();
+            };
+            window.setTimeout(() => {
+                document.addEventListener("pointerdown", closeWhenOutside, true);
+                document.addEventListener("keydown", closeWithEscape, true);
+            }, 0);
+        });
+    }
+
+    private copyMatrixText(content: string): void {
+        const textarea = document.createElement("textarea");
+        textarea.value = content;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.left = "-9999px";
+        textarea.style.top = "0";
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        let copied = false;
+        try {
+            copied = document.execCommand("copy");
+        } catch {
+            copied = false;
+        }
+        textarea.remove();
+        if (copied) {
+            this.showMatrixCopyNotice("Copiado al portapapeles");
+            return;
+        }
+        if (navigator.clipboard?.writeText) {
+            navigator.clipboard.writeText(content)
+                .then(() => this.showMatrixCopyNotice("Copiado al portapapeles"))
+                .catch(() => this.showMatrixCopyFallback(content));
+            return;
+        }
+        this.showMatrixCopyFallback(content);
+    }
+
+    private showMatrixCopyNotice(message: string): void {
+        if (!this.rootElement) return;
+        this.rootElement.querySelector(".evm-matrix-copy-notice")?.remove();
+        const notice = createElement("div", "evm-matrix-copy-notice", message);
+        this.rootElement.appendChild(notice);
+        window.setTimeout(() => notice.remove(), 1800);
+    }
+
+    private showMatrixCopyFallback(content: string): void {
+        this.showNavigationDebugTextarea(content);
+        this.showMatrixCopyNotice("Seleccione el texto y presione Ctrl+C");
+    }
+
     private copyNavigationDebug(): void {
         const content = JSON.stringify(this.navigationDebug, null, 2);
         const clipboard = navigator.clipboard;
@@ -805,7 +922,7 @@ export class Visual implements IVisual {
     private renderUnitProgressPanel(units: UnitSummaryData[]): HTMLElement {
         const section = createElement("section", "evm-card evm-unit-progress-card");
         const heading = createElement("div", "evm-unit-progress-heading");
-        heading.appendChild(createElement("div", "evm-section-title", "AVANCE POR UNIDAD GERENCIAL"));
+        heading.appendChild(createElement("div", "evm-section-title", "PORTAFOLIO DEL PRONIED"));
         const legend = createElement("div", "evm-unit-progress-range-legend");
         const legendTitle = createElement("div", "evm-unit-progress-range-title");
         legendTitle.appendChild(document.createTextNode("CRITERIO DE ESTADOS"));
@@ -883,12 +1000,20 @@ export class Visual implements IVisual {
 
         const table = createElement("div", "evm-unit-progress-table");
         const header = createElement("div", "evm-unit-progress-row evm-unit-progress-header");
-        header.appendChild(this.renderUnitProgressHeader("Unidad Gerencial", "unit"));
-        header.appendChild(this.renderUnitProgressHeader("Proyectos", "projects"));
+        header.appendChild(this.renderUnitProgressHeader("Unidad", "unit"));
         header.appendChild(this.renderUnitProgressHeader("% Avance", "advance"));
-        header.appendChild(this.renderUnitProgressHeader("SPI", "spi"));
+        header.appendChild(this.renderUnitProgressHeader("BAC", "cpi"));
+        header.appendChild(this.renderUnitProgressHeader("PV", "cpi"));
+        header.appendChild(this.renderUnitProgressHeader("EV", "cpi"));
+        header.appendChild(this.renderUnitProgressHeader("AC", "cpi"));
+        header.appendChild(this.renderUnitProgressHeader("CV", "cpi"));
         header.appendChild(this.renderUnitProgressHeader("CPI", "cpi"));
-        header.appendChild(this.renderUnitProgressHeader("Estado", "status"));
+        header.appendChild(this.renderUnitProgressHeader("SV", "spi"));
+        header.appendChild(this.renderUnitProgressHeader("SPI (w)", "spi"));
+        header.appendChild(this.renderUnitProgressHeader("EAC (c)", "cpi"));
+        header.appendChild(this.renderUnitProgressHeader("ETC (c)", "cpi"));
+        header.appendChild(this.renderUnitProgressHeader("TCPI", "spi"));
+        header.appendChild(this.renderUnitProgressHeader("VAC (c)", "cpi"));
         table.appendChild(header);
 
         const progressRows = units.slice(0, 12).map((unit) => {
@@ -897,7 +1022,8 @@ export class Visual implements IVisual {
             return { unit, advancePct };
         });
         progressRows.forEach(({ unit, advancePct }) => {
-            const isTotal = unit.UnidadGerencial.trim().toLowerCase() === "portafolio pronied";
+            const normalizedUnit = unit.UnidadGerencial.trim().toLowerCase();
+            const isTotal = normalizedUnit === "portafolio" || normalizedUnit === "portafolio pronied";
             const spi = unit.SPIW;
             const cpi = unit.CPI;
             const minimumIndex = Math.min(spi ?? 0, cpi ?? 0);
@@ -936,7 +1062,6 @@ export class Visual implements IVisual {
                 unitCell.appendChild(createElement("strong", undefined, unit.UnidadGerencial));
             }
             row.appendChild(unitCell);
-            row.appendChild(createElement("strong", "evm-unit-progress-projects", this.formatInteger(unit.CantidadProyectos)));
 
             const isOverTarget = advancePct > 100;
             const progressCell = createElement("div", `evm-unit-progress-value${isOverTarget ? " is-over-target" : ""}`);
@@ -947,19 +1072,54 @@ export class Visual implements IVisual {
             progressCell.appendChild(progress);
             progressCell.appendChild(createElement("strong", undefined, `${advancePct}%`));
             row.appendChild(progressCell);
-            row.appendChild(createElement("span", "evm-unit-progress-index", decimal(spi)));
+            row.appendChild(createElement("span", "evm-unit-progress-money", currency(unit.BAC)));
+            row.appendChild(createElement("span", "evm-unit-progress-money", currency(unit.PV)));
+            row.appendChild(createElement("span", "evm-unit-progress-money", currency(unit.EV)));
+            row.appendChild(createElement("span", "evm-unit-progress-money", currency(unit.AC)));
+            row.appendChild(createElement("span", "evm-unit-progress-money", currency(unit.CV)));
             row.appendChild(createElement("span", "evm-unit-progress-index", decimal(cpi)));
-            const statusCell = createElement("span", `evm-unit-progress-status ${status.className}`);
-            statusCell.appendChild(createElement("i"));
-            statusCell.appendChild(document.createTextNode(status.label));
-            row.appendChild(statusCell);
+            row.appendChild(createElement("span", "evm-unit-progress-money", currency(unit.SV)));
+            row.appendChild(createElement("span", "evm-unit-progress-index", decimal(spi)));
+            row.appendChild(createElement("span", "evm-unit-progress-money", currency(unit.EACC)));
+            row.appendChild(createElement("span", "evm-unit-progress-money", currency(unit.ETCC)));
+            row.appendChild(createElement("span", "evm-unit-progress-index", decimal(unit.TCPI)));
+            row.appendChild(createElement("span", "evm-unit-progress-money", currency(unit.VACC)));
+            Array.from(row.children).forEach((cell) => {
+                if (!(cell instanceof HTMLElement)) {
+                    return;
+                }
+                cell.tabIndex = 0;
+                cell.setAttribute("role", "gridcell");
+                cell.setAttribute("aria-selected", "false");
+                const toggleSelection = (): void => {
+                    const wasSelected = cell.classList.contains("is-selected");
+                    table.querySelectorAll(".is-selected").forEach((selected) => {
+                        selected.classList.remove("is-selected");
+                        if (selected.getAttribute("role") === "gridcell") {
+                            selected.setAttribute("aria-selected", "false");
+                        }
+                    });
+                    if (!wasSelected) {
+                        row.classList.add("is-selected");
+                        cell.classList.add("is-selected");
+                        cell.setAttribute("aria-selected", "true");
+                    }
+                };
+                cell.addEventListener("click", toggleSelection);
+                cell.addEventListener("keydown", (event: KeyboardEvent) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        toggleSelection();
+                    }
+                });
+            });
             table.appendChild(row);
         });
 
         const body = createElement("div", "evm-unit-progress-body");
         body.appendChild(table);
-        body.appendChild(legend);
         section.appendChild(body);
+        this.attachMatrixCopyMenu(table, ".evm-unit-progress-header", ".evm-unit-progress-row:not(.evm-unit-progress-header)", ".evm-unit-progress-row > *");
         return section;
     }
 
@@ -1266,7 +1426,7 @@ export class Visual implements IVisual {
     }
 
     private renderUnitDashboard(dashboard: ParsedDashboardData, viewport: powerbi.IViewport): HTMLElement {
-        const main = createElement("main", "evm-main");
+        const main = createElement("main", "evm-main evm-main--unit");
         main.style.minWidth = `${Math.min(780, Math.max(0, viewport.width - 92))}px`;
         const unitName = text(this.resolveUnitForNavigation(dashboard), "UGEO");
         main.appendChild(renderHeader(
@@ -1661,7 +1821,10 @@ export class Visual implements IVisual {
             if (value < 1) {
                 return "En riesgo";
             }
-            return "Estable";
+            if (value < 1.2) {
+                return "Estable";
+            }
+            return "Sobredimensionado";
         }
         if (value <= 1) {
             return "Estable";
@@ -2213,45 +2376,8 @@ export class Visual implements IVisual {
         downloadButton.type = "button";
         downloadButton.className = "evm-project-curve-configure-button evm-project-curve-download-button";
         downloadButton.textContent = "⇩ Descargar Excel";
-        downloadButton.addEventListener("click", async () => {
-            const exportFields = allFields.filter(isColumnVisible);
-            const sheetRows: Array<Array<string | number>> = [
-                exportFields.map((field) => field.label),
-                ...visibleRows.map((row) => exportFields.map((field) => numberValue(row[field.key] as DataValue) ?? ""))
-            ];
-            const worksheet = XLSX.utils.aoa_to_sheet(sheetRows);
-            const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, "Matriz EVM");
-            const content = XLSX.write(workbook, { bookType: "xlsx", type: "base64" }) as string;
-            const originalLabel = downloadButton.textContent;
-            downloadButton.disabled = true;
-            downloadButton.textContent = "Preparando...";
-            try {
-                const status = await this.host.downloadService.exportStatus();
-                if (status !== powerbi.PrivilegeStatus.Allowed) {
-                    throw new Error(`Descarga no permitida por Power BI: ${status}`);
-                }
-                const result = await this.host.downloadService.exportVisualsContentExtended(
-                    content,
-                    "matriz-evm.xlsx",
-                    "base64",
-                    "Matriz EVM en Excel"
-                );
-                if (!result.downloadCompleted) {
-                    throw new Error("Power BI no completó la descarga.");
-                }
-            } catch (error) {
-                console.error("No se pudo descargar la matriz EVM.", error);
-                downloadButton.textContent = "Descarga no disponible";
-                window.setTimeout(() => {
-                    downloadButton.textContent = originalLabel;
-                }, 2500);
-            } finally {
-                downloadButton.disabled = false;
-                if (downloadButton.textContent === "Preparando...") {
-                    downloadButton.textContent = originalLabel;
-                }
-            }
+        downloadButton.addEventListener("click", () => {
+            this.host.launchUrl("https://python-api-ssme-dng3a6ecgacfe5dc.centralus-01.azurewebsites.net/api/fn_descargar_excel?idIntervencion=123");
         });
         const headingActions = createElement("div", "evm-project-curve-heading-actions");
         headingActions.appendChild(downloadButton);
@@ -2270,6 +2396,33 @@ export class Visual implements IVisual {
             })
             .sort((a, b) => (numberValue(a.Semana) ?? 0) - (numberValue(b.Semana) ?? 0));
         const table = createElement("table", "evm-project-curve-matrix");
+        const visibleFields = groups.flatMap((group, groupIndex) => group.fields.filter((field, fieldIndex) => {
+            return !(groupIndex > 0 && fieldIndex === 0) && isColumnVisible(field);
+        }));
+        const colgroup = document.createElement("colgroup");
+        visibleFields.forEach((field) => {
+            const headerLines = field.label.match(/^(.+?)\s+(\([^)]*\))$/);
+            const headerLength = headerLines
+                ? Math.max(headerLines[1].length, headerLines[2].length)
+                : field.label.length;
+            const contentLength = visibleRows.reduce((maximum, row) => {
+                const value = numberValue(row[field.key] as DataValue);
+                const formatted = value === null
+                    ? "â€”"
+                    : field.kind === "money"
+                        ? `S/ ${Math.round(value).toLocaleString("en-US")}`
+                        : field.kind === "week"
+                            ? this.formatInteger(value)
+                            : value.toLocaleString("en-US", { minimumFractionDigits: field.kind === "index" ? 2 : 0, maximumFractionDigits: 2 });
+                return Math.max(maximum, formatted.length);
+            }, headerLength);
+            const minimumWidth = field.kind === "week" ? 56 : field.kind === "time" ? 58 : field.kind === "index" ? 68 : 78;
+            const maximumWidth = field.kind === "money" ? 116 : field.kind === "time" ? 92 : field.kind === "index" ? 96 : 76;
+            const col = document.createElement("col");
+            col.style.width = `${Math.max(minimumWidth, Math.min(maximumWidth, contentLength * 9 + 18))}px`;
+            colgroup.appendChild(col);
+        });
+        table.appendChild(colgroup);
         const head = document.createElement("thead");
         const headRow = document.createElement("tr");
         groups.forEach((group, groupIndex) => {
@@ -2280,7 +2433,15 @@ export class Visual implements IVisual {
                 if (!isColumnVisible(field)) {
                     return;
                 }
-                const th = createElement("th", undefined, field.label);
+                const th = createElement("th");
+                const headerLines = field.label.match(/^(.+?)\s+(\([^)]*\))$/);
+                if (headerLines) {
+                    th.classList.add("evm-project-curve-matrix-header--stacked");
+                    th.appendChild(createElement("span", undefined, headerLines[1]));
+                    th.appendChild(createElement("span", undefined, headerLines[2]));
+                } else {
+                    th.textContent = field.label;
+                }
                 th.title = field.title;
                 headRow.appendChild(th);
             });
@@ -2312,12 +2473,36 @@ export class Visual implements IVisual {
                     }
                     const td = createElement("td", undefined, formatted);
                     td.title = value === null ? "Sin dato" : `${field.title}: ${value.toLocaleString("en-US", { maximumFractionDigits: 4 })}`;
+                    td.tabIndex = 0;
+                    td.setAttribute("role", "gridcell");
+                    td.setAttribute("aria-selected", "false");
+                    const toggleSelection = (): void => {
+                        const wasSelected = td.classList.contains("is-selected");
+                        table.querySelectorAll("td.is-selected").forEach((cell) => {
+                            cell.classList.remove("is-selected");
+                            cell.setAttribute("aria-selected", "false");
+                        });
+                        table.querySelectorAll("tr.is-selected").forEach((selectedRow) => selectedRow.classList.remove("is-selected"));
+                        if (!wasSelected) {
+                            td.classList.add("is-selected");
+                            td.setAttribute("aria-selected", "true");
+                            tr.classList.add("is-selected");
+                        }
+                    };
+                    td.addEventListener("click", toggleSelection);
+                    td.addEventListener("keydown", (event: KeyboardEvent) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            toggleSelection();
+                        }
+                    });
                     tr.appendChild(td);
                 });
             });
             body.appendChild(tr);
         });
         table.appendChild(body);
+        this.attachMatrixCopyMenu(table, "thead tr", "tbody tr", "th, td");
         tableWrap.appendChild(table);
         card.appendChild(tableWrap);
         return card;

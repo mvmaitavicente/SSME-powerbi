@@ -274,9 +274,14 @@ export interface UnitSummaryData extends Record<string, unknown> {
     PV: number | null;
     EV: number | null;
     AC: number | null;
+    CV: number | null;
     CPI: number | null;
+    SV: number | null;
     SPIW: number | null;
+    EACC: number | null;
+    ETCC: number | null;
     TCPI: number | null;
+    VACC: number | null;
     TSPI: number | null;
     Avance: number | null;
     Estado: string;

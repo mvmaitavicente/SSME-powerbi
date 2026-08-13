@@ -6,6 +6,7 @@ export declare function shortCurrency(value: DataValue): string;
 export declare function percent(value: DataValue): string;
 export declare function percentRatio(value: DataValue): number;
 export declare function decimal(value: DataValue, digits?: number): string;
+export declare function decimalUpTo(value: DataValue, maximumDigits?: number): string;
 export declare function signedDecimal(value: DataValue): string;
 export declare function date(value: DataValue): string;
 export declare function createElement<K extends keyof HTMLElementTagNameMap>(tagName: K, className?: string, textContent?: string): HTMLElementTagNameMap[K];

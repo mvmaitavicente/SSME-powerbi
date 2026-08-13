@@ -1,7 +1,7 @@
 "use strict";
 
 import { DataValue, PerformanceData } from "../types";
-import { createElement, currency, date, numberValue, percent, percentRatio, svgElement, text } from "../utils/format";
+import { createElement, currency, date, decimalUpTo, numberValue, percent, percentRatio, svgElement } from "../utils/format";
 
 type PerformanceIcon = "clock" | "calendar" | "check" | "money" | "coins" | "chart";
 
@@ -21,9 +21,9 @@ export function renderPerformance(data: PerformanceData): HTMLElement {
         : "Sobre Costo Proyectado";
     card.appendChild(createElement("div", "evm-section-title", "Desempeno del Proyecto"));
 
-    card.appendChild(progressRow("clock", "Plazo Consumido", data.PlazoConsumidoPct, `${percent(data.PlazoConsumidoPct)}`, "Plazo Restante", `${text(data.PlazoRestanteSemanas)} sem.`));
-    card.appendChild(metricPair("calendar", "Plazo Programado Total", `${text(data.PlazoProgramadoTotalSemanas)} semanas`, "Plazo Proyectado", `${text(data.PlazoProyectadoSemanas)} semanas`));
-    card.appendChild(metricPair("check", "Retraso Proyectado", `${text(data.RetrasoProyectadoSemanas)} semanas`, "Termino Proyectado", date(data.TerminoProyectado), true));
+    card.appendChild(progressRow("clock", "Plazo Consumido", data.PlazoConsumidoPct, `${percent(data.PlazoConsumidoPct)}`, "Plazo Restante", `${decimalUpTo(data.PlazoRestanteSemanas)} sem.`));
+    card.appendChild(metricPair("calendar", "Plazo Programado Total", `${decimalUpTo(data.PlazoProgramadoTotalSemanas)} semanas`, "Plazo Proyectado", `${decimalUpTo(data.PlazoProyectadoSemanas)} semanas`));
+    card.appendChild(metricPair("check", "Retraso Proyectado", `${decimalUpTo(data.RetrasoProyectadoSemanas)} semanas`, "Termino Proyectado", date(data.TerminoProyectado), true));
     card.appendChild(progressRow("money", "Presupuesto Consumido", data.PresupuestoConsumidoPct, `${percent(data.PresupuestoConsumidoPct)}`, "Presupuesto Restante", currency(data.PresupuestoRestante)));
     card.appendChild(metricPair("coins", "Presupuesto Programado (BAC)", currency(data.PresupuestoProgramadoBAC), "Costo Estimado al Termino (EAC)", currency(data.CostoEstimadoTerminoEAC)));
     card.appendChild(metricSingle("chart", projectedCostLabel, `${currency(data.SobreCostoProyectadoVAC)} (${percent(data.SobreCostoProyectadoPct)})`, true));

@@ -2578,7 +2578,8 @@
 .evm-portfolio-summary-bottom .evm-portfolio-summary-main span {
   font-size: 16px;
 }
-.evm-main--pronied .evm-body-carousel-page--evm {
+.evm-main--pronied .evm-body-carousel-page--evm,
+.evm-main--unit .evm-body-carousel-page--evm {
   grid-template-columns: minmax(0, 68fr) minmax(0, 32fr);
 }
 .evm-main--pronied .evm-curve-card .evm-summary-grid {
@@ -2969,6 +2970,41 @@
 }
 .evm-unit-progress-status.critical {
   color: #D32F2F;
+}
+.evm-unit-progress-body .evm-unit-progress-row:not(.evm-unit-progress-header) > * {
+  position: relative;
+  transition: background-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+.evm-unit-progress-body .evm-unit-progress-row:not(.evm-unit-progress-header):hover > * {
+  background: #EAF2FF;
+}
+.evm-unit-progress-body .evm-unit-progress-row:not(.evm-unit-progress-header):hover > :first-child {
+  background: #DDEAFF;
+}
+.evm-unit-progress-body .evm-unit-progress-row:not(.evm-unit-progress-header) > *:hover {
+  z-index: 4;
+  background: #CFE1FF;
+  color: #00145C;
+  box-shadow: inset 0 0 0 2px #1769E8, 0 3px 10px rgba(23, 105, 232, 0.18);
+  font-weight: 950;
+}
+.evm-unit-progress-body .evm-unit-progress-row.is-selected > * {
+  background: #E2EDFF;
+}
+.evm-unit-progress-body .evm-unit-progress-row.is-selected > :first-child {
+  background: #D4E4FF;
+}
+.evm-unit-progress-body .evm-unit-progress-row > *.is-selected {
+  z-index: 4;
+  background: #BFD7FF;
+  color: #00145C;
+  box-shadow: inset 0 0 0 2px #001B8E, 0 3px 10px rgba(0, 27, 142, 0.22);
+  font-weight: 950;
+}
+.evm-unit-progress-body .evm-unit-progress-row > *:focus-visible {
+  z-index: 5;
+  outline: 2px solid #1769E8;
+  outline-offset: -3px;
 }
 .evm-portfolio-page-spacer {
   min-height: 0;
@@ -3373,13 +3409,14 @@
 .evm-unit-progress-body {
   flex: 1 1 auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 560px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 32px;
   min-width: 0;
   min-height: 0;
 }
 .evm-unit-progress-body .evm-unit-progress-table {
   align-self: stretch;
+  overflow-x: auto;
 }
 .evm-unit-progress-body .evm-unit-progress-range-legend {
   display: flex;
@@ -3441,7 +3478,14 @@
   line-height: 1.2;
 }
 .evm-unit-progress-body .evm-unit-progress-row {
-  grid-template-columns: minmax(180px, 0.85fr) 150px minmax(180px, 0.7fr) 150px 150px 200px;
+  grid-template-columns: minmax(220px, 1.4fr) minmax(170px, 1fr) repeat(5, minmax(125px, 0.8fr)) 100px minmax(125px, 0.8fr) 110px repeat(2, minmax(125px, 0.8fr)) 100px minmax(125px, 0.8fr);
+  min-width: 1920px;
+}
+.evm-unit-progress-money {
+  color: #102A72;
+  font-size: 17px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 .evm-unit-progress-row--total .evm-unit-progress-unit {
   padding-left: 74px;
@@ -5303,8 +5347,15 @@
   white-space: nowrap;
 }
 .evm-unit-progress-body .evm-unit-progress-row--total {
-  border-top: 1px solid #DDE6F5;
-  background: #F2F6FC;
+  border-top: 2px solid #1769E8;
+  background: #EAF2FF;
+  box-shadow: 0 4px 10px rgba(0, 27, 142, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+.evm-unit-progress-body .evm-unit-progress-row--total > * {
+  background: transparent;
+}
+.evm-unit-progress-body .evm-unit-progress-row--total > .evm-unit-progress-unit {
+  padding-left: 32px;
 }
 .evm-unit-progress-body .evm-unit-progress-header > .evm-unit-progress-header-label {
   align-items: center;
@@ -5340,7 +5391,8 @@
   border-right-color: #DEE6F0;
 }
 .evm-unit-progress-body .evm-unit-progress-row {
-  grid-template-columns: minmax(210px, 0.88fr) minmax(135px, 0.6fr) minmax(220px, 1fr) minmax(95px, 0.44fr) minmax(95px, 0.44fr) minmax(125px, 0.56fr);
+  grid-template-columns: minmax(220px, 1.4fr) minmax(170px, 1fr) repeat(5, minmax(125px, 0.8fr)) 100px minmax(125px, 0.8fr) 110px repeat(2, minmax(125px, 0.8fr)) 100px minmax(125px, 0.8fr);
+  min-width: 1920px;
 }
 .evm-unit-progress-unit .evm-unit-progress-unit-code {
   font-size: 18px;
@@ -5371,7 +5423,7 @@
 }
 /* Project page 2: Curve-S matrix above Risks + milestone carousel. */
 .evm-body-carousel-page--risk {
-  grid-template-rows: minmax(0, 43fr) minmax(0, 57fr);
+  grid-template-rows: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 .evm-project-curve-matrix-card {
@@ -5446,8 +5498,21 @@
   text-align: right;
 }
 .evm-project-details-lower-row {
-  grid-template-columns: minmax(0, 40fr) minmax(0, 60fr);
+  grid-template-columns: minmax(0, 48fr) minmax(0, 52fr);
   gap: 12px;
+}
+.evm-project-details-lower-row .evm-risk-card {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 10px;
+}
+.evm-project-details-lower-row .evm-risk-table {
+  align-self: stretch;
+}
+.evm-project-details-lower-row .evm-risk-table th {
+  padding: 8px 7px;
+}
+.evm-project-details-lower-row .evm-risk-table td {
+  padding: 12px 7px;
 }
 .evm-project-details-lower-row .evm-milestone-card {
   height: 100%;
@@ -5694,6 +5759,62 @@
 .evm-project-curve-matrix tbody tr.current td {
   box-shadow: inset 0 1px 0 #9DBCF2, inset 0 -1px 0 #9DBCF2;
 }
+/* Two-level hover: highlight the active row and emphasize its exact cell. */
+.evm-project-curve-matrix tbody tr {
+  transition: background-color 140ms ease;
+}
+.evm-project-curve-matrix tbody tr td {
+  position: relative;
+  transition: background-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+.evm-project-curve-matrix tbody tr:hover td {
+  background: #EAF2FF;
+  color: #001B8E;
+}
+.evm-project-curve-matrix.evm-matrix-alt-active tbody tr:not(.is-selected):hover td:not(.is-selected),
+.evm-unit-progress-table.evm-matrix-alt-active .evm-unit-progress-row:not(.evm-unit-progress-header):not(.is-selected):hover > *:not(.is-selected) {
+  background: revert;
+  color: inherit;
+  box-shadow: none;
+  font-weight: inherit;
+}
+.evm-project-curve-matrix tbody tr:hover td:first-child {
+  background: #DDEAFF;
+}
+.evm-project-curve-matrix tbody tr td:hover {
+  z-index: 4;
+  background: #CFE1FF;
+  color: #00145C;
+  box-shadow: inset 0 0 0 2px #1769E8, 0 3px 10px rgba(23, 105, 232, 0.18);
+  font-weight: 950;
+}
+.evm-project-curve-matrix tbody tr.current:hover td {
+  background: #DFEAFF;
+}
+.evm-project-curve-matrix tbody tr.current td:hover {
+  background: #C7DCFF;
+  box-shadow: inset 0 0 0 2px #001B8E, 0 3px 10px rgba(0, 27, 142, 0.2);
+}
+.evm-project-curve-matrix tbody tr.is-selected td {
+  background: #E2EDFF;
+  color: #001B8E;
+}
+.evm-project-curve-matrix tbody tr.is-selected td:first-child {
+  background: #D4E4FF;
+}
+.evm-project-curve-matrix tbody td.is-selected,
+.evm-project-curve-matrix tbody tr.current td.is-selected {
+  z-index: 4;
+  background: #BFD7FF;
+  color: #00145C;
+  box-shadow: inset 0 0 0 2px #001B8E, 0 3px 10px rgba(0, 27, 142, 0.22);
+  font-weight: 950;
+}
+.evm-project-curve-matrix tbody td:focus-visible {
+  z-index: 5;
+  outline: 2px solid #1769E8;
+  outline-offset: -3px;
+}
 /* Larger EVM matrix with vertical navigation beginning at week 1. */
 .evm-project-curve-matrix-wrap {
   overflow-x: auto;
@@ -5709,8 +5830,8 @@
 }
 .evm-project-curve-matrix th,
 .evm-project-curve-matrix td {
-  width: 126px;
-  min-width: 126px;
+  width: auto;
+  min-width: 0;
 }
 .evm-project-curve-matrix thead {
   position: sticky;
@@ -5766,9 +5887,32 @@
   font-weight: 950;
 }
 .evm-project-curve-matrix td {
-  padding-top: 11px;
-  padding-bottom: 11px;
-  font-size: 20px;
+  width: auto;
+  min-width: 0;
+  padding: 10px 3px;
+  font-size: 18px;
+  line-height: 1.1;
+}
+.evm-project-curve-matrix th {
+  width: auto;
+  min-width: 0;
+  padding-right: 3px;
+  padding-left: 3px;
+  font-size: 18px;
+}
+.evm-project-curve-matrix th.evm-project-curve-matrix-header--stacked {
+  line-height: 1.05;
+  text-align: center;
+}
+.evm-project-curve-matrix-header--stacked > span {
+  display: block;
+  width: 100%;
+  text-align: center;
+}
+.evm-project-curve-matrix th:first-child,
+.evm-project-curve-matrix td:first-child {
+  width: auto;
+  min-width: 0;
 }
 .evm-project-curve-matrix-counter {
   font-size: 14px;
@@ -5958,8 +6102,8 @@
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   align-self: end;
-  margin: 12px auto 0;
-  padding: 8px 12px;
+  margin: 0 auto;
+  padding: 6px 12px;
 }
 .evm-project-details-lower-row .evm-risk-legend-title {
   margin-bottom: 5px;
@@ -6007,14 +6151,14 @@
 }
 .evm-project-details-lower-row .evm-risk-legend,
 .evm-project-details-lower-row .evm-milestone-legend {
-  height: 100px;
-  min-height: 100px;
+  height: 78px;
+  min-height: 78px;
 }
 .evm-project-details-lower-row .evm-timeline-svg .evm-milestone-name {
-  font-size: 15px;
+  font-size: 17px;
 }
 .evm-project-details-lower-row .evm-timeline-svg .evm-milestone-date-text {
-  font-size: 14px;
+  font-size: 16px;
 }
 .evm-project-details-lower-row .evm-milestone-legend {
   padding-top: 9px;
@@ -6037,7 +6181,7 @@
   white-space: normal;
 }
 .evm-project-details-lower-row .evm-timeline-segment {
-  stroke-width: 4.5px;
+  stroke-width: 5.5px;
 }
 .evm-project-details-lower-row .evm-milestone-halo {
   stroke-width: 3px;
@@ -6107,7 +6251,7 @@
 }
 .evm-project-details-lower-row .evm-milestone-legend-title {
   margin: 0;
-  font-size: 21px;
+  font-size: 18px;
   line-height: 1;
 }
 .evm-project-details-lower-row .evm-milestone-legend-grid {
@@ -6134,7 +6278,7 @@
 .evm-project-details-lower-row .evm-milestone-legend-copy > span {
   margin-top: 5px;
   padding-left: 35px;
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1.2;
 }
 .evm-project-details-lower-row .evm-milestone-legend-icon {
@@ -6732,5 +6876,59 @@
   .evm-risk-dashboard-center-charts {
     min-height: 520px;
   }
+}
+.evm-matrix-copy-menu {
+  position: absolute;
+  z-index: 10020;
+  display: grid;
+  width: 246px;
+  padding: 6px;
+  border: 1px solid #C9D7EA;
+  border-radius: 9px;
+  background: #FFFFFF;
+  box-shadow: 0 10px 28px rgba(0, 27, 142, 0.2);
+}
+.evm-matrix-copy-menu button {
+  padding: 11px 13px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #00145C;
+  font: 750 16px "Segoe UI", sans-serif;
+  text-align: left;
+  cursor: pointer;
+}
+.evm-matrix-copy-menu button:hover,
+.evm-matrix-copy-menu button:focus-visible {
+  outline: none;
+  background: #EAF2FF;
+  color: #001B8E;
+}
+.evm-matrix-copy-notice {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  z-index: 10030;
+  padding: 10px 18px;
+  border-radius: 8px;
+  background: #001B8E;
+  color: #FFFFFF;
+  box-shadow: 0 8px 22px rgba(0, 27, 142, 0.25);
+  font: 800 14px "Segoe UI", sans-serif;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+/* Final total-row treatment: applied to cells so later row backgrounds cannot hide it. */
+.evm-unit-progress-body .evm-unit-progress-row.evm-unit-progress-row--total > * {
+  background: #E7F0FF;
+  box-shadow: inset 0 2px 0 #1769E8, inset 0 -5px 9px rgba(0, 27, 142, 0.09);
+}
+.evm-unit-progress-body .evm-unit-progress-row.evm-unit-progress-row--total > :first-child {
+  border-left: 1px solid #9DBCF2;
+  border-radius: 5px 0 0 5px;
+}
+.evm-unit-progress-body .evm-unit-progress-row.evm-unit-progress-row--total > :last-child {
+  border-right: 1px solid #9DBCF2;
+  border-radius: 0 5px 5px 0;
 }
 

@@ -27,7 +27,7 @@ export function currency(value: DataValue): string {
     if (parsed === null) {
         return emptyText;
     }
-    return `S/ ${parsed.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `S/ ${Math.round(parsed).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 }
 
 export function shortCurrency(value: DataValue): string {
@@ -37,10 +37,10 @@ export function shortCurrency(value: DataValue): string {
     }
     const abs = Math.abs(parsed);
     if (abs >= 1000000) {
-        return `S/ ${(parsed / 1000000).toLocaleString("en-US", { maximumFractionDigits: 2 })}M`;
+        return `S/ ${(parsed / 1000000).toLocaleString("en-US", { maximumFractionDigits: 0 })}M`;
     }
     if (abs >= 1000) {
-        return `S/ ${(parsed / 1000).toLocaleString("en-US", { maximumFractionDigits: 1 })}K`;
+        return `S/ ${(parsed / 1000).toLocaleString("en-US", { maximumFractionDigits: 0 })}K`;
     }
     return currency(parsed);
 }
@@ -69,6 +69,14 @@ export function decimal(value: DataValue, digits: number = 2): string {
         return emptyText;
     }
     return parsed.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
+export function decimalUpTo(value: DataValue, maximumDigits: number = 2): string {
+    const parsed = numberValue(value);
+    if (parsed === null) {
+        return emptyText;
+    }
+    return parsed.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: maximumDigits });
 }
 
 export function signedDecimal(value: DataValue): string {

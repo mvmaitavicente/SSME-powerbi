@@ -165,7 +165,7 @@ function signedWeeks(value: DataValue): string {
         return "—";
     }
     const sign = numeric > 0 ? "+" : "";
-    return `${sign}${numeric.toLocaleString("en-US", { maximumFractionDigits: 0 })} sem.`;
+    return `${sign}${numeric.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} sem.`;
 }
 
 function currencyFull(value: DataValue): string {

@@ -44,6 +44,10 @@ export declare class Visual implements IVisual {
     private appendNavigationDebugRow;
     private navigationDebugStatusLabel;
     private navigationDebugStatusColor;
+    private attachMatrixCopyMenu;
+    private copyMatrixText;
+    private showMatrixCopyNotice;
+    private showMatrixCopyFallback;
     private copyNavigationDebug;
     private showNavigationDebugTextarea;
     private resetNavigationDebug;

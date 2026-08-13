@@ -212,14 +212,14 @@ function drawCircleMarker(svg: SVGSVGElement, x: number, y: number, stateClass: 
     const halo = svgElement("circle");
     halo.setAttribute("cx", String(x));
     halo.setAttribute("cy", String(y));
-    halo.setAttribute("r", "19");
+    halo.setAttribute("r", "21");
     halo.setAttribute("class", `evm-milestone-halo ${stateClass}`);
     svg.appendChild(halo);
 
     const marker = svgElement("circle");
     marker.setAttribute("cx", String(x));
     marker.setAttribute("cy", String(y));
-    marker.setAttribute("r", filled ? "14" : "12");
+    marker.setAttribute("r", filled ? "16" : "14");
     marker.setAttribute("class", `evm-milestone-dot ${stateClass}`);
     svg.appendChild(marker);
 }
@@ -269,10 +269,10 @@ function addWrappedText(svg: SVGSVGElement, label: string, x: number, y: number,
 
 function addDateBadge(svg: SVGSVGElement, label: string, x: number, y: number, stateClass: string): void {
     const badge = svgElement("rect");
-    badge.setAttribute("x", String(x - 46));
-    badge.setAttribute("y", String(y - 13));
-    badge.setAttribute("width", "92");
-    badge.setAttribute("height", "25");
+    badge.setAttribute("x", String(x - 51));
+    badge.setAttribute("y", String(y - 15));
+    badge.setAttribute("width", "102");
+    badge.setAttribute("height", "29");
     badge.setAttribute("rx", "5");
     badge.setAttribute("class", `evm-milestone-date-bg ${stateClass}`);
     svg.appendChild(badge);

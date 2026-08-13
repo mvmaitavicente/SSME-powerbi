@@ -33,7 +33,7 @@ export function renderGaugeGrid(gauges: GaugeData[], palette: VisualPalette, onH
 
 export function renderGauge(data: GaugeData, palette: VisualPalette, onHistoryOpen?: (key: GaugeMetricKey) => void): HTMLElement {
     const card = createElement("article", "evm-card evm-gauge-card");
-    card.title = `${data.title}: ${text(data.value)} | Estado: ${text(data.status)}`;
+    card.title = `${data.title}: ${text(data.value)} | Estado: ${gaugeRangeLabel(data)}`;
 
     const svg = svgElement("svg");
     svg.setAttribute("role", "img");
@@ -235,8 +235,8 @@ function gaugeSegments(data: GaugeData, palette: VisualPalette): GaugeSegment[] 
     }
 
     return [
-        { start: 0, end: 1.01, color: palette.green },
-        { start: 1.01, end: 1.11, color: palette.orange },
+        { start: 0, end: 1, color: palette.green },
+        { start: 1, end: 1.11, color: palette.orange },
         { start: 1.11, end: 1.5, color: palette.red }
     ];
 }
@@ -300,11 +300,11 @@ function segmentValueToAngle(data: GaugeData, value: number): number {
         if (value <= 0.9) {
             return -90 + (value / 0.9) * 72;
         }
-        if (value <= 1.01) {
-            return -18 + ((value - 0.9) / 0.11) * 18;
+        if (value <= 1) {
+            return -18 + ((value - 0.9) / 0.1) * 18;
         }
         if (value <= 1.11) {
-            return ((value - 1.01) / 0.1) * 18;
+            return ((value - 1) / 0.11) * 18;
         }
         return 18 + ((value - 1.11) / 0.39) * 72;
     }
@@ -345,9 +345,9 @@ function drawValue(group: SVGGElement, data: GaugeData, layout: GaugeLayout): vo
 }
 
 function drawStatus(group: SVGGElement, data: GaugeData, layout: GaugeLayout): void {
-    const status = numberValue(data.value) === null ? "SIN DATO" : text(data.status, "Sin estado").toUpperCase();
+    const status = gaugeRangeLabel(data).toUpperCase();
     const className = gaugeRangeClass(data);
-    const badgeW = Math.max(96, Math.min(148, status.length * 10.8 + 30));
+    const badgeW = Math.max(96, Math.min(210, status.length * 10.8 + 30));
     const badgeH = Math.min(30, layout.badgeH);
     const badge = svgElement("rect");
     badge.setAttribute("x", String(layout.centerX - badgeW / 2));
@@ -401,8 +401,51 @@ function gaugeRangeColor(data: GaugeData): string {
     if (value === null) {
         return mainGaugeRangePalette.blue;
     }
-    const segment = gaugeSegments(data, mainGaugeRangePalette).find((item) => value >= item.start && value <= item.end);
-    return segment?.color ?? mainGaugeRangePalette.blue;
+    if (data.key === "CPI" || data.key === "SPIW") {
+        if (value < 0.9) {
+            return mainGaugeRangePalette.red;
+        }
+        if (value < 1) {
+            return mainGaugeRangePalette.orange;
+        }
+        if (value < 1.2) {
+            return mainGaugeRangePalette.green;
+        }
+        return gaugeRangeBlue;
+    }
+    if (value <= 1) {
+        return mainGaugeRangePalette.green;
+    }
+    if (value < 1.11) {
+        return mainGaugeRangePalette.orange;
+    }
+    return mainGaugeRangePalette.red;
+}
+
+function gaugeRangeLabel(data: GaugeData): string {
+    const value = numberValue(data.value);
+    if (value === null) {
+        return "Sin dato";
+    }
+    if (data.key === "CPI" || data.key === "SPIW") {
+        if (value < 0.9) {
+            return "Crítico";
+        }
+        if (value < 1) {
+            return "En riesgo";
+        }
+        if (value < 1.2) {
+            return "Estable";
+        }
+        return "Sobredimensionado";
+    }
+    if (value <= 1) {
+        return "Estable";
+    }
+    if (value <= 1.1) {
+        return "En riesgo";
+    }
+    return "Crítico";
 }
 
 function gaugeRangeClass(data: GaugeData): string {

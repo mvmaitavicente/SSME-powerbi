@@ -1,7 +1,7 @@
 "use strict";
 
 import { CurveHistoryPoint, CurveReferences, DataValue, RenderCurveData, VisualPalette } from "../types";
-import { createElement, decimal, numberValue, svgElement, text } from "../utils/format";
+import { createElement, decimal, decimalUpTo, numberValue, svgElement, text } from "../utils/format";
 
 type SeriesKey = "PV" | "EV" | "AC";
 type TimelineMarkerKey = "at" | "es" | "sac" | "eac";
@@ -171,7 +171,8 @@ function drawCurve(svg: SVGSVGElement, curve: RenderCurveData, palette: VisualPa
         yMax: yDomain.max,
         source: "curve-only"
     });
-    drawAxes(svg, axisMinWeek, axisMaxWeek, yDomain, xScale, referenceXScale, yScale, eacWeek, references, Boolean(options.portfolio), Boolean(options.showYearBracket));
+    drawAxes(svg, axisMinWeek, axisMaxWeek, yDomain, xScale, referenceXScale, yScale, eacWeek, references, Boolean(options.showYearBracket));
+    drawCurrentLine(svg, references, xScale);
     drawBacLine(svg, references, yScale);
     drawAcProjection(svg, currentPoint, references, referenceXScale, yScale, referenceYScale);
     drawEacCostLine(svg, references, referenceXScale, referenceYScale);
@@ -198,7 +199,6 @@ function drawCurve(svg: SVGSVGElement, curve: RenderCurveData, palette: VisualPa
 
     drawEacTimeLine(svg, references, referenceXScale, referenceYScale);
     drawCurrentValueLabels(svg, pointsToDraw, references, xScale, referenceXScale, yScale, referenceYScale, visualOffsets, segments, atWeek, options);
-    drawCurrentLine(svg, references, xScale);
     drawTimelineMarkerLabels(svg, references, referenceXScale, true);
     drawVacCost(svg, references, xScale, yScale, referenceYScale);
     drawVacTime(svg, references, referenceXScale);
@@ -234,7 +234,7 @@ function spacedEacCostYScale(yScale: (value: number) => number, references: Curv
     return (value: number): number => Math.abs(value - eacCost) < 0.000001 ? spacedEacY : yScale(value);
 }
 
-function drawAxes(svg: SVGSVGElement, minWeek: number, maxWeek: number, yDomain: AxisDomain, xScale: (week: number) => number, referenceXScale: (week: number) => number, yScale: (value: number) => number, eacWeek: number | null, references: CurveReferences, portfolio: boolean, showYearBracket: boolean): void {
+function drawAxes(svg: SVGSVGElement, minWeek: number, maxWeek: number, yDomain: AxisDomain, xScale: (week: number) => number, referenceXScale: (week: number) => number, yScale: (value: number) => number, eacWeek: number | null, references: CurveReferences, showYearBracket: boolean): void {
     addText(svg, "Costo (S/)", plot.left - 86, plot.top - 18, "start", "evm-axis-title");
 
     for (let index = 0; index <= 4; index++) {
@@ -250,7 +250,9 @@ function drawAxes(svg: SVGSVGElement, minWeek: number, maxWeek: number, yDomain:
     const interval = tickInterval(maxWeek - minWeek);
     const drawnTicks = new Set<string>();
     const addXTick = (week: number): void => {
-        if (shouldHideTickBeforeFractionalProjection(week, eacWeek)) {
+        const isReferenceWeek = timelineMarkers(references, xScale)
+            .some((marker) => Math.abs(marker.week - week) < 0.000001);
+        if (shouldHideTickBeforeFractionalProjection(week, eacWeek) && !isReferenceWeek) {
             return;
         }
         const key = formatWeek(week);
@@ -272,7 +274,7 @@ function drawAxes(svg: SVGSVGElement, minWeek: number, maxWeek: number, yDomain:
         addXTick(week);
     }
     addXTick(maxWeek);
-    if (portfolio && eacWeek !== null && !drawnTicks.has(formatWeek(eacWeek))) {
+    if (eacWeek !== null && !drawnTicks.has(formatWeek(eacWeek))) {
         const x = referenceXScale(eacWeek);
         drawLine(svg, x, plot.top + plot.height, x, plot.top + plot.height + 8, "evm-axis-tick");
         addText(svg, formatWeek(eacWeek), x, plot.top + plot.height + 32, "middle", "evm-eac-label");
@@ -855,9 +857,9 @@ function lineLabelOverlapPenalty(bounds: LabelBounds, segment: LineSegment): num
 
 function applyCoincidentPointOffsets(callouts: SeriesCallout[]): void {
     const offsets: Record<string, { x: number; y: number }> = {
-        ac: { x: 4, y: -4 },
+        ac: { x: 0, y: -4 },
         ev: { x: 0, y: 0 },
-        pv: { x: -4, y: 4 }
+        pv: { x: 0, y: 4 }
     };
     const closeThreshold = 4;
     callouts.forEach((item, index) => {
@@ -1079,9 +1081,9 @@ function renderCurveSummary(curve: RenderCurveData): HTMLElement {
         ["TSPI(t)", decimal(references.TSPIT), "blue"],
         ["SPI(t)", decimal(references.SPIT), "blue"],
         ["EAC(c)", fullCurrency(references.EACC), "blue"],
-        ["EAC(t)", text(references.EACT), "blue"],
+        ["EAC(t)", decimalUpTo(references.EACT), "blue"],
         ["VAC(c)", fullCurrency(references.VACC), "red"],
-        ["VAC(t)", `${text(references.VACT)} sem.`, "red"]
+        ["VAC(t)", `${decimalUpTo(references.VACT)} sem.`, "red"]
     ].forEach(([label, value, tone]) => {
         const cell = createElement("div", `evm-key-cell evm-key-cell-${tone}`);
         cell.appendChild(createElement("span", undefined, label));

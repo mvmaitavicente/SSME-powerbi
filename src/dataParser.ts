@@ -907,9 +907,14 @@ function normalizeUnitSummary(row: Record<string, unknown>): UnitSummaryData {
         PV: readNullableNumber(row, ["PV"]),
         EV: readNullableNumber(row, ["EV"]),
         AC: readNullableNumber(row, ["AC"]),
+        CV: readNullableNumber(row, ["CV"]),
         CPI: readNullableNumber(row, ["CPI"]),
+        SV: readNullableNumber(row, ["SV", "SV (w)", "SVW"]),
         SPIW: readNullableNumber(row, ["SPIW", "SPI (w)", "SPI"]),
+        EACC: readNullableNumber(row, ["EACC", "EAC (c)"]),
+        ETCC: readNullableNumber(row, ["ETCC", "ETC (c)"]),
         TCPI: readNullableNumber(row, ["TCPI"]),
+        VACC: readNullableNumber(row, ["VACC", "VAC (c)"]),
         TSPI: readNullableNumber(row, ["TSPI", "TSPIW", "TSPI (w)"]),
         Avance: toPercentagePoints(firstKnownValue(row, "Avance", "% Avance", "PorcentajeAvance")),
         Estado: textValue(firstKnownValue(row, "Estado", "EstadoProyecto", "Estado Proyecto"))
@@ -941,6 +946,7 @@ function normalizeProjectData(project: ProjectData | null): ProjectData | null {
     if (!project) {
         return null;
     }
+    const projectRow = project as unknown as Record<string, unknown>;
 
     return {
         ...project,
@@ -952,7 +958,7 @@ function normalizeProjectData(project: ProjectData | null): ProjectData | null {
         Distrito: textValue(project.Distrito),
         UnidadGerencial: textValue(project.UnidadGerencial),
         EstadoProyecto: textValue(project.EstadoProyecto),
-        MensajeEjecutivo: textValue(project.MensajeEjecutivo),
+        MensajeEjecutivo: textValue(firstKnownValue(projectRow, "EstadoMensaje", "MensajeEjecutivo")),
         FechaEstado: nullableText(project.FechaEstado),
         SemanaActual: textOrNumberValue(project.SemanaActual)
     };
