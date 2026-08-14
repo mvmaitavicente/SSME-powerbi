@@ -949,7 +949,7 @@ function drawVacCost(svg: SVGSVGElement, references: CurveReferences, xScale: (w
     const y1 = yScale(bac);
     const y2 = referenceYScale(eacCost);
     const isBreakEven = vacCost !== null && Math.abs(vacCost) < 0.000001;
-    const isSavings = vacCost !== null && vacCost < 0;
+    const isSavings = vacCost !== null && vacCost > 0;
     const projectionLabel = isBreakEven ? "Punto de" : (isSavings ? "Ahorro" : "Sobre Costo");
     const statusClass = isBreakEven ? " neutral" : (isSavings ? " favorable" : "");
     const labelClass = `evm-vac-label${statusClass}`;
@@ -957,7 +957,7 @@ function drawVacCost(svg: SVGSVGElement, references: CurveReferences, xScale: (w
     addText(svg, "VAC(c)", labelX, Math.min(y1, y2) + 16, "start", labelClass);
     addText(svg, projectionLabel, labelX, Math.min(y1, y2) + 39, "start", labelClass);
     addText(svg, isBreakEven ? "Equilibrio" : "Proyectado", labelX, Math.min(y1, y2) + 59, "start", labelClass);
-    addText(svg, fullCurrency(vacCost !== null && vacCost < 0 ? Math.abs(vacCost) : references.VACC), labelX, Math.min(y1, y2) + 84, "start", labelClass);
+    addText(svg, fullCurrency(vacCost === null ? null : Math.abs(vacCost)), labelX, Math.min(y1, y2) + 84, "start", labelClass);
 }
 
 function drawVacTime(svg: SVGSVGElement, references: CurveReferences, xScale: (week: number) => number): void {
@@ -971,7 +971,7 @@ function drawVacTime(svg: SVGSVGElement, references: CurveReferences, xScale: (w
     const x1 = xScale(sac);
     const x2 = xScale(eacWeek);
     const isBreakEven = vacTime !== null && Math.abs(vacTime) < 0.000001;
-    const isAhead = vacTime !== null && vacTime < 0;
+    const isAhead = vacTime !== null && vacTime > 0;
     const statusClass = isBreakEven ? " neutral" : (isAhead ? " favorable" : "");
     const lineClass = `evm-vac-line${statusClass}`;
     const arrowClass = `evm-vac-arrowhead${statusClass}`;

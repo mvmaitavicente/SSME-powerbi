@@ -30,7 +30,8 @@ export declare class Visual implements IVisual {
     private filterLoading;
     private filterLoadingTimer;
     private filterLoadingSafetyTimer;
-    private bodyCarouselIndex;
+    private projectCarouselIndex;
+    private portfolioCarouselIndex;
     private matrixVisibleColumns;
     private selectedGaugeKey;
     private visibleGaugeSeries;
@@ -103,6 +104,9 @@ export declare class Visual implements IVisual {
     private updateCarouselPages;
     private updateCarouselDots;
     private updateCarouselButtons;
+    private isPortfolioCarousel;
+    private getCarouselIndex;
+    private setCarouselIndex;
     private syncFilterStateFromDashboard;
     private resolveUnitForNavigation;
     private resolveProjectForNavigation;
@@ -119,6 +123,7 @@ export declare class Visual implements IVisual {
     private disableProjectNavigation;
     private openProjectDashboard;
     private openProjectView;
+    private openPortfolioView;
     private openProjectSelector;
     private openFilterPanel;
     private closeFilterPanel;

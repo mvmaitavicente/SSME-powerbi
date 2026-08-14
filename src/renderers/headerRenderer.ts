@@ -6,6 +6,7 @@ import { createElement, date, text } from "../utils/format";
 export interface SidebarOptions {
     expanded: boolean;
     activeLevel: DashboardLevel;
+    portfolioViewActive: "summary" | "matrix";
     projectViewActive: "summary" | "milestones" | "risks";
     canOpenUnit: boolean;
     canOpenProject: boolean;
@@ -13,6 +14,7 @@ export interface SidebarOptions {
     onOpenRisks: () => void;
     onOpenUnit: () => void;
     onOpenProject: () => void;
+    onPortfolioView: (view: "summary" | "matrix") => void;
     onProjectView: (view: "summary" | "milestones" | "risks") => void;
     onOpenFilters: () => void;
     onToggle: () => boolean;
@@ -35,9 +37,25 @@ export function renderSidebar(options: SidebarOptions): HTMLElement {
     brand.appendChild(brandLabel);
 
     const menu = createElement("nav", "evm-menu");
-    menu.appendChild(renderSidebarButton("▦", "Alta Dirección", options.activeLevel === "PRONIED", false, options.onOpenPronied));
+    const portfolioGroup = createElement("div", `evm-menu-project-group${options.activeLevel === "PRONIED" ? " active" : ""}`);
+    portfolioGroup.appendChild(renderSidebarButton("▦", "Alta Dirección", options.activeLevel === "PRONIED", false, options.onOpenPronied));
+    if (options.activeLevel === "PRONIED") {
+        const portfolioSubmenu = createElement("div", "evm-project-submenu");
+        portfolioSubmenu.appendChild(renderProjectSubtab("Resumen", "summary", options.portfolioViewActive === "summary", () => options.onPortfolioView("summary"), "portfolio"));
+        portfolioSubmenu.appendChild(renderProjectSubtab("Matriz", "matrix", options.portfolioViewActive === "matrix", () => options.onPortfolioView("matrix"), "portfolio"));
+        portfolioGroup.appendChild(portfolioSubmenu);
+    }
+    menu.appendChild(portfolioGroup);
     menu.appendChild(renderSidebarButton("☷", "Unidad Gerencial", options.activeLevel === "UNIDAD", false, options.onOpenUnit, options.canOpenUnit ? "Abrir Unidad Gerencial" : "Seleccione una unidad"));
-    menu.appendChild(renderSidebarButton("▣", "Proyectos", options.activeLevel === "PROYECTO", false, options.onOpenProject, options.canOpenProject ? "Abrir Proyectos" : "Seleccione un proyecto"));
+    const projectGroup = createElement("div", `evm-menu-project-group${options.activeLevel === "PROYECTO" ? " active" : ""}`);
+    projectGroup.appendChild(renderSidebarButton("▣", "Proyectos", options.activeLevel === "PROYECTO", false, options.onOpenProject, options.canOpenProject ? "Abrir Proyectos" : "Seleccione un proyecto"));
+    if (options.activeLevel === "PROYECTO") {
+        const projectSubmenu = createElement("div", "evm-project-submenu");
+        projectSubmenu.appendChild(renderProjectSubtab("Resumen", "summary", options.projectViewActive === "summary", () => options.onProjectView("summary"), "project"));
+        projectSubmenu.appendChild(renderProjectSubtab("Matriz", "matrix", options.projectViewActive !== "summary", () => options.onProjectView("milestones"), "project"));
+        projectGroup.appendChild(projectSubmenu);
+    }
+    menu.appendChild(projectGroup);
     menu.appendChild(renderSidebarButton("⚠", "Riesgos", options.activeLevel === "RIESGOS", false, options.onOpenRisks, "Abrir tablero de riesgos"));
 
     const footer = createElement("div", "evm-menu-footer");
@@ -56,6 +74,28 @@ export function renderSidebar(options: SidebarOptions): HTMLElement {
     sidebar.appendChild(menu);
     sidebar.appendChild(footer);
     return sidebar;
+}
+
+function renderProjectSubtab(
+    label: string,
+    view: "summary" | "matrix",
+    active: boolean,
+    onClick: () => void,
+    scope: "project" | "portfolio"
+): HTMLButtonElement {
+    const item = createElement("button", `evm-project-subtab${active ? " active" : ""}`);
+    item.type = "button";
+    item.dataset.projectView = view;
+    item.dataset.carouselScope = scope;
+    item.setAttribute("aria-label", `Abrir ${label} de ${scope === "project" ? "Proyectos" : "Alta Dirección"}`);
+    item.appendChild(createElement("span", "evm-project-subtab-marker", "•"));
+    item.appendChild(createElement("span", undefined, label));
+    item.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onClick();
+    });
+    return item;
 }
 
 function renderSidebarButton(

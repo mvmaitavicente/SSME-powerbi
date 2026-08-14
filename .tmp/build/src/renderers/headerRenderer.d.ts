@@ -2,6 +2,7 @@ import { DashboardLevel, ProjectHeader } from "../types";
 export interface SidebarOptions {
     expanded: boolean;
     activeLevel: DashboardLevel;
+    portfolioViewActive: "summary" | "matrix";
     projectViewActive: "summary" | "milestones" | "risks";
     canOpenUnit: boolean;
     canOpenProject: boolean;
@@ -9,6 +10,7 @@ export interface SidebarOptions {
     onOpenRisks: () => void;
     onOpenUnit: () => void;
     onOpenProject: () => void;
+    onPortfolioView: (view: "summary" | "matrix") => void;
     onProjectView: (view: "summary" | "milestones" | "risks") => void;
     onOpenFilters: () => void;
     onToggle: () => boolean;

@@ -57,23 +57,17 @@ export function renderMilestones(milestones: MilestoneItem[]): HTMLElement {
         previous.type = "button";
         next.type = "button";
         const updateNavigation = (): void => {
-            previous.disabled = pageIndex === 0;
-            next.disabled = pageIndex === pageCount - 1;
             status.textContent = `${pageIndex + 1} / ${pageCount}`;
         };
         previous.addEventListener("click", () => {
-            if (pageIndex > 0) {
-                pageIndex -= 1;
-                renderPage();
-                updateNavigation();
-            }
+            pageIndex = (pageIndex - 1 + pageCount) % pageCount;
+            renderPage();
+            updateNavigation();
         });
         next.addEventListener("click", () => {
-            if (pageIndex < pageCount - 1) {
-                pageIndex += 1;
-                renderPage();
-                updateNavigation();
-            }
+            pageIndex = (pageIndex + 1) % pageCount;
+            renderPage();
+            updateNavigation();
         });
         navigation.appendChild(previous);
         navigation.appendChild(status);

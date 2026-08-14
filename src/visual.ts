@@ -187,7 +187,8 @@ export class Visual implements IVisual {
     private filterLoading: boolean = false;
     private filterLoadingTimer: number | null = null;
     private filterLoadingSafetyTimer: number | null = null;
-    private bodyCarouselIndex: number = 0;
+    private projectCarouselIndex: number = 0;
+    private portfolioCarouselIndex: number = 0;
     private matrixVisibleColumns: Set<keyof CurveData> | null = null;
     private selectedGaugeKey: GaugeMetricKey | null = null;
     private visibleGaugeSeries: GaugeMetricKey[] = ["CPI", "SPI (w)", "TCPI", "TSPI (w)"];
@@ -297,7 +298,8 @@ export class Visual implements IVisual {
                 root.appendChild(renderSidebar({
                     expanded: this.sidebarExpanded,
                     activeLevel: dashboard.context.Level,
-                    projectViewActive: this.bodyCarouselIndex === 1 ? "milestones" : "summary",
+                    portfolioViewActive: this.portfolioCarouselIndex === 0 ? "summary" : "matrix",
+                    projectViewActive: this.projectCarouselIndex === 1 ? "milestones" : "summary",
                     canOpenUnit: Boolean(sidebarUnit),
                     canOpenProject: Boolean(sidebarProject),
                     onOpenPronied: () => this.openProniedDashboard(),
@@ -311,6 +313,7 @@ export class Visual implements IVisual {
                         }
                         this.disableProjectNavigation(sidebarProject ?? null);
                     },
+                    onPortfolioView: (view) => this.openPortfolioView(view),
                     onProjectView: (view) => this.openProjectView(view),
                     onOpenFilters: () => this.openFilterPanel(),
                     onToggle: () => {
@@ -828,7 +831,7 @@ export class Visual implements IVisual {
         const projectDashboard = adaptJsonDashboardData(dashboard);
         const main = document.createElement("main");
         main.className = "evm-main evm-main--project";
-        main.classList.toggle("evm-main--project-details", this.bodyCarouselIndex === 1);
+        main.classList.toggle("evm-main--project-details", this.projectCarouselIndex === 1);
         main.classList.add("evm-main--project-filters-open");
         main.style.minWidth = `${Math.min(780, Math.max(0, viewport.width - 92))}px`;
         main.appendChild(renderHeader(projectDashboard.header, {
@@ -847,7 +850,7 @@ export class Visual implements IVisual {
 
     private renderProniedDashboard(dashboard: ParsedDashboardData, viewport: powerbi.IViewport): HTMLElement {
         const main = createElement("main", "evm-main evm-main--pronied");
-        main.classList.toggle("evm-main--portfolio-details", this.bodyCarouselIndex === 1);
+        main.classList.toggle("evm-main--portfolio-details", this.portfolioCarouselIndex === 1);
         main.style.minWidth = `${Math.min(780, Math.max(0, viewport.width - 92))}px`;
         main.appendChild(renderHeader(
             this.portfolioHeaderData("TABLERO EJECUTIVO - PORTAFOLIO INSTITUCIONAL", dashboard),
@@ -890,8 +893,8 @@ export class Visual implements IVisual {
 
         const pages = [summaryPage, unitsPage];
         pages.forEach((page, index) => {
-            page.classList.toggle("active", index === this.bodyCarouselIndex);
-            page.setAttribute("aria-hidden", index === this.bodyCarouselIndex ? "false" : "true");
+            page.classList.toggle("active", index === this.portfolioCarouselIndex);
+            page.setAttribute("aria-hidden", index === this.portfolioCarouselIndex ? "false" : "true");
             viewport.appendChild(page);
         });
 
@@ -2151,8 +2154,8 @@ export class Visual implements IVisual {
 
         const pages = [evmPage, riskPage];
         pages.forEach((page, index) => {
-            page.classList.toggle("active", index === this.bodyCarouselIndex);
-            page.setAttribute("aria-hidden", index === this.bodyCarouselIndex ? "false" : "true");
+            page.classList.toggle("active", index === this.projectCarouselIndex);
+            page.setAttribute("aria-hidden", index === this.projectCarouselIndex ? "false" : "true");
             viewport.appendChild(page);
         });
 
@@ -2234,8 +2237,8 @@ export class Visual implements IVisual {
         heading.appendChild(title);
         const configureButton = document.createElement("button");
         configureButton.type = "button";
-        configureButton.className = "evm-project-curve-configure-button";
-        configureButton.textContent = "⚙ Configurar columnas";
+        configureButton.className = "evm-project-curve-configure-button evm-project-curve-configure-trigger";
+        configureButton.textContent = "Columnas visibles";
         configureButton.addEventListener("click", () => {
             const overlayHost = this.rootElement ?? this.target;
             const existing = overlayHost.querySelector(".evm-project-curve-column-overlay");
@@ -2375,13 +2378,78 @@ export class Visual implements IVisual {
         const downloadButton = document.createElement("button");
         downloadButton.type = "button";
         downloadButton.className = "evm-project-curve-configure-button evm-project-curve-download-button";
-        downloadButton.textContent = "⇩ Descargar Excel";
+        const downloadIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        downloadIcon.setAttribute("viewBox", "0 0 24 24");
+        downloadIcon.setAttribute("aria-hidden", "true");
+        const downloadPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        downloadPath.setAttribute("d", "M12 3v12m0 0 4-4m-4 4-4-4M5 16v4h14v-4");
+        downloadIcon.appendChild(downloadPath);
+        downloadButton.appendChild(downloadIcon);
+        downloadButton.appendChild(createElement("span", undefined, "Descargar Excel"));
         downloadButton.addEventListener("click", () => {
             this.host.launchUrl("https://python-api-ssme-dng3a6ecgacfe5dc.centralus-01.azurewebsites.net/api/fn_descargar_excel?idIntervencion=123");
         });
         const headingActions = createElement("div", "evm-project-curve-heading-actions");
         headingActions.appendChild(downloadButton);
-        headingActions.appendChild(configureButton);
+        const optionsWrap = createElement("div", "evm-project-curve-options-wrap");
+        const optionsButton = createElement("button", "evm-project-curve-options-button", "⋮");
+        optionsButton.type = "button";
+        optionsButton.setAttribute("aria-label", "Opciones de la matriz EVM");
+        optionsButton.setAttribute("aria-expanded", "false");
+        optionsButton.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const existing = optionsWrap.querySelector(".evm-project-curve-options-menu");
+            if (existing) {
+                existing.remove();
+                optionsButton.setAttribute("aria-expanded", "false");
+                return;
+            }
+            const menu = createElement("div", "evm-project-curve-options-menu");
+            menu.setAttribute("role", "menu");
+            const closeMenu = (): void => {
+                menu.remove();
+                optionsButton.setAttribute("aria-expanded", "false");
+                document.removeEventListener("pointerdown", closeOutside, true);
+                document.removeEventListener("keydown", closeEscape, true);
+            };
+            const closeOutside = (pointerEvent: PointerEvent): void => {
+                if (pointerEvent.target instanceof Node && optionsWrap.contains(pointerEvent.target)) return;
+                closeMenu();
+            };
+            const closeEscape = (keyEvent: KeyboardEvent): void => {
+                if (keyEvent.key !== "Escape") return;
+                keyEvent.preventDefault();
+                closeMenu();
+                optionsButton.focus();
+            };
+            const addOption = (icon: string, label: string, action: () => void): void => {
+                const option = createElement("button", "evm-project-curve-options-item");
+                option.type = "button";
+                option.setAttribute("role", "menuitem");
+                option.appendChild(createElement("span", "evm-project-curve-options-icon", icon));
+                option.appendChild(document.createTextNode(label));
+                option.addEventListener("click", () => {
+                    closeMenu();
+                    action();
+                });
+                menu.appendChild(option);
+            };
+            addOption("⚙", "Columnas visibles", () => configureButton.click());
+            addOption("↶", "Restablecer columnas", () => {
+                this.matrixVisibleColumns = null;
+                card.replaceWith(this.renderProjectCurveMatrix(curveRows));
+            });
+            optionsWrap.appendChild(menu);
+            optionsButton.setAttribute("aria-expanded", "true");
+            window.setTimeout(() => {
+                document.addEventListener("pointerdown", closeOutside, true);
+                document.addEventListener("keydown", closeEscape, true);
+                menu.querySelector<HTMLButtonElement>("button")?.focus();
+            }, 0);
+        });
+        optionsWrap.appendChild(optionsButton);
+        headingActions.appendChild(optionsWrap);
         heading.appendChild(headingActions);
         card.appendChild(heading);
 
@@ -2516,7 +2584,8 @@ export class Visual implements IVisual {
         button.textContent = label;
         button.addEventListener("click", () => {
             const step = direction === "next" ? 1 : -1;
-            this.bodyCarouselIndex = (this.bodyCarouselIndex + step + pages.length) % pages.length;
+            const nextIndex = (this.getCarouselIndex(pages) + step + pages.length) % pages.length;
+            this.setCarouselIndex(pages, nextIndex);
             this.updateCarouselPages(pages);
         });
         return button;
@@ -2531,50 +2600,73 @@ export class Visual implements IVisual {
             dot.className = "evm-carousel-dot";
             dot.setAttribute("aria-label", `Ver pantalla ${index + 1}`);
             dot.addEventListener("click", () => {
-                this.bodyCarouselIndex = index;
+                this.setCarouselIndex(pages, index);
                 this.updateCarouselPages(pages);
             });
             dots.appendChild(dot);
         });
-        this.updateCarouselDots(dots);
+        this.updateCarouselDots(dots, this.getCarouselIndex(pages));
         return dots;
     }
 
     private updateCarouselPages(pages: HTMLElement[]): void {
+        const carouselIndex = this.getCarouselIndex(pages);
         pages.forEach((page, index) => {
-            const active = index === this.bodyCarouselIndex;
+            const active = index === carouselIndex;
             page.classList.toggle("active", active);
             page.setAttribute("aria-hidden", active ? "false" : "true");
         });
         const dots = pages[0]?.parentElement?.parentElement?.querySelector(".evm-carousel-dots");
         if (dots instanceof HTMLElement) {
-            this.updateCarouselDots(dots);
+            this.updateCarouselDots(dots, carouselIndex);
         }
         const carousel = pages[0]?.parentElement?.parentElement;
         if (carousel instanceof HTMLElement) {
             this.updateCarouselButtons(carousel);
             const main = carousel.closest(".evm-main");
-            main?.classList.toggle("evm-main--project-details", main.classList.contains("evm-main--project") && this.bodyCarouselIndex === 1);
-            main?.classList.toggle("evm-main--portfolio-details", main.classList.contains("evm-main--pronied") && this.bodyCarouselIndex === 1);
+            main?.classList.toggle("evm-main--project-details", main.classList.contains("evm-main--project") && carouselIndex === 1);
+            main?.classList.toggle("evm-main--portfolio-details", main.classList.contains("evm-main--pronied") && carouselIndex === 1);
         }
+        const carouselScope = this.isPortfolioCarousel(pages) ? "portfolio" : "project";
+        this.rootElement?.querySelectorAll(`.evm-project-subtab[data-carousel-scope="${carouselScope}"]`).forEach((tab) => {
+                const view = (tab as HTMLElement).dataset.projectView;
+                tab.classList.toggle("active", view === (carouselIndex === 0 ? "summary" : "matrix"));
+        });
     }
 
-    private updateCarouselDots(dots: HTMLElement): void {
+    private updateCarouselDots(dots: HTMLElement, carouselIndex: number): void {
         Array.from(dots.children).forEach((dot, index) => {
-            dot.classList.toggle("active", index === this.bodyCarouselIndex);
+            dot.classList.toggle("active", index === carouselIndex);
         });
     }
 
     private updateCarouselButtons(carousel: HTMLElement): void {
         const isPortfolio = carousel.classList.contains("evm-body-carousel--portfolio");
+        const carouselIndex = isPortfolio ? this.portfolioCarouselIndex : this.projectCarouselIndex;
         const tooltip = isPortfolio
-            ? (this.bodyCarouselIndex === 0 ? "Ver avance por unidad" : "Volver al resumen")
-            : (this.bodyCarouselIndex === 0 ? "Ver Hitos & Riesgos" : "Volver a Desempeno");
+            ? (carouselIndex === 0 ? "Ver avance por unidad" : "Volver al resumen")
+            : (carouselIndex === 0 ? "Ver Hitos & Riesgos" : "Volver a Desempeno");
         carousel.querySelectorAll(".evm-carousel-button").forEach((button) => {
             button.setAttribute("aria-label", tooltip);
             button.setAttribute("title", tooltip);
             button.setAttribute("data-tooltip", tooltip);
         });
+    }
+
+    private isPortfolioCarousel(pages: HTMLElement[]): boolean {
+        return pages[0]?.parentElement?.parentElement?.classList.contains("evm-body-carousel--portfolio") ?? false;
+    }
+
+    private getCarouselIndex(pages: HTMLElement[]): number {
+        return this.isPortfolioCarousel(pages) ? this.portfolioCarouselIndex : this.projectCarouselIndex;
+    }
+
+    private setCarouselIndex(pages: HTMLElement[], index: number): void {
+        if (this.isPortfolioCarousel(pages)) {
+            this.portfolioCarouselIndex = index;
+        } else {
+            this.projectCarouselIndex = index;
+        }
     }
 
     private syncFilterStateFromDashboard(dashboard: ParsedDashboardData): void {
@@ -2792,8 +2884,20 @@ export class Visual implements IVisual {
         if (this.currentDashboardData?.context.Level !== "PROYECTO") {
             return;
         }
-        this.bodyCarouselIndex = view === "summary" ? 0 : 1;
+        this.projectCarouselIndex = view === "summary" ? 0 : 1;
         const pages = Array.from(this.rootElement?.querySelectorAll(".evm-body-carousel-page") ?? [])
+            .filter((element): element is HTMLElement => element instanceof HTMLElement);
+        if (pages.length) {
+            this.updateCarouselPages(pages);
+        }
+    }
+
+    private openPortfolioView(view: "summary" | "matrix"): void {
+        if (this.currentDashboardData?.context.Level !== "PRONIED") {
+            return;
+        }
+        this.portfolioCarouselIndex = view === "summary" ? 0 : 1;
+        const pages = Array.from(this.rootElement?.querySelectorAll(".evm-body-carousel--portfolio .evm-body-carousel-page") ?? [])
             .filter((element): element is HTMLElement => element instanceof HTMLElement);
         if (pages.length) {
             this.updateCarouselPages(pages);
@@ -2947,9 +3051,13 @@ export class Visual implements IVisual {
         const clear = createElement(
             "button",
             "evm-filter-clear",
-            this.currentDashboardData?.context.Level === "PROYECTO" ? "⌕  Cambiar proyecto" : "Limpiar filtros"
+            this.currentDashboardData?.context.Level === "PROYECTO" ? undefined : "Limpiar filtros"
         );
         clear.type = "button";
+        if (this.currentDashboardData?.context.Level === "PROYECTO") {
+            clear.appendChild(createElement("span", "evm-action-icon", "⇄"));
+            clear.appendChild(createElement("span", "evm-action-label", "Cambiar proyecto"));
+        }
         clear.addEventListener("click", () => {
             if (this.currentDashboardData?.context.Level === "PROYECTO") {
                 this.openAdvancedProjectSearch();
@@ -2987,6 +3095,8 @@ export class Visual implements IVisual {
                 : "Seleccione una UG y proyecto"
         );
         trigger.type = "button";
+        const fixedProjectHeader = this.currentDashboardData?.context.Level === "PROYECTO";
+        trigger.disabled = fixedProjectHeader;
         trigger.setAttribute("aria-haspopup", "listbox");
         trigger.setAttribute("aria-expanded", "false");
 

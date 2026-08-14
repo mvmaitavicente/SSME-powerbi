@@ -16,17 +16,28 @@ const iconColors: Record<PerformanceIcon, string> = {
 
 export function renderPerformance(data: PerformanceData): HTMLElement {
     const card = createElement("section", "evm-card evm-performance-card");
-    const projectedCostLabel = (numberValue(data.SobreCostoProyectadoVAC) ?? 0) < 0
+    const projectedCost = numberValue(data.SobreCostoProyectadoVAC) ?? 0;
+    const projectedTime = numberValue(data.RetrasoProyectadoSemanas) ?? 0;
+    const projectedCostLabel = projectedCost > 0
         ? "Ahorro Proyectado"
-        : "Sobre Costo Proyectado";
+        : (projectedCost < 0 ? "Sobre Costo Proyectado" : "Sin Variación de Costo");
+    const projectedTimeLabel = projectedTime > 0
+        ? "Adelanto Proyectado"
+        : (projectedTime < 0 ? "Retraso Proyectado" : "Sin Variación de Plazo");
     card.appendChild(createElement("div", "evm-section-title", "Desempeno del Proyecto"));
 
     card.appendChild(progressRow("clock", "Plazo Consumido", data.PlazoConsumidoPct, `${percent(data.PlazoConsumidoPct)}`, "Plazo Restante", `${decimalUpTo(data.PlazoRestanteSemanas)} sem.`));
     card.appendChild(metricPair("calendar", "Plazo Programado Total", `${decimalUpTo(data.PlazoProgramadoTotalSemanas)} semanas`, "Plazo Proyectado", `${decimalUpTo(data.PlazoProyectadoSemanas)} semanas`));
-    card.appendChild(metricPair("check", "Retraso Proyectado", `${decimalUpTo(data.RetrasoProyectadoSemanas)} semanas`, "Termino Proyectado", date(data.TerminoProyectado), true));
+    card.appendChild(metricPair("check", projectedTimeLabel, `${decimalUpTo(data.RetrasoProyectadoSemanas)} semanas`, "Termino Proyectado", date(data.TerminoProyectado), projectedTime > 0 ? "favorable" : (projectedTime < 0 ? "alert" : null)));
     card.appendChild(progressRow("money", "Presupuesto Consumido", data.PresupuestoConsumidoPct, `${percent(data.PresupuestoConsumidoPct)}`, "Presupuesto Restante", currency(data.PresupuestoRestante)));
     card.appendChild(metricPair("coins", "Presupuesto Programado (BAC)", currency(data.PresupuestoProgramadoBAC), "Costo Estimado al Termino (EAC)", currency(data.CostoEstimadoTerminoEAC)));
-    card.appendChild(metricSingle("chart", projectedCostLabel, `${currency(data.SobreCostoProyectadoVAC)} (${percent(data.SobreCostoProyectadoPct)})`, true));
+    const projectedCostPct = numberValue(data.SobreCostoProyectadoPct);
+    card.appendChild(metricSingle(
+        "chart",
+        projectedCostLabel,
+        `${currency(Math.abs(projectedCost))} (${percent(projectedCostPct === null ? null : Math.abs(projectedCostPct))})`,
+        projectedCost > 0 ? "favorable" : (projectedCost < 0 ? "alert" : null)
+    ));
 
     return card;
 }
@@ -51,16 +62,16 @@ function progressRow(icon: PerformanceIcon, leftLabel: string, pctValue: DataVal
     return row;
 }
 
-function metricPair(icon: PerformanceIcon, leftLabel: string, leftValue: string, rightLabel: string, rightValue: string, alert: boolean = false): HTMLElement {
-    const row = createElement("div", `evm-performance-row${alert ? " alert" : ""}`);
+function metricPair(icon: PerformanceIcon, leftLabel: string, leftValue: string, rightLabel: string, rightValue: string, tone: "alert" | "favorable" | null = null): HTMLElement {
+    const row = createElement("div", `evm-performance-row${tone ? ` ${tone}` : ""}`);
     row.appendChild(renderPerformanceIcon(icon));
     row.appendChild(metric(leftLabel, leftValue));
     row.appendChild(metric(rightLabel, rightValue));
     return row;
 }
 
-function metricSingle(icon: PerformanceIcon, label: string, value: string, alert: boolean = false): HTMLElement {
-    const row = createElement("div", `evm-performance-row single${alert ? " alert" : ""}`);
+function metricSingle(icon: PerformanceIcon, label: string, value: string, tone: "alert" | "favorable" | null = null): HTMLElement {
+    const row = createElement("div", `evm-performance-row single${tone ? ` ${tone}` : ""}`);
     const singleMetric = metric(label, value);
     singleMetric.classList.add("evm-performance-main");
     row.appendChild(renderPerformanceIcon(icon));

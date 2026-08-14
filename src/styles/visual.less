@@ -176,6 +176,52 @@
     background: #001B8E;
 }
 
+.evm-menu-project-group {
+    display: grid;
+    gap: 4px;
+}
+
+.evm-project-submenu {
+    display: none;
+}
+
+.evm-sidebar.expanded .evm-project-submenu {
+    display: grid;
+    gap: 3px;
+    padding: 1px 5px 3px 32px;
+}
+
+.evm-project-subtab {
+    display: grid;
+    grid-template-columns: 13px minmax(0, 1fr);
+    align-items: center;
+    min-height: 31px;
+    padding: 5px 8px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: #40527A;
+    font: 750 20px "Segoe UI", sans-serif;
+    text-align: left;
+    cursor: pointer;
+}
+
+.evm-project-subtab:hover {
+    background: #EEF4FF;
+    color: #001B8E;
+}
+
+.evm-project-subtab.active {
+    background: #E4EDFF;
+    color: #001B8E;
+    font-weight: 900;
+}
+
+.evm-project-subtab-marker {
+    color: #1769E8;
+    font-size: 16px;
+}
+
 .evm-menu-item.ghost {
     border: 1px solid #DDE3F0;
 }
@@ -222,6 +268,19 @@
 
 .evm-main--portfolio-details .evm-portfolio-gauge-grid {
     display: none;
+}
+
+/* Center portfolio controls against the full dashboard body on both pages. */
+.evm-main--pronied .evm-body-carousel--portfolio {
+    overflow: visible;
+}
+
+.evm-main--pronied:not(.evm-main--portfolio-details) .evm-carousel-button {
+    top: calc(50% - 242px);
+}
+
+.evm-main--pronied.evm-main--portfolio-details .evm-carousel-button {
+    top: calc(50% - 58px);
 }
 
 .evm-portfolio-main {
@@ -600,7 +659,7 @@
     display: grid;
     width: 100%;
     height: 94px;
-    grid-template-columns: minmax(360px, 2.1fr) minmax(115px, .75fr) repeat(3, minmax(130px, 1fr)) 210px;
+    grid-template-columns: minmax(360px, 2.1fr) minmax(115px, .75fr) repeat(3, minmax(130px, 1fr)) 240px;
     grid-template-rows: minmax(0, 1fr);
     align-items: end;
     gap: 10px;
@@ -632,21 +691,34 @@
 }
 
 .evm-filter-panel--project-inline .evm-filter-field select:disabled {
+    padding-right: 10px;
     border-color: #D5DDEA;
     background: #F5F7FB;
     color: #00145C;
     cursor: default;
     opacity: 1;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: none;
+}
+
+.evm-filter-panel--project-inline .evm-filter-field select:disabled::-ms-expand {
+    display: none;
 }
 
 .evm-filter-panel--project-inline .evm-filter-clear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
     width: 100%;
-    min-width: 0;
-    min-height: 45px;
+    min-width: 230px;
+    min-height: 50px;
     margin: 0;
-    padding: 8px 12px;
-    border: 1.5px solid #1769E8;
-    border-radius: 6px;
+    padding: 10px 17px;
+    border: 2px solid #4D7DDF;
+    border-radius: 8px;
     background: #FFFFFF;
     color: #0F55BE;
     font-size: 18px;
@@ -654,6 +726,18 @@
     line-height: 1;
     box-sizing: border-box;
     white-space: nowrap;
+}
+
+.evm-filter-panel--project-inline .evm-filter-clear .evm-action-icon {
+    color: #1769E8;
+    font-size: 27px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.evm-filter-panel--project-inline .evm-filter-clear .evm-action-label {
+    font-size: 18px;
+    line-height: 1;
 }
 
 .evm-filter-panel--project-inline .evm-filter-clear:hover {
@@ -699,6 +783,18 @@
 .evm-unit-project-trigger[aria-expanded="true"] {
     border-color: #1769E8;
     box-shadow: 0 0 0 2px rgba(23, 105, 232, .12);
+}
+
+.evm-filter-panel--project-inline .evm-unit-project-trigger:disabled {
+    padding-right: 11px;
+    color: #00145C;
+    cursor: default;
+    opacity: 1;
+}
+
+.evm-filter-panel--project-inline .evm-unit-project-trigger:disabled::after {
+    display: none;
+    content: none;
 }
 
 .evm-unit-project-menu {
@@ -1015,20 +1111,20 @@
 
 .evm-advanced-search-results table {
     width: 100%;
-    min-width: 1050px;
+    min-width: 1120px;
     border-collapse: collapse;
     color: #172B4D;
-    font-size: 17px;
+    font-size: 18px;
 }
 
 .evm-advanced-search-results th {
     position: sticky;
     z-index: 1;
     top: 0;
-    padding: 10px 9px;
+    padding: 10px 14px;
     background: #F5F8FD;
     color: #001B72;
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 950;
     text-align: center;
 }
@@ -1064,7 +1160,7 @@
 }
 
 .evm-advanced-search-results td {
-    padding: 10px 9px;
+    padding: 10px 14px;
     border-top: 1px solid #E6ECF5;
 }
 
@@ -1785,6 +1881,10 @@
 
 .evm-performance-row.alert strong {
     color: #FF1E1E;
+}
+
+.evm-performance-row.favorable strong {
+    color: #00A651;
 }
 
 .evm-body-grid {
@@ -7050,12 +7150,58 @@
     display: flex;
     align-items: center;
     gap: 9px;
+    margin-top: 10px;
+}
+
+.evm-project-curve-configure-trigger { display: none; }
+.evm-project-curve-options-wrap { position: relative; }
+.evm-project-curve-options-button {
+    display: grid; place-items: center; width: 42px; height: 42px; padding: 0 0 7px;
+    border: 1px solid #7EA4E5; border-radius: 7px; background: #FFFFFF; color: #001B8E;
+    font: 900 27px/1 "Segoe UI", sans-serif; cursor: pointer;
+}
+.evm-project-curve-options-button:hover,
+.evm-project-curve-options-button[aria-expanded="true"] { background: #EEF4FF; border-color: #1769E8; }
+.evm-project-curve-options-menu {
+    position: absolute; z-index: 120; top: calc(100% + 6px); right: 0; display: grid;
+    width: 250px; padding: 7px; border: 1px solid #C9D7EA; border-radius: 9px;
+    background: #FFFFFF; box-shadow: 0 10px 28px rgba(0, 27, 142, .2);
+}
+.evm-project-curve-options-item {
+    display: flex; align-items: center; gap: 11px; padding: 11px 12px; border: 0;
+    border-radius: 6px; background: transparent; color: #00145C;
+    font: 750 17px "Segoe UI", sans-serif; text-align: left; cursor: pointer;
+}
+.evm-project-curve-options-item:hover,
+.evm-project-curve-options-item:focus-visible { outline: none; background: #EAF2FF; }
+.evm-project-curve-options-icon {
+    display: inline-grid; place-items: center; width: 24px; color: #001B8E; font-size: 20px;
 }
 
 .evm-project-curve-download-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    min-width: 220px;
+    min-height: 50px;
+    padding: 11px 22px;
+    border-radius: 8px;
     border-color: #1769E8;
     background: #1769E8;
     color: #FFFFFF;
+    box-shadow: 0 4px 10px rgba(23, 105, 232, .18);
+    font-size: 17px;
+}
+
+.evm-project-curve-download-button svg {
+    width: 24px;
+    height: 24px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 .evm-project-curve-download-button:hover {
@@ -7160,7 +7306,7 @@
     border: 0;
     background: transparent;
     color: #175CD3;
-    font: 800 16px "Segoe UI", sans-serif;
+    font: 800 17px "Segoe UI", sans-serif;
     cursor: pointer;
 }
 
@@ -7180,7 +7326,7 @@
     min-height: 40px;
     padding: 3px 4px;
     color: #243B64;
-    font-size: 17px;
+    font-size: 18px;
     font-weight: 650;
     cursor: pointer;
 }
@@ -7198,7 +7344,7 @@
 
 .evm-project-curve-column-option small {
     color: #7184A4;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
 }
 
@@ -7212,7 +7358,7 @@
 .evm-project-curve-column-footer button {
     padding: 8px 14px;
     border-radius: 6px;
-    font: 800 17px "Segoe UI", sans-serif;
+    font: 800 18px "Segoe UI", sans-serif;
     cursor: pointer;
 }
 
