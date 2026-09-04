@@ -8,6 +8,7 @@ export interface SidebarOptions {
     activeLevel: DashboardLevel;
     portfolioViewActive: "summary" | "matrix";
     projectViewActive: "summary" | "milestones" | "risks";
+    riskViewActive: "summary" | "matrix";
     canOpenUnit: boolean;
     canOpenProject: boolean;
     onOpenPronied: () => void;
@@ -16,18 +17,13 @@ export interface SidebarOptions {
     onOpenProject: () => void;
     onPortfolioView: (view: "summary" | "matrix") => void;
     onProjectView: (view: "summary" | "milestones" | "risks") => void;
+    onRiskView: (view: "summary" | "matrix") => void;
     onOpenFilters: () => void;
     onToggle: () => boolean;
 }
 
 export function renderSidebar(options: SidebarOptions): HTMLElement {
     const sidebar = createElement("aside", `evm-sidebar${options.expanded ? " expanded" : ""}`);
-    console.debug("Sidebar renderizado", {
-        level: options.activeLevel,
-        canOpenUnit: options.canOpenUnit,
-        canOpenProject: options.canOpenProject
-    });
-
     const brand = createElement("button", "evm-sidebar-brand");
     brand.type = "button";
     brand.setAttribute("aria-label", options.expanded ? "Contraer menú" : "Expandir menú");
@@ -56,7 +52,15 @@ export function renderSidebar(options: SidebarOptions): HTMLElement {
         projectGroup.appendChild(projectSubmenu);
     }
     menu.appendChild(projectGroup);
-    menu.appendChild(renderSidebarButton("⚠", "Riesgos", options.activeLevel === "RIESGOS", false, options.onOpenRisks, "Abrir tablero de riesgos"));
+    const riskGroup = createElement("div", `evm-menu-project-group${options.activeLevel === "RIESGOS" ? " active" : ""}`);
+    riskGroup.appendChild(renderSidebarButton("⚠", "Riesgos", options.activeLevel === "RIESGOS", false, options.onOpenRisks, "Abrir tablero de riesgos"));
+    if (options.activeLevel === "RIESGOS") {
+        const riskSubmenu = createElement("div", "evm-project-submenu");
+        riskSubmenu.appendChild(renderProjectSubtab("Resumen", "summary", options.riskViewActive === "summary", () => options.onRiskView("summary"), "risk"));
+        riskSubmenu.appendChild(renderProjectSubtab("Matriz", "matrix", options.riskViewActive === "matrix", () => options.onRiskView("matrix"), "risk"));
+        riskGroup.appendChild(riskSubmenu);
+    }
+    menu.appendChild(riskGroup);
 
     const footer = createElement("div", "evm-menu-footer");
     footer.appendChild(renderSidebarButton("⚙", "Filtros", false, false, options.onOpenFilters, "Abrir filtros"));
@@ -81,13 +85,13 @@ function renderProjectSubtab(
     view: "summary" | "matrix",
     active: boolean,
     onClick: () => void,
-    scope: "project" | "portfolio"
+    scope: "project" | "portfolio" | "risk"
 ): HTMLButtonElement {
     const item = createElement("button", `evm-project-subtab${active ? " active" : ""}`);
     item.type = "button";
     item.dataset.projectView = view;
     item.dataset.carouselScope = scope;
-    item.setAttribute("aria-label", `Abrir ${label} de ${scope === "project" ? "Proyectos" : "Alta Dirección"}`);
+    item.setAttribute("aria-label", `Abrir ${label} de ${scope === "project" ? "Proyectos" : scope === "portfolio" ? "Alta Dirección" : "Riesgos"}`);
     item.appendChild(createElement("span", "evm-project-subtab-marker", "•"));
     item.appendChild(createElement("span", undefined, label));
     item.addEventListener("click", (event) => {
@@ -106,10 +110,6 @@ function renderSidebarButton(
     onClick: () => void,
     tooltip?: string
 ): HTMLButtonElement {
-    console.debug("Registrando botón sidebar", {
-        name: label,
-        disabled
-    });
     const item = createElement("button", `evm-menu-item${active ? " sidebar-item--active active" : ""}${disabled ? " disabled" : ""}`);
     item.type = "button";
     item.disabled = disabled;
@@ -125,15 +125,12 @@ function renderSidebarButton(
             return;
         }
 
-        console.debug("Sidebar click recibido", {
-            target: label
-        });
         onClick();
     });
     return item;
 }
 
-export function renderHeader(header: ProjectHeader, options: { titleLabel?: string | null; subtitle?: string; stateLabel?: string } = {}): HTMLElement {
+export function renderHeader(header: ProjectHeader, options: { titleLabel?: string | null; subtitle?: string; stateLabel?: string; weekOverride?: number } = {}): HTMLElement {
     const wrapper = createElement("section", "evm-header evm-card");
 
     const project = createElement("div", "evm-project-title");
@@ -176,7 +173,7 @@ export function renderHeader(header: ProjectHeader, options: { titleLabel?: stri
     const dates = createElement("div", "evm-project-dates");
     dates.appendChild(createElement("span", undefined, "Fecha de Estado"));
     dates.appendChild(createElement("strong", undefined, date(header.FechaEstado)));
-    dates.appendChild(createElement("small", undefined, `Semana Actual ${text(header.SemanaActual)}`));
+    dates.appendChild(createElement("small", undefined, `Semana Actual ${options.weekOverride ?? text(header.SemanaActual)}`));
 
     wrapper.appendChild(project);
     wrapper.appendChild(state);

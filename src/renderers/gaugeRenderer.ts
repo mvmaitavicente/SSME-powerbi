@@ -1,7 +1,8 @@
 "use strict";
 
 import { DataValue, GaugeData, GaugeMetricKey, VisualPalette } from "../types";
-import { createElement, decimal, numberValue, signedDecimal, svgElement, text } from "../utils/format";
+import { createElement, decimal, numberValue, signedDecimal, svgElement } from "../utils/format";
+import { LifecycleSink } from "../controllers/ViewLifecycle";
 
 interface GaugeLayout {
     width: number;
@@ -25,21 +26,22 @@ interface GaugeSegment {
 
 const gaugeRangeBlue = "#168BFF";
 
-export function renderGaugeGrid(gauges: GaugeData[], palette: VisualPalette, onHistoryOpen?: (key: GaugeMetricKey) => void): HTMLElement {
+export function renderGaugeGrid(gauges: GaugeData[], palette: VisualPalette, onHistoryOpen?: (key: GaugeMetricKey) => void, lifecycle?: LifecycleSink): HTMLElement {
     const grid = createElement("section", "evm-gauge-grid");
-    gauges.forEach((metric) => grid.appendChild(renderGauge(metric, palette, onHistoryOpen)));
+    gauges.forEach((metric) => grid.appendChild(renderGauge(metric, palette, onHistoryOpen, lifecycle)));
     return grid;
 }
 
-export function renderGauge(data: GaugeData, palette: VisualPalette, onHistoryOpen?: (key: GaugeMetricKey) => void): HTMLElement {
+export function renderGauge(data: GaugeData, palette: VisualPalette, onHistoryOpen?: (key: GaugeMetricKey) => void, lifecycle?: LifecycleSink): HTMLElement {
     const card = createElement("article", "evm-card evm-gauge-card");
-    card.title = `${data.title}: ${text(data.value)} | Estado: ${gaugeRangeLabel(data)}`;
+    card.classList.add("evm-gauge-card--help");
 
     const svg = svgElement("svg");
     svg.setAttribute("role", "img");
     svg.setAttribute("aria-label", `${data.title} ${displayDecimal(data.value)}`);
     svg.classList.add("evm-gauge-svg");
     card.appendChild(svg);
+    card.appendChild(renderGaugeHelp(data));
     card.appendChild(renderHistoryCard(data, onHistoryOpen));
 
     const render = (): void => {
@@ -50,17 +52,39 @@ export function renderGauge(data: GaugeData, palette: VisualPalette, onHistoryOp
         drawGauge(svg, data, palette, gaugeLayout(width, height));
     };
 
-    render();
+    let animationFrame: number | null = null;
+    let lastWidth = -1;
+    let lastHeight = -1;
+    const scheduleRender = (): void => {
+        if (animationFrame !== null) return;
+        animationFrame = window.requestAnimationFrame(() => {
+            animationFrame = null;
+            if (!card.isConnected) return;
+            const rect = card.getBoundingClientRect();
+            const width = Math.round(rect.width);
+            const height = Math.round(rect.height);
+            if (width === lastWidth && height === lastHeight) return;
+            lastWidth = width;
+            lastHeight = height;
+            render();
+        });
+    };
+    scheduleRender();
+    let observer: ResizeObserver | null = null;
     if (typeof ResizeObserver !== "undefined") {
-        const observer = new ResizeObserver(() => {
+        observer = new ResizeObserver(() => {
             if (!card.isConnected) {
-                observer.disconnect();
+                observer?.disconnect();
                 return;
             }
-            render();
+            scheduleRender();
         });
         observer.observe(card);
     }
+    lifecycle?.register(() => {
+        if (animationFrame !== null) window.cancelAnimationFrame(animationFrame);
+        observer?.disconnect();
+    });
 
     return card;
 }
@@ -208,7 +232,7 @@ function gaugeLayout(width: number, height: number): GaugeLayout {
 function drawGauge(svg: SVGSVGElement, data: GaugeData, palette: VisualPalette, layout: GaugeLayout): void {
     svg.replaceChildren();
     svg.setAttribute("viewBox", `0 0 ${layout.width} ${layout.height}`);
-    drawTitle(svg, data.title, layout);
+    drawTitle(svg, data, layout);
     appendGroup(svg, "backgroundArc", (group) => drawArc(group, -90, 90, "#EEF2F7", layout.stroke + 2, layout));
     appendGroup(svg, "rangeArcs", (group) => drawGaugeSegments(group, data, palette, layout));
     appendGroup(svg, "arcSeparators", (group) => drawArcSeparators(group, data, palette, layout));
@@ -241,19 +265,92 @@ function gaugeSegments(data: GaugeData, palette: VisualPalette): GaugeSegment[] 
     ];
 }
 
-function drawTitle(svg: SVGSVGElement, title: string, layout: GaugeLayout): void {
+function drawTitle(svg: SVGSVGElement, data: GaugeData, layout: GaugeLayout): void {
     const group = svgElement("g");
     group.setAttribute("class", "title");
-    const helpX = layout.width - 28;
-    const help = svgElement("circle");
-    help.setAttribute("cx", String(helpX));
-    help.setAttribute("cy", String(layout.titleY - 4));
-    help.setAttribute("r", "9");
-    help.setAttribute("class", "evm-gauge-help");
-    group.appendChild(svgText(title, 22, layout.titleY, "start", "evm-gauge-title"));
-    group.appendChild(help);
-    group.appendChild(svgText("?", helpX, layout.titleY + 1, "middle", "evm-gauge-help-text"));
+    group.appendChild(svgText(data.title, 22, layout.titleY, "start", "evm-gauge-title"));
     svg.appendChild(group);
+}
+
+interface GaugeHelpConfig {
+    acronym: string;
+    title: string;
+    intro: string;
+    numerator: string;
+    denominator: string;
+    ranges: Array<[string, string, string, string, string]>;
+    example: (value: string, numericValue: number | null) => string;
+}
+
+function renderGaugeHelp(data: GaugeData): HTMLElement {
+    const config = gaugeHelpConfig(data.key);
+    const wrapper = createElement("div", "evm-cpi-help");
+    const button = createElement("button", "evm-cpi-help-button", "?");
+    button.type = "button";
+    button.setAttribute("aria-label", `Ver explicación del ${config.acronym}`);
+    button.setAttribute("aria-expanded", "false");
+
+    const panel = createElement("section", "evm-cpi-help-panel");
+    panel.setAttribute("role", "tooltip");
+    const value = numberValue(data.value);
+    const example = value === null ? "—" : value.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const header = document.createElement("header");
+    const close = createElement("button", "evm-cpi-help-close", "×");
+    close.type = "button";
+    close.setAttribute("aria-label", `Cerrar explicación del ${config.acronym}`);
+    close.addEventListener("click", () => {
+        wrapper.classList.remove("open");
+        button.setAttribute("aria-expanded", "false");
+    });
+    header.append(createElement("strong", undefined, config.acronym), document.createElement("i"), createElement("h3", undefined, config.title), close);
+    const formula = createElement("div", "evm-cpi-help-formula");
+    const fraction = document.createElement("span");
+    fraction.append(createElement("strong", undefined, config.numerator), document.createElement("em"), createElement("strong", undefined, config.denominator));
+    formula.append(createElement("b", undefined, `${config.acronym} =`), fraction);
+    const content = createElement("div", "evm-cpi-help-content");
+    const ranges = createElement("div", "evm-cpi-help-ranges");
+    ranges.append(...config.ranges.map(item => cpiRange(...item)));
+    const exampleCard = createElement("aside", "evm-cpi-help-example");
+    const exampleCopy = document.createElement("p");
+    exampleCopy.textContent = config.example(example, value);
+    exampleCard.append(createElement("div", "evm-cpi-help-chart-icon", "⌁⌕"), createElement("strong", undefined, "Ejemplo:"), createElement("b", undefined, `${config.acronym} = ${example}`), exampleCopy);
+    content.append(ranges, exampleCard);
+    panel.append(header, createElement("p", "evm-cpi-help-intro", config.intro), formula, content);
+
+    button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const open = wrapper.classList.toggle("open");
+        button.setAttribute("aria-expanded", String(open));
+    });
+    panel.addEventListener("click", event => event.stopPropagation());
+    wrapper.append(button, panel);
+    return wrapper;
+}
+
+function gaugeHelpConfig(key: GaugeData["key"]): GaugeHelpConfig {
+    const performanceRanges: GaugeHelpConfig["ranges"] = [
+        ["blue", "⌃", "≥ 1.20", "SOBREDIMENSIONADO", "El desempeño está significativamente por encima de lo planificado."],
+        ["green", "✓", "1.00 - 1.19", "ESTABLE", "El proyecto se encuentra dentro de lo planificado."],
+        ["orange", "!", "0.90 - 0.99", "EN RIESGO", "Existe una desviación moderada respecto de lo planificado."],
+        ["red", "×", "0.00 - 0.89", "CRÍTICO", "Existe una desviación significativa respecto de lo planificado."]
+    ];
+    const completionRanges: GaugeHelpConfig["ranges"] = [
+        ["green", "✓", "0.00 - 1.00", "ESTABLE", "El rendimiento requerido para completar el proyecto se mantiene dentro de un nivel razonable."],
+        ["orange", "!", "1.01 - 1.10", "EN RIESGO", "Se necesita mejorar moderadamente el rendimiento restante."],
+        ["red", "×", "≥ 1.11", "CRÍTICO", "Se requiere un rendimiento futuro difícil de alcanzar."]
+    ];
+    if (key === "SPIW") return { acronym: "SPI (w)", title: "Índice de Desempeño del Cronograma", intro: "Mide la eficiencia del avance físico respecto de lo planificado.", numerator: "EV", denominator: "PV", ranges: performanceRanges, example: (_value, numericValue) => `Significa que avanzamos al ${numericValue === null ? "—" : (numericValue * 100).toLocaleString("es-PE", { maximumFractionDigits: 0 })}% del ritmo previsto originalmente.` };
+    if (key === "TCPI") return { acronym: "TCPI", title: "Índice de Desempeño del Costo por Completar", intro: "Mide la eficiencia de costo requerida para completar el proyecto dentro del presupuesto.", numerator: "BAC - EV", denominator: "BAC - AC", ranges: completionRanges, example: (_value, numericValue) => `Necesitas ser ${numericValue === null ? "—" : Math.max(0, (numericValue - 1) * 100).toLocaleString("es-PE", { maximumFractionDigits: 0 })}% más eficiente en el trabajo restante para no superar el presupuesto planificado (BAC).` };
+    if (key === "TSPIW") return { acronym: "TSPI (w)", title: "Índice de Desempeño del Cronograma por Completar", intro: "Mide la eficiencia de avance requerida para completar el trabajo en el plazo planificado.", numerator: "BAC - EV", denominator: "BAC - PV", ranges: completionRanges, example: (_value, numericValue) => `Necesitas avanzar ${numericValue === null ? "—" : Math.max(0, (numericValue - 1) * 100).toLocaleString("es-PE", { maximumFractionDigits: 0 })}% más eficientemente en lo que queda de la ejecución para cumplir el cronograma planificado.` };
+    return { acronym: "CPI", title: "Índice de Desempeño del Costo", intro: "Mide la eficiencia del costo del proyecto.", numerator: "EV", denominator: "AC", ranges: performanceRanges, example: value => `Por cada S/ 1.00 gastado obtenemos S/ ${value} de trabajo realizado.` };
+}
+
+function cpiRange(tone: string, icon: string, range: string, title: string, description: string): HTMLElement {
+    const row = createElement("div", `evm-cpi-help-range ${tone}`);
+    const copy = document.createElement("div");
+    copy.append(createElement("strong", undefined, title), createElement("p", undefined, description));
+    row.append(createElement("span", undefined, icon), createElement("b", undefined, range), copy);
+    return row;
 }
 
 function appendGroup(svg: SVGSVGElement, className: string, draw: (group: SVGGElement) => void): void {

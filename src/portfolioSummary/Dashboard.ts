@@ -24,7 +24,7 @@ function percentage(value: DataValue, signed: boolean): string {
     return `${sign}${normalized.toLocaleString("en-US", { maximumFractionDigits: 1 })}%`;
 }
 
-export function renderPortfolioDashboard(summary: PortfolioSummaryData | null): HTMLElement {
+export function renderPortfolioDashboard(summary: PortfolioSummaryData | null, unit?: string | null): HTMLElement {
     const panel = createElement("section", `evm-card evm-performance-card ${portfolioClasses.panel}`);
     panel.appendChild(createElement("div", "evm-section-title", "Resumen General"));
     if (!summary) {
@@ -32,15 +32,27 @@ export function renderPortfolioDashboard(summary: PortfolioSummaryData | null): 
         return panel;
     }
 
-    const grid = createElement("div", portfolioClasses.grid);
-    grid.appendChild(renderPrimaryCard("blue", "building", integer(summary.ProyectosActivos), "Proyectos Activos", undefined, [
+    const unitCode = (unit ?? "").trim().split(/\s|-/)[0].toUpperCase();
+    const mixedUnit = unitCode === "UGME" || unitCode === "";
+    const interventionOnly = unitCode === "UGM";
+    const activityValue = interventionOnly ? summary.CantidadIntervenciones : summary.ProyectosActivos;
+    const activityLabel = mixedUnit
+        ? "Proyectos e\nIntervenciones\nActivas"
+        : interventionOnly
+            ? "Intervenciones Activas"
+            : "Proyectos Activos";
+    const activityDetails: Array<[string, string]> = mixedUnit ? [
         [integer(summary.CantidadProyectos), "Proyectos"],
         [integer(summary.CantidadIntervenciones), "Intervenciones"]
-    ]));
-    grid.appendChild(renderPrimaryCard("green", "budget", shortCurrency(summary.PresupuestoInstitucional), "Presupuesto Institucional", "(BAC y PIM)", [
+    ] : [];
+    const budgetDetails: Array<[string, string]> = mixedUnit ? [
         [shortCurrency(summary.PresupuestoProyectos), "Proyectos"],
         [shortCurrency(summary.PresupuestoIntervenciones), "Intervenciones"]
-    ]));
+    ] : [];
+
+    const grid = createElement("div", portfolioClasses.grid);
+    grid.appendChild(renderPrimaryCard("blue", "building", integer(activityValue), activityLabel, undefined, activityDetails));
+    grid.appendChild(renderPrimaryCard("green", "budget", shortCurrency(summary.PresupuestoInstitucional), "Presupuesto Institucional", "(BAC y PIM)", budgetDetails));
     const deviations = createElement("div", "evm-portfolio-summary-deviations");
     deviations.appendChild(renderHorizontalCard("blue", "schedule", percentage(summary.DesviacionPlazoPct, true), "Desviación del Portafolio", "(Plazo)"));
     deviations.appendChild(renderHorizontalCard("orange", "cost", percentage(summary.DesviacionCostoPct, true), "Desviación del Portafolio", "(Costo)"));

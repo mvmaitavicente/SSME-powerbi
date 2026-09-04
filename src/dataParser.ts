@@ -5,6 +5,32 @@ import { AggregateCurveData, AggregateGaugeData, CurrentSnapshot, CurveData, Cur
 
 type DataViewTable = powerbi.DataViewTable;
 type DataViewMetadataColumn = powerbi.DataViewMetadataColumn;
+const parserDebugEnabled = false;
+let cachedNavigatorJson: string | null = null;
+let cachedNavigatorData: NavigatorData | null = null;
+const dashboardCache = new Map<string, ParsedDashboardData>();
+const dashboardCacheLimit = 5;
+
+function dashboardCacheKey(rawDashboard: string, navigatorOrProject: unknown): string {
+    return String(navigatorOrProject ?? "") + "\u0000" + rawDashboard;
+}
+
+function cachedDashboard(key: string): ParsedDashboardData | null {
+    const cached = dashboardCache.get(key);
+    if (!cached) return null;
+    dashboardCache.delete(key);
+    dashboardCache.set(key, cached);
+    return cached;
+}
+
+function rememberDashboard(key: string, dashboard: ParsedDashboardData): void {
+    dashboardCache.delete(key);
+    dashboardCache.set(key, dashboard);
+    if (dashboardCache.size > dashboardCacheLimit) {
+        const oldest = dashboardCache.keys().next().value as string | undefined;
+        if (oldest !== undefined) dashboardCache.delete(oldest);
+    }
+}
 
 const headerFields = [
     "NombreIntervencion",
@@ -145,21 +171,6 @@ const roleFieldMap: { [roleName: string]: string } = {
 export function parseDashboardData(dataView?: powerbi.DataView): DashboardData {
     const jsonDashboard = parseDashboardJsonData(dataView);
     if (jsonDashboard?.context.Level === "PROYECTO" && jsonDashboard.project && jsonDashboard.gauges.length && jsonDashboard.curve.length) {
-        console.debug("Dashboard JSON parseado", {
-            idIntervencion: jsonDashboard.idIntervencion,
-            project: jsonDashboard.project,
-            gaugeRows: jsonDashboard.gauges.length,
-            curveRows: jsonDashboard.curve.length,
-            currentCurveRow: getCurrentCurveRow(jsonDashboard.curve)
-        });
-        console.log(jsonDashboard.project);
-        console.log(jsonDashboard.gauges);
-        console.log(jsonDashboard.curve);
-        console.log("Gauge History CPI", jsonDashboard.gauges.map((row) => row.CPI).filter((value): value is number => value !== null));
-        console.log("Gauge History SPI", jsonDashboard.gauges.map((row) => row["SPI (w)"]).filter((value): value is number => value !== null));
-        console.log("Gauge History TCPI", jsonDashboard.gauges.map((row) => row.TCPI).filter((value): value is number => value !== null));
-        console.log("Gauge History TSPI", jsonDashboard.gauges.map((row) => row["TSPI (w)"]).filter((value): value is number => value !== null));
-        console.log("Current Curve", getCurrentCurveRow(jsonDashboard.curve));
         return adaptJsonDashboardData(jsonDashboard);
     }
 
@@ -238,9 +249,21 @@ function jsonTableToObjects<T extends Record<string, unknown>>(table: JsonTableP
     });
 }
 
+function sortIfNeeded<T>(items: T[], value: (item: T) => number): T[] {
+    for (let index = 1; index < items.length; index += 1) {
+        if (value(items[index - 1]) > value(items[index])) {
+            return items.sort((left, right) => value(left) - value(right));
+        }
+    }
+    return items;
+}
+
 function parseNavigatorPayload(rawNavigator: unknown): NavigatorData {
     if (typeof rawNavigator !== "string" || rawNavigator.trim() === "") {
         return { projects: [] };
+    }
+    if (rawNavigator === cachedNavigatorJson && cachedNavigatorData) {
+        return cachedNavigatorData;
     }
 
     try {
@@ -248,10 +271,13 @@ function parseNavigatorPayload(rawNavigator: unknown): NavigatorData {
         const projects = payload.projects ? jsonTableToObjects<NavigatorProject>(payload.projects) : [];
         validateJsonTableRowCount(payload.projects, "JSON Navigator projects");
 
-        return {
+        const navigator = {
             schemaVersion: payload.schemaVersion,
             projects
         };
+        cachedNavigatorJson = rawNavigator;
+        cachedNavigatorData = navigator;
+        return navigator;
     } catch (error) {
         console.warn("No se pudo interpretar JSON Navigator.", error);
         return { projects: [] };
@@ -442,6 +468,9 @@ function parseNavigatorDashboardRow(
     if (typeof rawDashboard !== "string" || rawDashboard.trim() === "") {
         return null;
     }
+    const cacheKey = dashboardCacheKey(rawDashboard, rawNavigator);
+    const cached = cachedDashboard(cacheKey);
+    if (cached) return cached;
 
     try {
         const navigator = parseNavigatorPayload(rawNavigator);
@@ -457,25 +486,35 @@ function parseNavigatorDashboardRow(
             rawContextLevel: contextDebug.rawContextLevel,
             normalizedContextLevel: contextDebug.normalizedContextLevel,
             rawDashboardLength: rawDashboard.length,
-            rawDashboardPreview: rawDashboard.slice(0, 800),
-            directContextObject: JSON.stringify(directContextRow, null, 2),
+            rawDashboardPreview: parserDebugEnabled ? rawDashboard.slice(0, 800) : "",
+            directContextObject: parserDebugEnabled ? JSON.stringify(directContextRow, null, 2) : "",
             directRawLevel,
             directNormalizedLevel,
-            contextAfterParse: JSON.stringify(contextDebug.context, null, 2)
+            contextAfterParse: parserDebugEnabled ? JSON.stringify(contextDebug.context, null, 2) : ""
         };
 
+        let parsed: ParsedDashboardData | null;
         switch (contextDebug.context.Level) {
             case "PRONIED":
-                return parseProniedDashboardPayload(payload, contextDebug.context, navigator, debugBase);
+                parsed = parseProniedDashboardPayload(payload, contextDebug.context, navigator, debugBase);
+                break;
             case "UNIDAD":
-                return parseUnitDashboardPayload(payload, contextDebug.context, navigator, debugBase);
+                parsed = parseUnitDashboardPayload(payload, contextDebug.context, navigator, debugBase);
+                break;
             case "PROYECTO":
-                return parseProjectDashboardPayload(payload, contextDebug.context, navigator, debugBase);
+                parsed = parseProjectDashboardPayload(payload, contextDebug.context, navigator, debugBase);
+                break;
             case "RIESGOS":
-                return parseRiskDashboardPayload(payload, contextDebug.context, navigator, debugBase);
+                parsed = parseRiskDashboardPayload(payload, contextDebug.context, navigator, debugBase);
+                break;
             default:
-                return null;
+                parsed = null;
+                break;
         }
+        if (parsed) {
+            rememberDashboard(cacheKey, parsed);
+        }
+        return parsed;
     } catch (error) {
         console.error("No se pudo interpretar JSON Navigator/Dashboard.", error);
         return null;
@@ -571,6 +610,9 @@ function parseDashboardJsonRow(row: powerbi.DataViewTableRow, idIndex: number, j
     if (!idIntervencion || typeof rawJson !== "string" || rawJson.trim() === "") {
         return null;
     }
+    const cacheKey = dashboardCacheKey(rawJson, idIntervencion);
+    const cached = cachedDashboard(cacheKey);
+    if (cached) return cached;
 
     try {
         const payload = JSON.parse(rawJson) as DashboardJsonPayload;
@@ -578,15 +620,15 @@ function parseDashboardJsonRow(row: powerbi.DataViewTableRow, idIndex: number, j
         const directContextRow = directContextRows[0] ?? {};
         const directRawLevelValue = firstKnownValue(directContextRow, "Level", "Nivel");
         const contextDebug = parseDashboardContextWithDebug(payload.context);
-        return parseDashboardPayload(payload, idIntervencion, contextDebug.context, undefined, {
+        const parsed = parseDashboardPayload(payload, idIntervencion, contextDebug.context, undefined, {
             rawContextLevel: contextDebug.rawContextLevel,
             normalizedContextLevel: contextDebug.normalizedContextLevel,
             rawDashboardLength: rawJson.length,
-            rawDashboardPreview: rawJson.slice(0, 800),
-            directContextObject: JSON.stringify(directContextRow, null, 2),
+            rawDashboardPreview: parserDebugEnabled ? rawJson.slice(0, 800) : "",
+            directContextObject: parserDebugEnabled ? JSON.stringify(directContextRow, null, 2) : "",
             directRawLevel: String(directRawLevelValue ?? ""),
             directNormalizedLevel: normalizeDashboardLevel(directRawLevelValue),
-            contextAfterParse: JSON.stringify(contextDebug.context, null, 2),
+            contextAfterParse: parserDebugEnabled ? JSON.stringify(contextDebug.context, null, 2) : "",
             beforeLegacyLevel: contextDebug.context.Level,
             legacyParsedLevel: null,
             legacyContextLevel: null,
@@ -601,6 +643,10 @@ function parseDashboardJsonRow(row: powerbi.DataViewTableRow, idIndex: number, j
             dataViewRowCount: null,
             rowIndexUsed: null
         });
+        if (parsed) {
+            rememberDashboard(cacheKey, parsed);
+        }
+        return parsed;
     } catch (error) {
         console.error("No se pudo interpretar JSON Dashboard.", error);
         return null;
@@ -619,18 +665,26 @@ function parseDashboardPayload(
         return null;
     }
 
+    const isProject = context.Level === "PROYECTO";
+    const isAggregate = context.Level === "PRONIED" || context.Level === "UNIDAD";
+    const isRiskDashboard = context.Level === "RIESGOS";
     const summaryRows = payload.summary ? jsonTableToObjects<Record<string, unknown>>(payload.summary) : [];
-    const projectRows = payload.project ? jsonTableToObjects<ProjectData>(payload.project) : [];
-    const gaugeRows = payload.gauges ? jsonTableToObjects<Record<string, unknown>>(payload.gauges) : [];
-    const curveRows = payload.curve ? jsonTableToObjects<Record<string, unknown>>(payload.curve) : [];
-    const unitRows = payload.units ? jsonTableToObjects<Record<string, unknown>>(payload.units) : [];
-    const portfolioSummaryRows = payload.portfolioSummary ? jsonTableToObjects<Record<string, unknown>>(payload.portfolioSummary) : [];
-    const projectSummaryRows = payload.projects ? jsonTableToObjects<Record<string, unknown>>(payload.projects) : [];
-    const riskRows = payload.risks ? jsonTableToObjects<Record<string, unknown>>(payload.risks) : [];
-    const milestoneRows = payload.milestone || payload.milestones
+    const projectRows = isProject && payload.project ? jsonTableToObjects<ProjectData>(payload.project) : [];
+    const gaugeRows = (isProject || isAggregate) && payload.gauges ? jsonTableToObjects<Record<string, unknown>>(payload.gauges) : [];
+    const curveRows = (isProject || isAggregate) && payload.curve ? jsonTableToObjects<Record<string, unknown>>(payload.curve) : [];
+    const unitRows = context.Level === "PRONIED" && payload.units ? jsonTableToObjects<Record<string, unknown>>(payload.units) : [];
+    const summaryDashboardPayload = context.Level === "UNIDAD"
+        ? (payload.UnidadGerencialSummary ?? payload.portfolioSummary)
+        : payload.portfolioSummary;
+    const portfolioSummaryRows = isAggregate && summaryDashboardPayload
+        ? jsonTableToObjects<Record<string, unknown>>(summaryDashboardPayload)
+        : [];
+    const projectSummaryRows = context.Level === "UNIDAD" && payload.projects ? jsonTableToObjects<Record<string, unknown>>(payload.projects) : [];
+    const riskRows = (isProject || context.Level === "PRONIED") && payload.risks ? jsonTableToObjects<Record<string, unknown>>(payload.risks) : [];
+    const milestoneRows = isProject && (payload.milestone || payload.milestones)
         ? jsonTableToObjects<Record<string, unknown>>((payload.milestone || payload.milestones) as JsonTablePayload)
         : [];
-    const riskDashboard: RiskDashboardData | null = context.Level === "RIESGOS" ? {
+    const riskDashboard: RiskDashboardData | null = isRiskDashboard ? {
         summary: summaryRows,
         evolution: jsonRows(payload.evolution),
         categories: jsonRows(payload.categories),
@@ -647,32 +701,36 @@ function parseDashboardPayload(
     validateJsonTableRowCount(payload.curve, "JSON curve");
     validateJsonTableRowCount(payload.units, "JSON units");
     validateJsonTableRowCount(payload.portfolioSummary, "JSON portfolioSummary");
+    validateJsonTableRowCount(payload.UnidadGerencialSummary, "JSON UnidadGerencialSummary");
     validateJsonTableRowCount(payload.projects, "JSON projects");
     validateJsonTableRowCount(payload.risks, "JSON risks");
 
     const milestonePayload = payload.milestone || payload.milestones;
     validateJsonTableRowCount(milestonePayload, "JSON milestone");
 
-    const normalizedGauges = gaugeRows
-        .map(normalizeJsonGauge)
-        .sort((a, b) => a.Semana - b.Semana);
-
-    const normalizedCurve = curveRows
-        .map(normalizeJsonCurve)
-        .sort((a, b) => a.Semana - b.Semana);
-    const normalizedAggregateGauges = gaugeRows.map(normalizeAggregateGauge).sort((a, b) => a.OrdenSemana - b.OrdenSemana);
-    const normalizedAggregateCurve = curveRows.map(normalizeAggregateCurve).sort((a, b) => a.OrdenSemana - b.OrdenSemana);
+    const normalizedGauges = isProject
+        ? sortIfNeeded(gaugeRows.map(normalizeJsonGauge), (row) => row.Semana)
+        : [];
+    const normalizedCurve = isProject
+        ? sortIfNeeded(curveRows.map(normalizeJsonCurve), (row) => row.Semana)
+        : [];
+    const normalizedAggregateGauges = isAggregate
+        ? sortIfNeeded(gaugeRows.map(normalizeAggregateGauge), (row) => row.OrdenSemana)
+        : [];
+    const normalizedAggregateCurve = isAggregate
+        ? sortIfNeeded(curveRows.map(normalizeAggregateCurve), (row) => row.OrdenSemana)
+        : [];
     const normalizedUnits = unitRows.map(normalizeUnitSummary);
     const normalizedPortfolioSummary = normalizePortfolioSummary(portfolioSummaryRows[0] ?? null);
     const normalizedProjects = projectSummaryRows.map(normalizeUnitProjectSummary);
 
     const normalizedRisks = riskRows.map(normalizeJsonRisk).filter((item) => hasAny(item as FieldValueMap, riskFields));
-    const normalizedMilestones = milestoneRows
+    const normalizedMilestones = sortIfNeeded(milestoneRows
         .map(normalizeJsonMilestone)
-        .filter((item) => hasAny(item as FieldValueMap, milestoneFields))
-        .sort((a, b) => (toNullableNumber(a.OrdenHito) ?? 0) - (toNullableNumber(b.OrdenHito) ?? 0));
+        .filter((item) => hasAny(item as FieldValueMap, milestoneFields)),
+        (item) => toNullableNumber(item.OrdenHito) ?? 0);
 
-    const debug: ParserDebugData | undefined = debugInput
+    const debug: ParserDebugData | undefined = parserDebugEnabled && debugInput
         ? {
             rawContextLevel: debugInput.rawContextLevel,
             normalizedContextLevel: debugInput.normalizedContextLevel,
@@ -721,7 +779,7 @@ function parseDashboardPayload(
         riskDashboard
     };
 
-    if (finalParsed.debug) {
+    if (parserDebugEnabled && finalParsed.debug) {
         finalParsed.debug.finalParsedPreview = JSON.stringify(finalParsed, null, 2).slice(0, 2000);
     }
 
@@ -830,24 +888,71 @@ function normalizeJsonCurve(row: Record<string, unknown>): CurveData {
         SAC: readNullableNumber(row, ["SAC"]),
         ES: readNullableNumber(row, ["ES"]),
         AT: readNullableNumber(row, ["AT"]),
+        AT_Matriz: readNullableNumber(row, ["AT_Matriz"]),
+        SemanaEstado: readNullableNumber(row, ["SemanaEstado"]),
         PV: readNullableNumber(row, ["PV"]),
         EV: readNullableNumber(row, ["EV"]),
         AC: readNullableNumber(row, ["AC"]),
         CV: readNullableNumber(row, ["CV"]),
         CPI: readNullableNumber(row, ["CPI"]),
         "SPI (w)": readNullableNumber(row, ["SPI (w)", "SPIW"]),
+        "SPI (w)(*)": readNullableNumber(row, [
+            "SPI (w)(*)",
+            "SPI (w) (*)",
+            "SPI (w)*",
+            "SPI (w) *",
+            "SPIW(*)",
+            "SPIW*"
+        ]),
         "SPI (t)": readNullableNumber(row, ["SPI (t)", "SPIT"]),
         TCPI: readNullableNumber(row, ["TCPI"]),
+        "TCPI Proy": readNullableNumber(row, [
+            "TCPI (**)",
+            "TCPI(**)",
+            "TCPI **",
+            "TCPI**",
+            "TCPI Proy",
+            "TCPIProy"
+        ]),
         "TSPI (w)": readNullableNumber(row, ["TSPI (w)", "TSPIW"]),
         "TSPI (t)": readNullableNumber(row, ["TSPI (t)", "TSPIT"]),
+        "TSPI (w) Proy": readNullableNumber(row, [
+            "TSPI (w)(***)",
+            "TSPI (w) (***)",
+            "TSPI (w)***",
+            "TSPI (w) ***",
+            "TSPI (w) Proy",
+            "TSPIW Proy",
+            "TSPIWProy"
+        ]),
+        "TSPI (t) Proy": readNullableNumber(row, [
+            "TSPI (t)(***)",
+            "TSPI (t) (***)",
+            "TSPI (t)***",
+            "TSPI (t) ***",
+            "TSPI (t) Proy",
+            "TSPIT Proy",
+            "TSPITProy"
+        ]),
         "EAC (c)": readNullableNumber(row, ["EAC (c)", "EACC"]),
         "EAC (t)": readNullableNumber(row, ["EAC (t)", "EACT"]),
+        "IEAC (c)": readNullableNumber(row, ["IEAC (c)", "IEACC"]),
         "IEAC (t)": readNullableNumber(row, ["IEAC (t)", "IEACT"]),
+        "IVAC (t)": readNullableNumber(row, ["IVAC (t)", "IVACT"]),
         "VAC (c)": readNullableNumber(row, ["VAC (c)", "VACC"]),
+        "VAC (c2)": readNullableNumber(row, ["VAC (c2)", "VACC2"]),
+        "VAC (c3)": readNullableNumber(row, ["VAC (c3)", "VACC3"]),
+        "VAC (c4)": readNullableNumber(row, ["VAC (c4)", "VACC4"]),
         "VAC (t)": readNullableNumber(row, ["VAC (t)", "VACT"]),
         "SV (w)": readNullableNumber(row, ["SV (w)", "SVW"]),
         "SV (t)": readNullableNumber(row, ["SV (t)", "SVT"]),
         "ETC (c)": readNullableNumber(row, ["ETC (c)", "ETCC"]),
+        "EAC (c2)": readNullableNumber(row, ["EAC (c2)", "EACC2"]),
+        "EAC (c3)": readNullableNumber(row, ["EAC (c3)", "EACC3"]),
+        "EAC (c4)": readNullableNumber(row, ["EAC (c4)", "EACC4"]),
+        "ETC (c2)": readNullableNumber(row, ["ETC (c2)", "ETCC2"]),
+        "ETC (c3)": readNullableNumber(row, ["ETC (c3)", "ETCC3"]),
+        "ETC (c4)": readNullableNumber(row, ["ETC (c4)", "ETCC4"]),
         "ETC (t)": readNullableNumber(row, ["ETC (t)", "ETCT"])
     };
 }
@@ -1087,16 +1192,16 @@ function normalizePortfolioSummary(row: Record<string, unknown> | null): Portfol
     }
 
     return {
-        ProyectosActivos: readPortfolioMetric(row, ["ProyectosActivos", "CantidadProyectosActivos", "TotalProyectosActivos"], ["proyecto", "activo"], 0),
-        CantidadProyectos: readPortfolioMetric(row, ["CantidadProyectos", "Proyectos", "TotalProyectos"], ["cantidad", "proyecto"], 1),
-        CantidadIntervenciones: readPortfolioMetric(row, ["CantidadIntervenciones", "Intervenciones", "TotalIntervenciones"], ["cantidad", "intervencion"], 2),
-        PresupuestoInstitucional: readPortfolioMetric(row, ["PresupuestoInstitucional", "PresupuestoTotal", "PIMInstitucional"], ["presupuesto", "institucional"], 3),
-        PresupuestoProyectos: readPortfolioMetric(row, ["PresupuestoProyectos", "PresupuestoProyecto", "PIMProyectos"], ["presupuesto", "proyecto"], 4),
-        PresupuestoIntervenciones: readPortfolioMetric(row, ["PresupuestoIntervenciones", "PresupuestoIntervencion", "PIMIntervenciones"], ["presupuesto", "intervencion"], 5),
-        IntervencionesCriticas: readPortfolioMetric(row, ["IntervencionesCriticas", "CantidadIntervencionesCriticas", "Criticas"], ["intervencion", "critica"], 8),
-        DesviacionPlazoPct: readPortfolioMetric(row, ["DesviacionPlazoPct", "DesviacionPlazo", "PorcentajeDesviacionPlazo"], ["desviacion", "plazo"], 7),
-        DesviacionCostoPct: readPortfolioMetric(row, ["DesviacionCostoPct", "DesviacionCosto", "PorcentajeDesviacionCosto"], ["desviacion", "costo"], 6),
-        RiesgoPortafolioPct: readPortfolioMetric(row, ["RiesgoPortafolioPct", "RiesgoPortafolio", "PorcentajeRiesgoPortafolio"], ["riesgo", "portafolio"], 9)
+        ProyectosActivos: readPortfolioMetric(row, ["ActiveProjects", "ProyectosActivos", "CantidadProyectosActivos", "TotalProyectosActivos"], ["proyecto", "activo"], 0),
+        CantidadProyectos: readPortfolioMetric(row, ["Projects", "CantidadProyectos", "Proyectos", "TotalProyectos"], ["cantidad", "proyecto"], 1),
+        CantidadIntervenciones: readPortfolioMetric(row, ["Interventions", "CantidadIntervenciones", "Intervenciones", "TotalIntervenciones"], ["cantidad", "intervencion"], 2),
+        PresupuestoInstitucional: readPortfolioMetric(row, ["InstitutionalBudget", "PresupuestoInstitucional", "PresupuestoTotal", "PIMInstitucional"], ["presupuesto", "institucional"], 3),
+        PresupuestoProyectos: readPortfolioMetric(row, ["ProjectedBudget", "PresupuestoProyectos", "PresupuestoProyecto", "PIMProyectos"], ["presupuesto", "proyecto"], 4),
+        PresupuestoIntervenciones: readPortfolioMetric(row, ["InterventionBudget", "PresupuestoIntervenciones", "PresupuestoIntervencion", "PIMIntervenciones"], ["presupuesto", "intervencion"], 5),
+        IntervencionesCriticas: readPortfolioMetric(row, ["CriticalInterventions", "IntervencionesCriticas", "CantidadIntervencionesCriticas", "Criticas"], ["intervencion", "critica"], 8),
+        DesviacionPlazoPct: readPortfolioMetric(row, ["ScheduleDeviation", "DesviacionPlazoPct", "DesviacionPlazo", "PorcentajeDesviacionPlazo"], ["desviacion", "plazo"], 7),
+        DesviacionCostoPct: readPortfolioMetric(row, ["CostDeviation", "DesviacionCostoPct", "DesviacionCosto", "PorcentajeDesviacionCosto"], ["desviacion", "costo"], 6),
+        RiesgoPortafolioPct: readPortfolioMetric(row, ["PortfolioRisk", "RiesgoPortafolioPct", "RiesgoPortafolio", "PorcentajeRiesgoPortafolio"], ["riesgo", "portafolio"], 9)
     };
 }
 
@@ -1491,21 +1596,6 @@ function buildPerformanceData(rows: FieldValueMap[], at: DataValue): Performance
     });
 
     const performance = target as PerformanceData;
-    console.debug("Desempeno values", {
-        porcentajeSobreCosto: performance.SobreCostoProyectadoPct,
-        costoEstimadoTerminoEAC: performance.CostoEstimadoTerminoEAC,
-        plazoConsumido: performance.PlazoConsumidoPct,
-        plazoProgramadoTotal: performance.PlazoProgramadoTotalSemanas,
-        plazoProyectado: performance.PlazoProyectadoSemanas,
-        plazoRestante: performance.PlazoRestanteSemanas,
-        presupuestoConsumido: performance.PresupuestoConsumidoPct,
-        presupuestoProgramado: performance.PresupuestoProgramadoBAC,
-        presupuestoRestante: performance.PresupuestoRestante,
-        retrasoProyectado: performance.RetrasoProyectadoSemanas,
-        sobreCostoProyectadoVAC: performance.SobreCostoProyectadoVAC,
-        terminoProyectado: performance.TerminoProyectado
-    });
-
     return performance;
 }
 
@@ -1653,12 +1743,6 @@ function historyFor(rows: Array<{ row: FieldValueMap; index: number; week: numbe
 }
 
 function buildGauges(current: CurrentSnapshot, history: GaugeHistory): GaugeData[] {
-    console.debug("Gauge values", {
-        CPI: current.CPI,
-        SPIW: current.SPI,
-        TCPI: current.TCPI,
-        TSPIW: current.TSPI
-    });
     return [
         gauge("CPI", current.CPI, current.CPIEstado, current.CPIVariacionSemanaAnterior, history.CPI),
         gauge("SPIW", current.SPI, current.SPIEstado, current.SPIVariacionSemanaAnterior, history.SPIW),

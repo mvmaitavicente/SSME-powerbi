@@ -31,11 +31,16 @@ export function renderPrimaryCard(
     miniCards: Array<[string, string, PortfolioIconName?]>
 ): HTMLElement {
     const card = createElement("article", `${portfolioClasses.card} ${portfolioClasses.primaryCard} is-${tone}`);
-    const right = createElement("div", portfolioClasses.detail);
-    miniCards.forEach(([miniValue, miniLabel, miniIcon]) => right.appendChild(renderMiniCard(miniValue, miniLabel, miniIcon)));
+    if (miniCards.length === 0) {
+        card.classList.add("is-single-metric");
+    }
     card.appendChild(iconBlock(icon));
     card.appendChild(mainMetric(value, label, note));
-    card.appendChild(right);
+    if (miniCards.length > 0) {
+        const right = createElement("div", portfolioClasses.detail);
+        miniCards.forEach(([miniValue, miniLabel, miniIcon]) => right.appendChild(renderMiniCard(miniValue, miniLabel, miniIcon)));
+        card.appendChild(right);
+    }
     return card;
 }
 

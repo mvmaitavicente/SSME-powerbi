@@ -1,8 +1,6 @@
 "use strict";
 
 import powerbi from "powerbi-visuals-api";
-import { FormattingSettingsService } from "powerbi-visuals-utils-formattingmodel";
-import { BasicFilter } from "powerbi-models";
 import "./styles/visual.less";
 
 import { adaptJsonDashboardData, parseDashboardJsonData } from "./dataParser";
@@ -12,11 +10,16 @@ import { renderHeader, renderSidebar } from "./renderers/headerRenderer";
 import { renderMilestones } from "./renderers/milestoneRenderer";
 import { renderPerformance } from "./renderers/performanceRenderer";
 import { renderRisks } from "./renderers/riskRenderer";
-import { renderRiskDashboard } from "./renderers/riskDashboardRenderer";
+import { mountRiskDashboardPage, renderRiskDashboard } from "./renderers/riskDashboardRenderer";
 import { renderPortfolioDashboard } from "./portfolioSummary/Dashboard";
-import { VisualFormattingSettingsModel } from "./settings";
 import { AggregateCurveData, AggregateGaugeData, CurveData, CurveHistoryPoint, CurveReferences, DashboardData, DashboardLevel, DataValue, GaugeChartPoint, GaugeChartSeries, GaugeData, GaugeHistoryRow, GaugeMetricKey, NavigatorProject, ParsedDashboardData, PortfolioSummaryData, ProjectHeader, RenderCurveData, RiskItem, SummaryData, UnitProjectSummaryData, UnitSummaryData, VisualPalette } from "./types";
 import { createElement, currency, date, decimal, numberValue, shortCurrency, text } from "./utils/format";
+import { debounceInput } from "./utils/interaction";
+import { NavigationFilterController } from "./controllers/NavigationFilterController";
+import { NavigatorProjectIndex } from "./controllers/NavigatorProjectIndex";
+import { InternalFilterController } from "./controllers/InternalFilterController";
+import { ViewLifecycle } from "./controllers/ViewLifecycle";
+import { LazyCarouselView } from "./views/LazyCarouselView";
 import VisualConstructorOptions = powerbi.extensibility.visual.VisualConstructorOptions;
 import VisualUpdateOptions = powerbi.extensibility.visual.VisualUpdateOptions;
 import IVisual = powerbi.extensibility.visual.IVisual;
@@ -96,8 +99,6 @@ export class Visual implements IVisual {
     private readonly host: powerbi.extensibility.visual.IVisualHost;
     private readonly events: IVisualEventService;
     private readonly target: HTMLElement;
-    private formattingSettings: VisualFormattingSettingsModel = new VisualFormattingSettingsModel();
-    private readonly formattingSettingsService: FormattingSettingsService;
     private rootElement: HTMLElement | null = null;
     private currentDashboardData: ParsedDashboardData | null = null;
     private filterPanelOpen: boolean = false;
@@ -123,9 +124,11 @@ export class Visual implements IVisual {
         district: null,
         status: null
     };
-    private readonly appliedFilterValues: { [propertyName: string]: string | null } = {};
-    private generalNavigationFilterValue: string | null = null;
-    private navigatorProjectCatalog: NavigatorProject[] = [];
+    private readonly navigationFilters: NavigationFilterController;
+    private readonly internalFilters: InternalFilterController;
+    private readonly navigatorIndex: NavigatorProjectIndex;
+    private readonly filteredProjectsCache = new Map<string, NavigatorProject[]>();
+    private readonly viewLifecycle = new ViewLifecycle();
     private navigationDebugHidden: boolean = false;
     private readonly navigationDebugPanelEnabled: boolean = false;
     private pendingNavigationLevel: DashboardLevel | null = null;
@@ -189,7 +192,10 @@ export class Visual implements IVisual {
     private filterLoadingSafetyTimer: number | null = null;
     private projectCarouselIndex: number = 0;
     private portfolioCarouselIndex: number = 0;
+    private riskCarouselIndex: number = 0;
+    private readonly lazyCarousel = new LazyCarouselView();
     private matrixVisibleColumns: Set<keyof CurveData> | null = null;
+    private matrixCostProjectionMethod: 1 | 2 | 3 | 4 = 1;
     private selectedGaugeKey: GaugeMetricKey | null = null;
     private visibleGaugeSeries: GaugeMetricKey[] = ["CPI", "SPI (w)", "TCPI", "TSPI (w)"];
     private readonly handleGaugeModalKeydown = (event: KeyboardEvent): void => {
@@ -202,70 +208,84 @@ export class Visual implements IVisual {
         this.host = options.host;
         this.events = options.host.eventService;
         this.target = options.element;
-        this.formattingSettingsService = new FormattingSettingsService();
+        this.navigationFilters = new NavigationFilterController(this.host, () => this.beginFilterLoading());
+        this.internalFilters = new InternalFilterController(this.host, () => this.beginFilterLoading());
+        this.navigatorIndex = new NavigatorProjectIndex((project) => this.getProjectId(project));
         this.target.classList.add("evm-visual-host");
     }
 
     public update(options: VisualUpdateOptions): void {
         this.events.renderingStarted(options);
+        const resizeMask = powerbi.VisualUpdateType.Resize | powerbi.VisualUpdateType.ResizeEnd;
+        const isResizeOnly = Boolean(options.type & resizeMask) && (options.type & ~resizeMask) === 0;
+        if (isResizeOnly && this.rootElement && this.currentDashboardData) {
+            this.rootElement.style.width = `${options.viewport.width}px`;
+            this.rootElement.style.height = `${options.viewport.height}px`;
+            const main = this.rootElement.querySelector(".evm-main");
+            if (main instanceof HTMLElement) {
+                main.style.minWidth = `${Math.min(780, Math.max(0, options.viewport.width - 92))}px`;
+            }
+            this.events.renderingFinished(options);
+            return;
+        }
         const jsonFilters = this.readUpdateJsonFilters(options);
-        this.navigationDebug.updateCount += 1;
-        this.navigationDebug.lastAction = "Power BI ejecutó update()";
-        this.navigationDebug.jsonFilterCount = jsonFilters.length;
-        this.navigationDebug.lastFilterJson = JSON.stringify(jsonFilters);
-        this.navigationDebug.activeJsonFilters = JSON.stringify(jsonFilters, null, 2);
-        this.navigationDebug.activeFilterSummary = this.summarizeJsonFilters(jsonFilters);
-        this.navigationDebug.timestamp = new Date().toISOString();
-        console.debug("[UPDATE] Visual actualizado", {
-            updateType: options.type,
-            jsonFilters,
-            dataViews: options.dataViews?.length ?? 0
-        });
+        if (this.navigationDebugPanelEnabled) {
+            this.navigationDebug.updateCount += 1;
+            this.navigationDebug.lastAction = "Power BI ejecutó update()";
+            this.navigationDebug.jsonFilterCount = jsonFilters.length;
+            this.navigationDebug.lastFilterJson = JSON.stringify(jsonFilters);
+            this.navigationDebug.activeJsonFilters = JSON.stringify(jsonFilters, null, 2);
+            this.navigationDebug.activeFilterSummary = this.summarizeJsonFilters(jsonFilters);
+            this.navigationDebug.timestamp = new Date().toISOString();
+        }
 
         try {
             const dataView = options.dataViews?.[0];
-            this.formattingSettings = this.formattingSettingsService.populateFormattingSettingsModel(VisualFormattingSettingsModel, dataView);
-            this.target.replaceChildren();
-
             const dashboard = parseDashboardJsonData(dataView);
-            console.debug("[UPDATE] Contexto recibido", {
-                level: dashboard?.context?.Level,
-                unit: dashboard?.context?.Unit,
-                projectId: dashboard?.context?.ProjectId
-            });
-            this.navigationDebug.receivedLevel = dashboard?.context?.Level ?? null;
-            this.navigationDebug.receivedUnit = dashboard?.context?.Unit ?? null;
-            this.navigationDebug.receivedProjectId = dashboard?.context?.ProjectId ?? null;
+            if (dashboard && dashboard === this.currentDashboardData && this.rootElement) {
+                this.rootElement.style.width = `${options.viewport.width}px`;
+                this.rootElement.style.height = `${options.viewport.height}px`;
+                this.finishFilterLoading();
+                this.events.renderingFinished(options);
+                return;
+            }
+            this.viewLifecycle.reset();
+            this.target.replaceChildren();
             if (dashboard?.context?.Level === this.pendingNavigationLevel) {
                 this.pendingNavigationLevel = null;
             }
-            this.navigationDebug.rawContextLevel = dashboard?.debug?.rawContextLevel ?? null;
-            this.navigationDebug.normalizedContextLevel = dashboard?.debug?.normalizedContextLevel ?? null;
-            this.navigationDebug.contextLevelAfterParse = dashboard?.debug?.contextLevelAfterParse ?? null;
-            this.navigationDebug.rawDashboardLength = dashboard?.debug?.rawDashboardLength ?? null;
-            this.navigationDebug.rawDashboardPreview = dashboard?.debug?.rawDashboardPreview ?? "";
-            this.navigationDebug.directContextObject = dashboard?.debug?.directContextObject ?? "";
-            this.navigationDebug.directRawLevel = dashboard?.debug?.directRawLevel ?? null;
-            this.navigationDebug.directNormalizedLevel = dashboard?.debug?.directNormalizedLevel ?? null;
-            this.navigationDebug.contextAfterParse = dashboard?.debug?.contextAfterParse ?? "";
-            this.navigationDebug.beforeLegacyLevel = dashboard?.debug?.beforeLegacyLevel ?? null;
-            this.navigationDebug.legacyParsedLevel = dashboard?.debug?.legacyParsedLevel ?? null;
-            this.navigationDebug.legacyContextLevel = dashboard?.debug?.legacyContextLevel ?? null;
-            this.navigationDebug.legacyParsedObject = dashboard?.debug?.legacyParsedObject ?? "";
-            this.navigationDebug.finalContextLevel = dashboard?.debug?.finalContextLevel ?? null;
-            this.navigationDebug.finalParsedPreview = dashboard?.debug?.finalParsedPreview ?? "";
-            this.navigationDebug.parserUsed = dashboard?.debug?.parserUsed ?? null;
-            this.navigationDebug.fallbackUsed = dashboard?.debug?.fallbackUsed ?? false;
-            this.navigationDebug.cachedDashboardUsed = dashboard?.debug?.cachedDashboardUsed ?? false;
-            this.navigationDebug.jsonDashboardRoleIndex = dashboard?.debug?.jsonDashboardRoleIndex ?? null;
-            this.navigationDebug.jsonDashboardDisplayName = dashboard?.debug?.jsonDashboardDisplayName ?? null;
-            this.navigationDebug.jsonDashboardQueryName = dashboard?.debug?.jsonDashboardQueryName ?? null;
-            this.navigationDebug.navigatorRoleIndex = dashboard?.debug?.navigatorRoleIndex ?? null;
-            this.navigationDebug.dataViewRowCount = dashboard?.debug?.dataViewRowCount ?? null;
-            this.navigationDebug.rowIndexUsed = dashboard?.debug?.rowIndexUsed ?? null;
-            this.navigationDebug.lastAction = "JSON Dashboard interpretado";
-            this.navigationDebug.lastError = null;
-            this.navigationDebug.timestamp = new Date().toISOString();
+            if (this.navigationDebugPanelEnabled) {
+                this.navigationDebug.receivedLevel = dashboard?.context?.Level ?? null;
+                this.navigationDebug.receivedUnit = dashboard?.context?.Unit ?? null;
+                this.navigationDebug.receivedProjectId = dashboard?.context?.ProjectId ?? null;
+                this.navigationDebug.rawContextLevel = dashboard?.debug?.rawContextLevel ?? null;
+                this.navigationDebug.normalizedContextLevel = dashboard?.debug?.normalizedContextLevel ?? null;
+                this.navigationDebug.contextLevelAfterParse = dashboard?.debug?.contextLevelAfterParse ?? null;
+                this.navigationDebug.rawDashboardLength = dashboard?.debug?.rawDashboardLength ?? null;
+                this.navigationDebug.rawDashboardPreview = dashboard?.debug?.rawDashboardPreview ?? "";
+                this.navigationDebug.directContextObject = dashboard?.debug?.directContextObject ?? "";
+                this.navigationDebug.directRawLevel = dashboard?.debug?.directRawLevel ?? null;
+                this.navigationDebug.directNormalizedLevel = dashboard?.debug?.directNormalizedLevel ?? null;
+                this.navigationDebug.contextAfterParse = dashboard?.debug?.contextAfterParse ?? "";
+                this.navigationDebug.beforeLegacyLevel = dashboard?.debug?.beforeLegacyLevel ?? null;
+                this.navigationDebug.legacyParsedLevel = dashboard?.debug?.legacyParsedLevel ?? null;
+                this.navigationDebug.legacyContextLevel = dashboard?.debug?.legacyContextLevel ?? null;
+                this.navigationDebug.legacyParsedObject = dashboard?.debug?.legacyParsedObject ?? "";
+                this.navigationDebug.finalContextLevel = dashboard?.debug?.finalContextLevel ?? null;
+                this.navigationDebug.finalParsedPreview = dashboard?.debug?.finalParsedPreview ?? "";
+                this.navigationDebug.parserUsed = dashboard?.debug?.parserUsed ?? null;
+                this.navigationDebug.fallbackUsed = dashboard?.debug?.fallbackUsed ?? false;
+                this.navigationDebug.cachedDashboardUsed = dashboard?.debug?.cachedDashboardUsed ?? false;
+                this.navigationDebug.jsonDashboardRoleIndex = dashboard?.debug?.jsonDashboardRoleIndex ?? null;
+                this.navigationDebug.jsonDashboardDisplayName = dashboard?.debug?.jsonDashboardDisplayName ?? null;
+                this.navigationDebug.jsonDashboardQueryName = dashboard?.debug?.jsonDashboardQueryName ?? null;
+                this.navigationDebug.navigatorRoleIndex = dashboard?.debug?.navigatorRoleIndex ?? null;
+                this.navigationDebug.dataViewRowCount = dashboard?.debug?.dataViewRowCount ?? null;
+                this.navigationDebug.rowIndexUsed = dashboard?.debug?.rowIndexUsed ?? null;
+                this.navigationDebug.lastAction = "JSON Dashboard interpretado";
+                this.navigationDebug.lastError = null;
+                this.navigationDebug.timestamp = new Date().toISOString();
+            }
             this.currentDashboardData = dashboard;
             if (dashboard) {
                 this.rememberNavigatorProjects(dashboard.navigator?.projects ?? dashboard.projects);
@@ -288,18 +308,12 @@ export class Visual implements IVisual {
                 }
                 const sidebarUnit = this.resolveUnitForNavigation(dashboard);
                 const sidebarProject = this.resolveProjectForNavigation(dashboard);
-                console.debug("Update posterior a navegación", {
-                    receivedLevel: dashboard.context.Level,
-                    receivedUnit: dashboard.context.Unit,
-                    receivedProject: dashboard.context.ProjectId,
-                    sidebarUnit,
-                    sidebarProject
-                });
                 root.appendChild(renderSidebar({
                     expanded: this.sidebarExpanded,
                     activeLevel: dashboard.context.Level,
                     portfolioViewActive: this.portfolioCarouselIndex === 0 ? "summary" : "matrix",
                     projectViewActive: this.projectCarouselIndex === 1 ? "milestones" : "summary",
+                    riskViewActive: this.riskCarouselIndex === 1 ? "matrix" : "summary",
                     canOpenUnit: Boolean(sidebarUnit),
                     canOpenProject: Boolean(sidebarProject),
                     onOpenPronied: () => this.openProniedDashboard(),
@@ -315,6 +329,7 @@ export class Visual implements IVisual {
                     },
                     onPortfolioView: (view) => this.openPortfolioView(view),
                     onProjectView: (view) => this.openProjectView(view),
+                    onRiskView: (view) => this.openRiskView(view),
                     onOpenFilters: () => this.openFilterPanel(),
                     onToggle: () => {
                         this.sidebarExpanded = !this.sidebarExpanded;
@@ -343,16 +358,14 @@ export class Visual implements IVisual {
             this.events.renderingFinished(options);
         } catch (error) {
             this.finishFilterLoading();
-            this.navigationDebug.lastAction = "Error al interpretar JSON Dashboard";
-            this.navigationDebug.lastError = error instanceof Error ? error.message : String(error);
-            this.navigationDebug.timestamp = new Date().toISOString();
-            this.renderNavigationDebugPanel();
+            if (this.navigationDebugPanelEnabled) {
+                this.navigationDebug.lastAction = "Error al interpretar JSON Dashboard";
+                this.navigationDebug.lastError = error instanceof Error ? error.message : String(error);
+                this.navigationDebug.timestamp = new Date().toISOString();
+                this.renderNavigationDebugPanel();
+            }
             this.events.renderingFailed(options, String(error));
         }
-    }
-
-    public getFormattingModel(): powerbi.visuals.FormattingModel {
-        return this.formattingSettingsService.buildFormattingModel(this.formattingSettings);
     }
 
     private renderNavigationDebugPanel(): void {
@@ -536,7 +549,6 @@ export class Visual implements IVisual {
 
     private renderNavigationLevelTestButton(label: string, level: "PRONIED" | "UNIDAD" | "PROYECTO"): HTMLButtonElement {
         const button = this.renderNavigationDebugButton(label, () => {
-            console.debug("[NAV] Click detectado", level);
             this.navigationDebug.clickCount += 1;
             this.navigationDebug.lastAction = `Click navegación ${level}`;
             this.navigationDebug.requestedLevel = level;
@@ -600,7 +612,7 @@ export class Visual implements IVisual {
         return "#64748B";
     }
 
-    private attachMatrixCopyMenu(matrix: HTMLElement, headerSelector: string, rowSelector: string, cellSelector: string): void {
+    private attachMatrixCopyMenu(matrix: HTMLElement, headerSelector: string, rowSelector: string, cellSelector: string, completeRows?: string[][]): void {
         const clearAltHover = (): void => matrix.classList.remove("evm-matrix-alt-active");
         matrix.addEventListener("keydown", (event: KeyboardEvent) => {
             if (event.key === "Alt") {
@@ -613,7 +625,7 @@ export class Visual implements IVisual {
             }
         });
         matrix.addEventListener("pointermove", clearAltHover);
-        window.addEventListener("blur", clearAltHover, { once: true });
+        this.viewLifecycle.listen(window, "blur", clearAltHover, { once: true });
         matrix.addEventListener("contextmenu", (event: MouseEvent) => {
             const target = event.target instanceof Element ? event.target.closest(cellSelector) : null;
             if (!(target instanceof HTMLElement) || !matrix.contains(target)) return;
@@ -621,28 +633,131 @@ export class Visual implements IVisual {
             if (!row || row.matches(headerSelector)) return;
             event.preventDefault();
             event.stopPropagation();
-            const clean = (element: Element | null): string => (element?.textContent ?? "").trim().replace(/\s+/g, " ");
-            const header = matrix.querySelector(headerSelector);
-            const headers = header ? Array.from(header.children).map(clean) : [];
+            const clean = (element: Element | null): string => {
+                if (!element) return "";
+                const raw = element.matches("th") && element.children.length
+                    ? Array.from(element.children).map((child) => child.textContent ?? "").join(" ")
+                    : element.textContent ?? "";
+                return raw.trim().replace(/\s+/g, " ");
+            };
+            const copyValue = (element: Element | null): string => clean(element).replace(/^S\/\s*/i, "");
             const rows = Array.from(matrix.querySelectorAll(rowSelector));
-            const rowValues = Array.from(row.children).map(clean);
+            const rowValues = Array.from(row.children).map(copyValue);
             const columnIndex = Array.from(row.children).indexOf(target);
-            const columnValues = rows.map((item) => clean(item.children[columnIndex] ?? null));
-            const tableText = [headers, ...rows.map((item) => Array.from(item.children).map(clean))].map((values) => values.join("\t")).join("\n");
+            const columnValues = completeRows
+                ? completeRows.map((values) => values[columnIndex] ?? "")
+                : rows.map((item) => copyValue(item.children[columnIndex] ?? null));
+            const columnCount = rowValues.length;
+            const headerRows = Array.from(matrix.querySelectorAll("thead tr"));
+            const headerGrid: string[][] = headerRows.map(() => Array(columnCount).fill(""));
+            headerRows.forEach((headerRow, headerRowIndex) => {
+                let gridColumn = 0;
+                Array.from(headerRow.children).forEach((cell) => {
+                    while (gridColumn < columnCount && headerGrid[headerRowIndex][gridColumn]) gridColumn += 1;
+                    const htmlCell = cell as HTMLTableCellElement;
+                    const columnSpan = Math.max(1, htmlCell.colSpan || 1);
+                    const rowSpan = Math.max(1, htmlCell.rowSpan || 1);
+                    const value = clean(cell);
+                    for (let rowOffset = 0; rowOffset < rowSpan; rowOffset += 1) {
+                        for (let columnOffset = 0; columnOffset < columnSpan; columnOffset += 1) {
+                            const targetRow = headerRowIndex + rowOffset;
+                            const targetColumn = gridColumn + columnOffset;
+                            if (targetRow < headerGrid.length && targetColumn < columnCount) {
+                                headerGrid[targetRow][targetColumn] = value;
+                            }
+                        }
+                    }
+                    gridColumn += columnSpan;
+                });
+            });
+            const groupHeaders = headerGrid[0] ?? Array(columnCount).fill("");
+            const individualHeaders = headerGrid[headerGrid.length - 1] ?? groupHeaders;
+            const hasGroupedHeaders = headerGrid.length > 1;
+            const qualifiedHeaders = individualHeaders.map((individual, index) => {
+                const group = groupHeaders[index] ?? "";
+                return group && group !== individual ? `${group} > ${individual}` : individual || group;
+            });
+            const headerLines = hasGroupedHeaders
+                ? [groupHeaders.join("\t"), individualHeaders.join("\t")]
+                : [individualHeaders.join("\t")];
+            const tableText = [
+                ...headerLines,
+                ...(completeRows ?? rows.map((item) => Array.from(item.children).map(copyValue))).map((values) => values.join("\t"))
+            ].join("\n");
+            const selectedHeader = qualifiedHeaders[columnIndex] ?? "";
+            const columnHeaderLines = hasGroupedHeaders
+                ? [groupHeaders[columnIndex] ?? "", individualHeaders[columnIndex] ?? ""]
+                : [individualHeaders[columnIndex] ?? ""];
+            const copyTableHtml = (selectedRow: Element | null = null): string => {
+                const clone = matrix.cloneNode(true) as HTMLElement;
+                const sourceHeaderCells = Array.from(matrix.querySelectorAll("thead th"));
+                Array.from(clone.querySelectorAll("thead th")).forEach((headerCell, index) => {
+                    headerCell.textContent = clean(sourceHeaderCells[index] ?? null);
+                });
+                const sourceRows = Array.from(matrix.querySelectorAll(rowSelector));
+                Array.from(clone.querySelectorAll(rowSelector)).forEach((cloneRow, index) => {
+                    if (selectedRow && sourceRows[index] !== selectedRow) {
+                        cloneRow.remove();
+                        return;
+                    }
+                    Array.from(cloneRow.children).forEach((cell) => {
+                        cell.textContent = copyValue(cell);
+                        cell.removeAttribute("title");
+                        cell.removeAttribute("tabindex");
+                    });
+                });
+                if (completeRows && !selectedRow) {
+                    const cloneBody = clone.querySelector("tbody");
+                    cloneBody?.replaceChildren(...completeRows.map((values) => {
+                        const completeRow = document.createElement("tr");
+                        values.forEach((value) => completeRow.appendChild(createElement("td", undefined, value)));
+                        return completeRow;
+                    }));
+                }
+                clone.removeAttribute("class");
+                clone.querySelectorAll("*").forEach((element) => element.removeAttribute("class"));
+                return clone.outerHTML;
+            };
+            const copyColumnHtml = (): string => {
+                const copyTable = document.createElement("table");
+                const copyHead = document.createElement("thead");
+                columnHeaderLines.forEach((headerText) => {
+                    const headerRow = document.createElement("tr");
+                    headerRow.appendChild(createElement("th", undefined, headerText));
+                    copyHead.appendChild(headerRow);
+                });
+                const copyBody = document.createElement("tbody");
+                columnValues.forEach((value) => {
+                    const valueRow = document.createElement("tr");
+                    valueRow.appendChild(createElement("td", undefined, value));
+                    copyBody.appendChild(valueRow);
+                });
+                copyTable.append(copyHead, copyBody);
+                return copyTable.outerHTML;
+            };
+            const copySingleValueHtml = (): string => {
+                const copyTable = document.createElement("table");
+                const headerRow = document.createElement("tr");
+                headerRow.appendChild(createElement("th", undefined, selectedHeader));
+                const valueRow = document.createElement("tr");
+                valueRow.appendChild(createElement("td", undefined, copyValue(target)));
+                copyTable.append(headerRow, valueRow);
+                return copyTable.outerHTML;
+            };
             this.rootElement?.querySelector(".evm-matrix-copy-menu")?.remove();
             if (!this.rootElement) return;
             const menu = createElement("div", "evm-matrix-copy-menu");
-            const actions: Array<[string, string]> = [
-                ["Copiar valor seleccionado", clean(target)],
-                ["Copiar fila", `${headers.join("\t")}\n${rowValues.join("\t")}`],
-                ["Copiar columna", [headers[columnIndex] ?? "", ...columnValues].join("\n")],
-                ["Copiar tabla", tableText]
+            const actions: Array<{ label: string; text: string; html: string }> = [
+                { label: "Copiar valor seleccionado", text: `${selectedHeader}\n${copyValue(target)}`, html: copySingleValueHtml() },
+                { label: "Copiar fila", text: [...headerLines, rowValues.join("\t")].join("\n"), html: copyTableHtml(row) },
+                { label: "Copiar columna", text: [...columnHeaderLines, ...columnValues].join("\n"), html: copyColumnHtml() },
+                { label: "Copiar tabla", text: tableText, html: copyTableHtml() }
             ];
-            actions.forEach(([label, content]) => {
-                const button = createElement("button", undefined, label);
+            actions.forEach((action) => {
+                const button = createElement("button", undefined, action.label);
                 button.type = "button";
                 button.addEventListener("click", () => {
-                    this.copyMatrixText(content);
+                    this.copyMatrixText(action.text, action.html);
                     menu.remove();
                 });
                 menu.appendChild(button);
@@ -675,7 +790,36 @@ export class Visual implements IVisual {
         });
     }
 
-    private copyMatrixText(content: string): void {
+    private copyMatrixText(content: string, htmlContent?: string): void {
+        if (htmlContent) {
+            const richCopy = document.createElement("div");
+            richCopy.contentEditable = "true";
+            richCopy.style.position = "fixed";
+            richCopy.style.left = "-9999px";
+            richCopy.style.top = "0";
+            const parsedCopy = new DOMParser().parseFromString(htmlContent, "text/html");
+            Array.from(parsedCopy.body.childNodes).forEach((node) => {
+                richCopy.appendChild(document.importNode(node, true));
+            });
+            document.body.appendChild(richCopy);
+            const selection = window.getSelection();
+            const range = document.createRange();
+            range.selectNodeContents(richCopy);
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+            let richCopied = false;
+            try {
+                richCopied = document.execCommand("copy");
+            } catch {
+                richCopied = false;
+            }
+            selection?.removeAllRanges();
+            richCopy.remove();
+            if (richCopied) {
+                this.showMatrixCopyNotice("Copiado al portapapeles");
+                return;
+            }
+        }
         const textarea = document.createElement("textarea");
         textarea.value = content;
         textarea.setAttribute("readonly", "");
@@ -802,17 +946,7 @@ export class Visual implements IVisual {
     }
 
     private renderCurrentDashboard(dashboard: ParsedDashboardData, viewport: powerbi.IViewport): HTMLElement {
-        this.navigationDebug.renderedLevel = dashboard.context.Level;
-        console.debug("Dashboard render target", {
-            level: dashboard.context.Level,
-            axisType: dashboard.context.AxisType,
-            summary: dashboard.summary,
-            units: dashboard.context.Level === "PRONIED" ? dashboard.units.length : undefined,
-            projects: dashboard.context.Level === "UNIDAD" ? dashboard.projects.length : undefined,
-            gaugeRows: dashboard.context.Level === "PROYECTO" ? dashboard.gauges.length : dashboard.aggregateGauges.length,
-            curveRows: dashboard.context.Level === "PROYECTO" ? dashboard.curve.length : dashboard.aggregateCurve.length
-        });
-
+        if (this.navigationDebugPanelEnabled) this.navigationDebug.renderedLevel = dashboard.context.Level;
         switch (dashboard.context.Level) {
             case "PRONIED":
                 return this.renderProniedDashboard(dashboard, viewport);
@@ -821,7 +955,7 @@ export class Visual implements IVisual {
             case "PROYECTO":
                 return this.renderProjectDashboard(dashboard, viewport);
             case "RIESGOS":
-                return renderRiskDashboard(dashboard.riskDashboard);
+                return renderRiskDashboard(dashboard.riskDashboard, this.riskCarouselIndex, (index) => this.openRiskView(index === 0 ? "summary" : "matrix"));
             default:
                 return this.renderDashboardError(`Nivel no reconocido: ${dashboard.context.Level}`);
         }
@@ -841,7 +975,7 @@ export class Visual implements IVisual {
         const filterPanel = this.renderFilterPanel();
         filterPanel.classList.add("evm-filter-panel--project-inline");
         main.appendChild(filterPanel);
-        const gaugeGrid = renderGaugeGrid(projectDashboard.gauges, palette, (key) => this.openGaugeHistoryModal(key));
+        const gaugeGrid = renderGaugeGrid(projectDashboard.gauges, palette, (key) => this.openGaugeHistoryModal(key), this.viewLifecycle);
         gaugeGrid.classList.add("evm-project-gauge-grid");
         main.appendChild(gaugeGrid);
         main.appendChild(this.renderBodyCarousel(projectDashboard, dashboard.curve));
@@ -857,7 +991,8 @@ export class Visual implements IVisual {
             {
                 titleLabel: null,
                 subtitle: "Sistema de Seguimiento, Monitoreo y Evaluación - SSME",
-                stateLabel: "Estado del Portafolio"
+                stateLabel: "Estado del Portafolio",
+                weekOverride: 44
             }
         ));
         const gaugeSection = this.renderPortfolioGaugeSection(dashboard);
@@ -871,25 +1006,26 @@ export class Visual implements IVisual {
         const carousel = createElement("section", "evm-body-carousel evm-body-carousel--portfolio");
         const viewport = createElement("div", "evm-body-carousel-viewport");
 
-        const summaryPage = createElement("div", "evm-body-carousel-page evm-body-carousel-page--evm");
-        const left = createElement("div", "evm-left-column");
-        const curveCard = renderCurve(this.buildAggregateRenderCurve(dashboard), palette, { portfolio: true, showYearBracket: true });
-        curveCard.classList.add("evm-portfolio-curve-card");
-        const curveTitle = curveCard.querySelector(".evm-section-title");
-        if (curveTitle instanceof HTMLElement) {
-            curveTitle.textContent = "CURVA S - PORTAFOLIO INSTITUCIONAL";
-            curveTitle.insertAdjacentElement("afterend", this.renderPortfolioCurveLegend());
-        }
-        left.appendChild(curveCard);
-        const right = createElement("div", "evm-right-column");
-        right.appendChild(renderPortfolioDashboard(dashboard.portfolioSummary));
-        summaryPage.appendChild(left);
-        summaryPage.appendChild(right);
+        const summaryPage = this.createLazyCarouselPage("evm-body-carousel-page evm-body-carousel-page--evm", this.portfolioCarouselIndex === 0, (page) => {
+            const left = createElement("div", "evm-left-column");
+            const curveCard = renderCurve(this.buildAggregateRenderCurve(dashboard), palette, { portfolio: true, showYearBracket: true }, this.viewLifecycle);
+            curveCard.classList.add("evm-portfolio-curve-card");
+            const curveTitle = curveCard.querySelector(".evm-section-title");
+            if (curveTitle instanceof HTMLElement) {
+                curveTitle.textContent = "CURVA S - PORTAFOLIO INSTITUCIONAL";
+                curveTitle.insertAdjacentElement("afterend", this.renderPortfolioCurveLegend());
+            }
+            left.appendChild(curveCard);
+            const right = createElement("div", "evm-right-column");
+            right.appendChild(renderPortfolioDashboard(dashboard.portfolioSummary));
+            page.append(left, right);
+        });
 
-        const unitsPage = createElement("div", "evm-body-carousel-page evm-body-carousel-page--portfolio-units");
-        const portfolioAt = this.lastAggregateValue(dashboard.aggregateCurve, (row) => row.AT);
-        unitsPage.appendChild(this.renderUnitProgressPanel(this.unitsAtWeek(dashboard.units, portfolioAt)));
-        unitsPage.appendChild(this.renderPortfolioRiskSection(dashboard.risks));
+        const unitsPage = this.createLazyCarouselPage("evm-body-carousel-page evm-body-carousel-page--portfolio-units", this.portfolioCarouselIndex === 1, (page) => {
+            const portfolioAt = this.lastAggregateValue(dashboard.aggregateCurve, (row) => row.AT);
+            page.appendChild(this.renderUnitProgressPanel(this.unitsAtWeek(dashboard.units, portfolioAt)));
+            page.appendChild(this.renderPortfolioRiskSection(dashboard.risks));
+        });
 
         const pages = [summaryPage, unitsPage];
         pages.forEach((page, index) => {
@@ -1432,20 +1568,138 @@ export class Visual implements IVisual {
         const main = createElement("main", "evm-main evm-main--unit");
         main.style.minWidth = `${Math.min(780, Math.max(0, viewport.width - 92))}px`;
         const unitName = text(this.resolveUnitForNavigation(dashboard), "UGEO");
-        main.appendChild(renderHeader(
+        const unitHeader = renderHeader(
             this.portfolioHeaderData(`TABLERO UNIDAD GERENCIAL - ${unitName}`, dashboard),
             {
                 titleLabel: null,
-                subtitle: "Sistema de Seguimiento, Monitoreo y Evaluación - SSME"
+                subtitle: "Sistema de Seguimiento, Monitoreo y Evaluación - SSME",
+                weekOverride: 44
             }
-        ));
+        );
+        unitHeader.classList.add("evm-unit-dashboard-header");
+        const changeUnit = createElement("button", "evm-change-unit-button");
+        changeUnit.type = "button";
+        changeUnit.appendChild(createElement("span", undefined, "⇄"));
+        changeUnit.appendChild(document.createTextNode("Cambiar unidad"));
+        changeUnit.addEventListener("click", () => this.openUnitSelectorModal(dashboard));
+        unitHeader.querySelector(".evm-project-title")?.appendChild(changeUnit);
+        main.appendChild(unitHeader);
         main.appendChild(this.renderPortfolioGaugeSection(dashboard));
         main.appendChild(this.renderPortfolioBody(
             this.buildAggregateRenderCurve(dashboard),
-            renderPortfolioDashboard(dashboard.portfolioSummary),
+            renderPortfolioDashboard(dashboard.portfolioSummary, unitName),
             unitName
         ));
         return main;
+    }
+
+    private openUnitSelectorModal(dashboard: ParsedDashboardData): void {
+        const host = this.rootElement ?? this.target;
+        host.querySelector(".evm-unit-selector-overlay")?.remove();
+        const projects = this.navigatorProjectCatalog.length
+            ? this.navigatorProjectCatalog
+            : dashboard.navigator?.projects ?? dashboard.projects ?? [];
+        const counts = new Map<string, number>();
+        projects.forEach((project) => {
+            const unit = this.navigatorText(project.UnidadGerencial).trim();
+            if (unit) counts.set(unit, (counts.get(unit) ?? 0) + 1);
+        });
+        if (!counts.size) {
+            dashboard.units.forEach((unit) => {
+                const name = this.navigatorText(unit.UnidadGerencial).trim();
+                if (name) counts.set(name, numberValue(unit.CantidadProyectos) ?? 0);
+            });
+        }
+        const unitNames: Record<string, string> = {
+            UGME: "Unidad Gerencial de Mobiliario y Equipamiento",
+            UGEO: "Unidad Gerencial de Estudios y Obras",
+            UGM: "Unidad Gerencial de Mantenimiento",
+            UGSC: "Unidad Gerencial de Supervisión de Convenios",
+            UGRD: "Unidad Gerencial de Riesgos frente a Desastres"
+        };
+        const unitColors: Record<string, string> = { UGME: "green", UGEO: "blue", UGM: "orange", UGSC: "purple", UGRD: "red" };
+        let pendingUnit = dashboard.context.Unit ?? this.filterState.selectedUnit ?? Array.from(counts.keys())[0] ?? null;
+        const overlay = createElement("div", "evm-unit-selector-overlay");
+        const modal = createElement("section", "evm-unit-selector-modal");
+        modal.setAttribute("role", "dialog");
+        modal.setAttribute("aria-modal", "true");
+        modal.setAttribute("aria-label", "Cambiar Unidad Gerencial");
+        const modalHeader = createElement("header", "evm-unit-selector-header");
+        modalHeader.appendChild(createElement("span", "evm-unit-selector-building", "▥"));
+        const headingCopy = createElement("div");
+        headingCopy.appendChild(createElement("h2", undefined, "Cambiar Unidad Gerencial"));
+        headingCopy.appendChild(createElement("p", undefined, "Selecciona la unidad gerencial para actualizar el tablero"));
+        modalHeader.appendChild(headingCopy);
+        const close = createElement("button", undefined, "×");
+        close.type = "button";
+        close.setAttribute("aria-label", "Cerrar");
+        modalHeader.appendChild(close);
+        modal.appendChild(modalHeader);
+        const searchWrap = createElement("div", "evm-unit-selector-search");
+        searchWrap.appendChild(createElement("span", undefined, "⌕"));
+        const search = document.createElement("input");
+        search.type = "search";
+        search.placeholder = "Buscar unidad gerencial...";
+        searchWrap.appendChild(search);
+        modal.appendChild(searchWrap);
+        const table = createElement("div", "evm-unit-selector-table");
+        const tableHead = createElement("div", "evm-unit-selector-table-head");
+        tableHead.appendChild(createElement("span", undefined, "UNIDAD GERENCIAL"));
+        tableHead.appendChild(createElement("span", undefined, "PROYECTOS ACTIVOS"));
+        table.appendChild(tableHead);
+        const list = createElement("div", "evm-unit-selector-list");
+        const renderUnits = (): void => {
+            list.replaceChildren();
+            const query = search.value.trim().toLocaleLowerCase("es");
+            Array.from(counts.entries()).sort(([a], [b]) => a.localeCompare(b)).forEach(([unit, count]) => {
+                const code = unit.trim().split(/\s|-/)[0].toUpperCase();
+                const fullName = unitNames[code] ?? unit;
+                if (query && !`${unit} ${fullName}`.toLocaleLowerCase("es").includes(query)) return;
+                const row = createElement("button", `evm-unit-selector-row${pendingUnit === unit ? " selected" : ""}`);
+                row.type = "button";
+                row.appendChild(createElement("span", "evm-unit-selector-radio", pendingUnit === unit ? "●" : ""));
+                row.appendChild(createElement("span", `evm-unit-selector-code ${unitColors[code] ?? "blue"}`, code));
+                row.appendChild(createElement("strong", undefined, fullName));
+                row.appendChild(createElement("b", undefined, String(count)));
+                row.addEventListener("click", () => { pendingUnit = unit; renderUnits(); });
+                list.appendChild(row);
+            });
+        };
+        table.appendChild(list);
+        modal.appendChild(table);
+        const footer = createElement("footer", "evm-unit-selector-footer");
+        const totals = createElement("div", "evm-unit-selector-totals");
+        totals.appendChild(createElement("span", undefined, `Total de proyectos\n${Array.from(counts.values()).reduce((sum, value) => sum + value, 0)}`));
+        totals.appendChild(createElement("span", undefined, `Total de intervenciones\n${projects.length}`));
+        footer.appendChild(totals);
+        const actions = createElement("div", "evm-unit-selector-actions");
+        const cancel = createElement("button", "secondary", "Cancelar");
+        const apply = createElement("button", "primary", "Aplicar");
+        actions.appendChild(cancel);
+        actions.appendChild(apply);
+        footer.appendChild(actions);
+        modal.appendChild(footer);
+        const closeModal = (): void => overlay.remove();
+        close.addEventListener("click", closeModal);
+        cancel.addEventListener("click", closeModal);
+        overlay.addEventListener("click", (event) => { if (event.target === overlay) closeModal(); });
+        search.addEventListener("input", debounceInput(renderUnits));
+        apply.addEventListener("click", () => {
+            if (!pendingUnit) return;
+            const selectedCode = pendingUnit.trim().split(/\s|-/)[0].toUpperCase();
+            this.filterState.selectedUnit = selectedCode;
+            this.filterState.lastNavigableUnit = selectedCode;
+            this.filterState.selectedProjectId = null;
+            this.pendingNavigationLevel = "UNIDAD";
+            // Power BI puede restaurar un filtro general de proyecto de una sesión
+            // anterior aunque el estado local del visual ya no lo recuerde.
+            this.applyUnitDashboardFilters(selectedCode);
+            closeModal();
+        });
+        renderUnits();
+        overlay.appendChild(modal);
+        host.appendChild(overlay);
+        window.setTimeout(() => search.focus(), 0);
     }
 
     private renderDashboardError(message: string): HTMLElement {
@@ -1568,7 +1822,7 @@ export class Visual implements IVisual {
         const left = createElement("div", "evm-left-column");
         const right = createElement("div", "evm-right-column");
 
-        const curveCard = renderCurve(curve, palette, { portfolio: true, showYearBracket: true });
+        const curveCard = renderCurve(curve, palette, { portfolio: true, unit: true, showYearBracket: true }, this.viewLifecycle);
         curveCard.classList.add("evm-portfolio-curve-card");
         const curveTitle = curveCard.querySelector(".evm-section-title");
         if (curveTitle instanceof HTMLElement) {
@@ -1767,11 +2021,11 @@ export class Visual implements IVisual {
             return empty;
         }
 
-        return renderGaugeGrid(gauges, palette, (key) => this.openGaugeHistoryModal(key));
+        return renderGaugeGrid(gauges, palette, (key) => this.openGaugeHistoryModal(key), this.viewLifecycle);
     }
 
     private windowAggregateGaugeRows(dashboard: ParsedDashboardData): AggregateGaugeData[] {
-        const orderedRows = [...dashboard.aggregateGauges].sort((a, b) => a.OrdenSemana - b.OrdenSemana);
+        const orderedRows = dashboard.aggregateGauges;
         const curve = this.buildAggregateRenderCurve(dashboard);
         const currentWeek = numberValue(curve.current.SemanaProyecto);
         if (currentWeek === null) {
@@ -1790,7 +2044,7 @@ export class Visual implements IVisual {
             { key: "TCPI", title: "TCPI", selector: (row) => row.TCPI },
             { key: "TSPIW", title: "TSPI (w)", selector: (row) => row.TSPIW ?? numberValue(row["TSPI (w)"] as DataValue) ?? numberValue(row.TSPI as DataValue) }
         ];
-        const orderedRows = [...rows].sort((a, b) => a.OrdenSemana - b.OrdenSemana);
+        const orderedRows = rows;
 
         return definitions.map((definition) => {
             const sparkline = orderedRows.map(definition.selector).filter((value): value is number => value !== null);
@@ -1839,7 +2093,7 @@ export class Visual implements IVisual {
     }
 
     private buildAggregateRenderCurve(dashboard: ParsedDashboardData): RenderCurveData {
-        const orderedRows = [...dashboard.aggregateCurve].sort((a, b) => a.OrdenSemana - b.OrdenSemana);
+        const orderedRows = dashboard.aggregateCurve;
         const history: CurveHistoryPoint[] = orderedRows.map((row) => ({
             SemanaProyecto: row.OrdenSemana,
             PV: row.PV,
@@ -1865,14 +2119,6 @@ export class Visual implements IVisual {
             FechaEstado: dashboard.context.CutoffDate
         };
         const current = this.currentAggregateCurvePoint(orderedRows, references, dashboard.context.CutoffDate);
-
-        console.debug("Portfolio EAC values at AT", {
-            AT: at,
-            EACC: eacCostAt,
-            EACT: eacTimeAt,
-            VACC: vacCostAt,
-            VACT: vacTimeAt
-        });
 
         return {
             history,
@@ -2042,9 +2288,6 @@ export class Visual implements IVisual {
             card.setAttribute("role", "button");
             card.setAttribute("tabindex", "0");
             card.addEventListener("click", () => {
-                console.debug("Click tarjeta unidad", {
-                    unit: unit.UnidadGerencial
-                });
                 this.openUnitDashboard(unit.UnidadGerencial);
             });
             card.addEventListener("keydown", (event) => {
@@ -2133,24 +2376,26 @@ export class Visual implements IVisual {
         const viewport = document.createElement("div");
         viewport.className = "evm-body-carousel-viewport";
 
-        const evmPage = document.createElement("div");
-        evmPage.className = "evm-body-carousel-page evm-body-carousel-page--evm";
-        const evmLeft = document.createElement("div");
-        evmLeft.className = "evm-left-column";
-        evmLeft.appendChild(renderCurve(dashboard.curve, palette));
-        const evmRight = document.createElement("div");
-        evmRight.className = "evm-right-column";
-        evmRight.appendChild(renderPerformance(dashboard.performance));
-        evmPage.appendChild(evmLeft);
-        evmPage.appendChild(evmRight);
+        const evmPage = this.createLazyCarouselPage("evm-body-carousel-page evm-body-carousel-page--evm", this.projectCarouselIndex === 0, (page) => {
+            const evmLeft = createElement("div", "evm-left-column");
+            const curveCard = renderCurve(dashboard.curve, palette, {}, this.viewLifecycle);
+            const curveTitle = curveCard.querySelector(".evm-section-title");
+            if (curveTitle instanceof HTMLElement) {
+                curveTitle.insertAdjacentElement("afterend", this.renderPortfolioCurveLegend());
+            }
+            evmLeft.appendChild(curveCard);
+            const evmRight = createElement("div", "evm-right-column");
+            evmRight.appendChild(renderPerformance(dashboard.performance));
+            page.append(evmLeft, evmRight);
+        });
 
-        const riskPage = document.createElement("div");
-        riskPage.className = "evm-body-carousel-page evm-body-carousel-page--risk";
-        riskPage.appendChild(this.renderProjectCurveMatrix(curveRows));
-        const lowerRow = createElement("div", "evm-project-details-lower-row");
-        lowerRow.appendChild(renderRisks(dashboard.risks));
-        lowerRow.appendChild(renderMilestones(dashboard.milestones));
-        riskPage.appendChild(lowerRow);
+        const riskPage = this.createLazyCarouselPage("evm-body-carousel-page evm-body-carousel-page--risk", this.projectCarouselIndex === 1, (page) => {
+            page.appendChild(this.renderProjectCurveMatrix(curveRows));
+            const lowerRow = createElement("div", "evm-project-details-lower-row");
+            lowerRow.appendChild(renderRisks(dashboard.risks));
+            lowerRow.appendChild(renderMilestones(dashboard.milestones));
+            page.appendChild(lowerRow);
+        });
 
         const pages = [evmPage, riskPage];
         pages.forEach((page, index) => {
@@ -2175,59 +2420,54 @@ export class Visual implements IVisual {
         const weekField: MatrixField = { key: "Semana", label: "SEMANA", title: "Semana del proyecto", kind: "week" };
         const groups: Array<{ name: string; className: string; fields: MatrixField[] }> = [
             {
-                name: "BASE",
+                name: "LÍNEA BASE",
                 className: "base",
                 fields: [
-                    weekField,
                     { key: "BAC", label: "BAC", title: "Presupuesto a la conclusión", kind: "money" },
-                    { key: "SAC", label: "SAC", title: "Duración planificada", kind: "time" },
+                    { key: "SAC", label: "SAC", title: "Duración planificada", kind: "time" }
+                ]
+            },
+            {
+                name: "ESTADO ACTUAL",
+                className: "current",
+                fields: [
                     { key: "ES", label: "ES", title: "Cronograma ganado", kind: "time" },
                     { key: "AT", label: "AT", title: "Tiempo actual", kind: "time" },
                     { key: "PV", label: "PV", title: "Valor planificado", kind: "money" },
                     { key: "EV", label: "EV", title: "Valor ganado", kind: "money" },
                     { key: "AC", label: "AC", title: "Costo actual", kind: "money" },
-                    { key: "CV", label: "CV", title: "Variación del costo", kind: "money" }
-                ]
-            },
-            {
-                name: "ÍNDICES",
-                className: "indices",
-                fields: [
-                    weekField,
-                    { key: "CPI", label: "CPI", title: "Índice de desempeño del costo", kind: "index" },
-                    { key: "SPI (w)", label: "SPI (w)", title: "Índice de desempeño del cronograma por valor", kind: "index" },
-                    { key: "SPI (t)", label: "SPI (t)", title: "Índice de desempeño del cronograma por tiempo", kind: "index" },
-                    { key: "TCPI", label: "TCPI", title: "Índice de desempeño requerido del costo", kind: "index" },
-                    { key: "TSPI (w)", label: "TSPI (w)", title: "Índice de desempeño requerido del cronograma por valor", kind: "index" },
-                    { key: "TSPI (t)", label: "TSPI (t)", title: "Índice de desempeño requerido del cronograma por tiempo", kind: "index" }
-                ]
-            },
-            {
-                name: "PROYECCIONES",
-                className: "projections",
-                fields: [
-                    weekField,
-                    { key: "EAC (c)", label: "EAC (c)", title: "Estimado de costo a la conclusión", kind: "money" },
-                    { key: "EAC (t)", label: "EAC (t)", title: "Estimado de tiempo a la conclusión", kind: "time" },
-                    { key: "IEAC (t)", label: "IEAC (t)", title: "Estimado independiente de tiempo a la conclusión", kind: "time" },
-                    { key: "VAC (c)", label: "VAC (c)", title: "Variación de costo a la conclusión", kind: "money" },
-                    { key: "VAC (t)", label: "VAC (t)", title: "Variación de tiempo a la conclusión", kind: "time" }
-                ]
-            },
-            {
-                name: "VARIACIONES",
-                className: "variations",
-                fields: [
-                    weekField,
+                    { key: "CV", label: "CV", title: "Variación del costo", kind: "money" },
                     { key: "SV (w)", label: "SV (w)", title: "Variación del cronograma por valor", kind: "money" },
                     { key: "SV (t)", label: "SV (t)", title: "Variación del cronograma por tiempo", kind: "time" },
+                    { key: "CPI", label: "CPI", title: "Índice de desempeño del costo", kind: "index" },
+                    { key: "SPI (w)", label: "SPI (w)", title: "Índice de desempeño del cronograma por valor", kind: "index" },
+                    { key: "SPI (w)(*)", label: "SPI (w)(*)", title: "SPI (w) cuando AT es mayor que SAC", kind: "index" },
+                    { key: "SPI (t)", label: "SPI (t)", title: "Índice de desempeño del cronograma por tiempo", kind: "index" }
+                ]
+            },
+            {
+                name: "PRONÓSTICO",
+                className: "forecast",
+                fields: [
+                    { key: "TCPI", label: "TCPI", title: "Índice de desempeño requerido del costo", kind: "index" },
+                    { key: "TCPI Proy", label: "TCPI **", title: "TCPI proyectado", kind: "index" },
+                    { key: "VAC (c)", label: "VAC (c)", title: "Variación de costo a la conclusión", kind: "money" },
+                    { key: "EAC (c)", label: "EAC (c)", title: "Estimado de costo a la conclusión", kind: "money" },
                     { key: "ETC (c)", label: "ETC (c)", title: "Costo restante estimado", kind: "money" },
-                    { key: "ETC (t)", label: "ETC (t)", title: "Tiempo restante estimado", kind: "time" }
+                    { key: "TSPI (w)", label: "TSPI (w)", title: "Índice de desempeño requerido del cronograma por valor", kind: "index" },
+                    { key: "TSPI (t)", label: "TSPI (t)", title: "Índice de desempeño requerido del cronograma por tiempo", kind: "index" },
+                    { key: "VAC (t)", label: "VAC (t)", title: "Variación de tiempo a la conclusión", kind: "time" },
+                    { key: "EAC (t)", label: "EAC (t)", title: "Estimado de tiempo a la conclusión", kind: "time" },
+                    { key: "ETC (t)", label: "ETC (t)", title: "Tiempo restante estimado", kind: "time" },
+                    { key: "TSPI (w) Proy", label: "TSPI (w) ***", title: "TSPI por valor proyectado", kind: "index" },
+                    { key: "TSPI (t) Proy", label: "TSPI (t) ***", title: "TSPI por tiempo proyectado", kind: "index" },
+                    { key: "IEAC (c)", label: "IEAC (c)", title: "Estimado independiente de costo a la conclusión", kind: "money" },
+                    { key: "IEAC (t)", label: "IEAC (t)", title: "Estimado independiente de tiempo a la conclusión", kind: "time" }
                 ]
             }
         ];
         const allFields = Array.from(
-            new Map(groups.flatMap((group) => group.fields).map((field) => [field.key, field])).values()
+            new Map([weekField, ...groups.flatMap((group) => group.fields)].map((field) => [field.key, field])).values()
         );
         const isColumnVisible = (field: MatrixField): boolean => (
             field.key === "Semana" || this.matrixVisibleColumns === null || this.matrixVisibleColumns.has(field.key)
@@ -2305,7 +2545,7 @@ export class Visual implements IVisual {
                     });
             };
 
-            search.addEventListener("input", renderOptions);
+            search.addEventListener("input", debounceInput(renderOptions));
             selectAll.addEventListener("click", () => {
                 allFields.forEach((field) => {
                     if (field.key !== "Semana") draft.add(field.key);
@@ -2387,7 +2627,18 @@ export class Visual implements IVisual {
         downloadButton.appendChild(downloadIcon);
         downloadButton.appendChild(createElement("span", undefined, "Descargar Excel"));
         downloadButton.addEventListener("click", () => {
-            this.host.launchUrl("https://python-api-ssme-dng3a6ecgacfe5dc.centralus-01.azurewebsites.net/api/fn_descargar_excel?idIntervencion=123");
+            const projectId = this.currentDashboardData?.context.ProjectId
+                ?? this.navigatorText(this.currentDashboardData?.project?.IdIntervencion)
+                ?? this.filterState.selectedProjectId
+                ?? this.filterState.lastNavigableProjectId;
+            if (!projectId) {
+                console.warn("No se pudo descargar el Excel porque no hay una intervención seleccionada.");
+                return;
+            }
+
+            const downloadUrl = "https://python-api-ssme-dng3a6ecgacfe5dc.centralus-01.azurewebsites.net/api/fn_descargar_excel"
+                + `?idIntervencion=${encodeURIComponent(projectId)}`;
+            this.host.launchUrl(downloadUrl);
         });
         const headingActions = createElement("div", "evm-project-curve-heading-actions");
         headingActions.appendChild(downloadButton);
@@ -2453,37 +2704,125 @@ export class Visual implements IVisual {
         heading.appendChild(headingActions);
         card.appendChild(heading);
 
+        const projectionSelector = createElement("div", "evm-matrix-projection-selector");
+        projectionSelector.appendChild(createElement("strong", "evm-matrix-projection-caption", "Método de proyección EAC:"));
+        const projectionMethods: Array<{ value: 1 | 2 | 3 | 4; label: string; formula: string; description: string; icon: string; className: string }> = [
+            { value: 1, label: "Si se espera que el CPI sea el mismo para el resto del proyecto", formula: "EAC = BAC / CPI", description: "Se asume que la eficiencia de costos observada continuará hasta la finalización del proyecto.", icon: "↗", className: "cpi" },
+            { value: 2, label: "Si el trabajo futuro sera realizado al ritmo previsto", formula: "EAC = AC + (BAC - EV)", description: "Se asume que el trabajo pendiente se ejecutará según la eficiencia originalmente planificada.", icon: "▣", className: "plan" },
+            { value: 3, label: "Si el plan inicial ya no es válido", formula: "EAC = AC + ETC ascendente", description: "Se utiliza una nueva estimación del costo necesario para completar el trabajo restante.", icon: "⌁", className: "etc" },
+            { value: 4, label: "Si tanto el CPI como el SPI influyen en el trabajo restante", formula: "EAC = AC + (BAC - EV) / (CPI × SPI)", description: "Se asume que las eficiencias de costo y cronograma influirán en el trabajo restante.", icon: "⇄", className: "combined" }
+        ];
+        const activeProjection = projectionMethods.find((method) => method.value === this.matrixCostProjectionMethod) ?? projectionMethods[0];
+        const dropdown = createElement("div", "evm-matrix-projection-dropdown");
+        const trigger = createElement("button", "evm-matrix-projection-trigger");
+        trigger.type = "button";
+        trigger.setAttribute("aria-haspopup", "listbox");
+        trigger.setAttribute("aria-expanded", "false");
+        trigger.appendChild(createElement("span", undefined, activeProjection.label));
+        trigger.appendChild(createElement("span", "evm-matrix-projection-chevron", "⌄"));
+        const menu = createElement("div", "evm-matrix-projection-menu");
+        menu.setAttribute("role", "listbox");
+        projectionMethods.forEach((method) => {
+            const option = createElement("button", `evm-matrix-projection-option ${method.className}${method.value === this.matrixCostProjectionMethod ? " active" : ""}`);
+            option.type = "button";
+            option.setAttribute("role", "option");
+            option.setAttribute("aria-selected", String(method.value === this.matrixCostProjectionMethod));
+            option.appendChild(createElement("span", "evm-matrix-projection-option-icon", method.icon));
+            const copy = createElement("span", "evm-matrix-projection-option-copy");
+            copy.appendChild(createElement("strong", undefined, method.label));
+            copy.appendChild(createElement("small", undefined, method.formula));
+            option.appendChild(copy);
+            option.addEventListener("click", () => {
+                this.matrixCostProjectionMethod = method.value;
+                card.replaceWith(this.renderProjectCurveMatrix(curveRows));
+            });
+            menu.appendChild(option);
+        });
+        trigger.addEventListener("click", () => {
+            const isOpen = dropdown.classList.toggle("open");
+            trigger.setAttribute("aria-expanded", String(isOpen));
+        });
+        dropdown.appendChild(trigger);
+        dropdown.appendChild(menu);
+        projectionSelector.appendChild(dropdown);
+        const infoButton = createElement("button", "evm-matrix-projection-info-button", "ⓘ");
+        infoButton.type = "button";
+        infoButton.setAttribute("aria-label", "Información del método de proyección");
+        infoButton.setAttribute("aria-describedby", "evm-matrix-projection-tooltip");
+        const infoCard = createElement("div", `evm-matrix-projection-info-card ${activeProjection.className}`);
+        infoCard.id = "evm-matrix-projection-tooltip";
+        infoCard.setAttribute("role", "tooltip");
+        const infoTitle = createElement("div", "evm-matrix-projection-info-title");
+        infoTitle.appendChild(createElement("span", undefined, "ⓘ"));
+        infoTitle.appendChild(createElement("strong", undefined, activeProjection.label));
+        infoCard.appendChild(infoTitle);
+        infoCard.appendChild(createElement("b", undefined, `Fórmula: ${activeProjection.formula}`));
+        infoButton.addEventListener("click", () => infoCard.classList.toggle("open"));
+        projectionSelector.appendChild(infoButton);
+        projectionSelector.appendChild(infoCard);
+        heading.insertBefore(projectionSelector, headingActions);
+
         const tableWrap = createElement("div", "evm-project-curve-matrix-wrap");
-        const atWeek = curveRows
-            .map((row) => numberValue(row.AT))
-            .find((value): value is number => value !== null);
-        const visibleRows = [...curveRows]
+        const matrixCutoffValues = curveRows
+            .map((row) => numberValue(row.SemanaEstado))
+            .filter((value): value is number => value !== null && value >= 1);
+        const cutoffWeek = matrixCutoffValues.length ? Math.max(...matrixCutoffValues) : null;
+        const visibleRows = curveRows
             .filter((row) => {
                 const week = numberValue(row.Semana);
-                return week !== null && week >= 1 && (atWeek === undefined || week <= atWeek);
-            })
-            .sort((a, b) => (numberValue(a.Semana) ?? 0) - (numberValue(b.Semana) ?? 0));
+                return week !== null
+                    && week >= 1
+                    && (cutoffWeek === null || week <= cutoffWeek);
+            });
         const table = createElement("table", "evm-project-curve-matrix");
-        const visibleFields = groups.flatMap((group, groupIndex) => group.fields.filter((field, fieldIndex) => {
-            return !(groupIndex > 0 && fieldIndex === 0) && isColumnVisible(field);
+        table.classList.add(`evm-matrix-projection-method-${this.matrixCostProjectionMethod}`);
+        const visibleFields = [weekField, ...groups.flatMap((group) => group.fields.filter(isColumnVisible))];
+        const matrixFieldValue = (row: CurveData, field: MatrixField): number | null => {
+            if (field.key === "AT") return numberValue(row.AT_Matriz);
+            const scenarioKeys: Partial<Record<keyof CurveData, Array<keyof CurveData>>> = {
+                "VAC (c)": ["VAC (c)", "VAC (c2)", "VAC (c3)", "VAC (c4)"],
+                "EAC (c)": ["EAC (c)", "EAC (c2)", "EAC (c3)", "EAC (c4)"],
+                "ETC (c)": ["ETC (c)", "ETC (c2)", "ETC (c3)", "ETC (c4)"]
+            };
+            const scenarioKey = scenarioKeys[field.key]?.[this.matrixCostProjectionMethod - 1] ?? field.key;
+            return numberValue(row[scenarioKey] as DataValue);
+        };
+        const matrixHeaderParts = (field: MatrixField): string[] => {
+            if (field.key === "SPI (w)(*)") return ["SPI", "(w)", "*"];
+            if (field.key === "TCPI Proy") return ["TCPI", "**"];
+            if (field.key === "TSPI (w) Proy") return ["TSPI", "(w)", "***"];
+            if (field.key === "TSPI (t) Proy") return ["TSPI", "(t)", "***"];
+            const match = field.label.match(/^(.+?)\s+(\([^)]*\))$/);
+            return match ? [match[1], match[2]] : [field.label];
+        };
+        type PreparedMatrixCell = { field: MatrixField; value: number | null; formatted: string; title: string };
+        const formatEarnedSchedule = (value: number): string => value.toLocaleString("en-US", {
+            minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
+            maximumFractionDigits: 2
+        });
+        const preparedRows: PreparedMatrixCell[][] = visibleRows.map((row) => visibleFields.map((field) => {
+            const value = matrixFieldValue(row, field);
+            const formatted = value === null
+                ? "—"
+                : field.kind === "money"
+                    ? `S/ ${Math.round(value).toLocaleString("en-US")}`
+                    : field.kind === "week"
+                        ? this.formatInteger(value)
+                        : field.key === "ES"
+                            ? formatEarnedSchedule(value)
+                            : value.toLocaleString("en-US", { minimumFractionDigits: field.kind === "index" ? 2 : 0, maximumFractionDigits: 2 });
+            return {
+                field,
+                value,
+                formatted,
+                title: value === null ? "Sin dato" : `${field.title}: ${value.toLocaleString("en-US", { maximumFractionDigits: 4 })}`
+            };
         }));
         const colgroup = document.createElement("colgroup");
-        visibleFields.forEach((field) => {
-            const headerLines = field.label.match(/^(.+?)\s+(\([^)]*\))$/);
-            const headerLength = headerLines
-                ? Math.max(headerLines[1].length, headerLines[2].length)
-                : field.label.length;
-            const contentLength = visibleRows.reduce((maximum, row) => {
-                const value = numberValue(row[field.key] as DataValue);
-                const formatted = value === null
-                    ? "â€”"
-                    : field.kind === "money"
-                        ? `S/ ${Math.round(value).toLocaleString("en-US")}`
-                        : field.kind === "week"
-                            ? this.formatInteger(value)
-                            : value.toLocaleString("en-US", { minimumFractionDigits: field.kind === "index" ? 2 : 0, maximumFractionDigits: 2 });
-                return Math.max(maximum, formatted.length);
-            }, headerLength);
+        visibleFields.forEach((field, fieldIndex) => {
+            const headerParts = matrixHeaderParts(field);
+            const headerLength = Math.max(...headerParts.map((part) => part.length));
+            const contentLength = preparedRows.reduce((maximum, row) => Math.max(maximum, row[fieldIndex].formatted.length), headerLength);
             const minimumWidth = field.kind === "week" ? 56 : field.kind === "time" ? 58 : field.kind === "index" ? 68 : 78;
             const maximumWidth = field.kind === "money" ? 116 : field.kind === "time" ? 92 : field.kind === "index" ? 96 : 76;
             const col = document.createElement("col");
@@ -2492,85 +2831,144 @@ export class Visual implements IVisual {
         });
         table.appendChild(colgroup);
         const head = document.createElement("thead");
-        const headRow = document.createElement("tr");
-        groups.forEach((group, groupIndex) => {
-            group.fields.forEach((field, fieldIndex) => {
-                if (groupIndex > 0 && fieldIndex === 0) {
-                    return;
-                }
+        const groupHeadRow = document.createElement("tr");
+        groupHeadRow.className = "evm-project-curve-matrix-group-row";
+        const weekHead = createElement("th", "evm-project-curve-matrix-week-header", weekField.label);
+        weekHead.rowSpan = 2;
+        weekHead.title = weekField.title;
+        groupHeadRow.appendChild(weekHead);
+        groups.forEach((group) => {
+            const visibleGroupFields = group.fields.filter(isColumnVisible);
+            if (!visibleGroupFields.length) return;
+            const groupHead = createElement("th", `evm-project-curve-matrix-group ${group.className}`, group.name);
+            groupHead.colSpan = visibleGroupFields.length;
+            groupHeadRow.appendChild(groupHead);
+        });
+        head.appendChild(groupHeadRow);
+        const fieldHeadRow = document.createElement("tr");
+        groups.forEach((group) => {
+            group.fields.forEach((field) => {
                 if (!isColumnVisible(field)) {
                     return;
                 }
                 const th = createElement("th");
-                const headerLines = field.label.match(/^(.+?)\s+(\([^)]*\))$/);
-                if (headerLines) {
+                if (field.key === "VAC (c)") th.classList.add("evm-matrix-header-vac-cost");
+                if (field.key === "EAC (c)" || field.key === "ETC (c)") th.classList.add("evm-matrix-header-eac-cost");
+                const headerParts = matrixHeaderParts(field);
+                if (headerParts.length > 1) {
                     th.classList.add("evm-project-curve-matrix-header--stacked");
-                    th.appendChild(createElement("span", undefined, headerLines[1]));
-                    th.appendChild(createElement("span", undefined, headerLines[2]));
+                    headerParts.forEach((part) => {
+                        const partClass = /^\*+$/.test(part) ? "evm-project-curve-matrix-asterisks" : undefined;
+                        th.appendChild(createElement("span", partClass, part));
+                    });
                 } else {
-                    th.textContent = field.label;
+                    th.textContent = headerParts[0];
                 }
                 th.title = field.title;
-                headRow.appendChild(th);
+                fieldHeadRow.appendChild(th);
             });
         });
-        head.appendChild(headRow);
+        head.appendChild(fieldHeadRow);
         table.appendChild(head);
         const body = document.createElement("tbody");
-        visibleRows.forEach((row, rowIndex) => {
-            const tr = document.createElement("tr");
-            if (rowIndex === visibleRows.length - 1) {
-                tr.className = "current";
-            }
-            groups.forEach((group, groupIndex) => {
-                group.fields.forEach((field, fieldIndex) => {
-                    if (groupIndex > 0 && fieldIndex === 0) {
-                        return;
+        const populatePreparedRow = (tr: HTMLTableRowElement, row: PreparedMatrixCell[], rowIndex: number): void => {
+            tr.className = rowIndex === preparedRows.length - 1 ? "current" : "";
+            row.forEach((cell, cellIndex) => {
+                    const td = tr.cells[cellIndex] ?? createElement("td");
+                    td.textContent = cell.formatted;
+                    td.className = "";
+                    if (cell.field.key === "VAC (c)" || cell.field.key === "EAC (c)" || cell.field.key === "ETC (c)") {
+                        td.classList.add("evm-matrix-cell-cost-projection");
                     }
-                    if (!isColumnVisible(field)) {
-                        return;
-                    }
-                    const value = numberValue(row[field.key] as DataValue);
-                    let formatted = "—";
-                    if (value !== null) {
-                        formatted = field.kind === "money"
-                            ? `S/ ${Math.round(value).toLocaleString("en-US")}`
-                            : field.kind === "week"
-                                ? this.formatInteger(value)
-                                : value.toLocaleString("en-US", { minimumFractionDigits: field.kind === "index" ? 2 : 0, maximumFractionDigits: 2 });
-                    }
-                    const td = createElement("td", undefined, formatted);
-                    td.title = value === null ? "Sin dato" : `${field.title}: ${value.toLocaleString("en-US", { maximumFractionDigits: 4 })}`;
+                    td.title = cell.title;
                     td.tabIndex = 0;
                     td.setAttribute("role", "gridcell");
                     td.setAttribute("aria-selected", "false");
-                    const toggleSelection = (): void => {
-                        const wasSelected = td.classList.contains("is-selected");
-                        table.querySelectorAll("td.is-selected").forEach((cell) => {
-                            cell.classList.remove("is-selected");
-                            cell.setAttribute("aria-selected", "false");
-                        });
-                        table.querySelectorAll("tr.is-selected").forEach((selectedRow) => selectedRow.classList.remove("is-selected"));
-                        if (!wasSelected) {
-                            td.classList.add("is-selected");
-                            td.setAttribute("aria-selected", "true");
-                            tr.classList.add("is-selected");
-                        }
-                    };
-                    td.addEventListener("click", toggleSelection);
-                    td.addEventListener("keydown", (event: KeyboardEvent) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            toggleSelection();
-                        }
-                    });
-                    tr.appendChild(td);
-                });
+                    if (!td.parentElement) tr.appendChild(td);
             });
+        };
+        const appendPreparedRow = (row: PreparedMatrixCell[], rowIndex: number): void => {
+            const tr = document.createElement("tr");
+            populatePreparedRow(tr, row, rowIndex);
             body.appendChild(tr);
-        });
+        };
+        const virtualThreshold = 160;
+        const virtualRowHeight = 34;
+        if (preparedRows.length <= virtualThreshold) {
+            preparedRows.forEach(appendPreparedRow);
+        } else {
+            const overscan = 12;
+            const visibleCount = Math.max(30, Math.ceil(tableWrap.clientHeight / virtualRowHeight));
+            const poolSize = Math.min(preparedRows.length, visibleCount + overscan * 2);
+            const spacerRow = (): HTMLTableRowElement => {
+                const row = document.createElement("tr");
+                row.className = "evm-virtual-spacer-row";
+                const cell = document.createElement("td");
+                cell.colSpan = visibleFields.length;
+                row.appendChild(cell);
+                return row;
+            };
+            const topSpacer = spacerRow();
+            const bottomSpacer = spacerRow();
+            const rowPool = Array.from({ length: poolSize }, () => document.createElement("tr"));
+            body.append(topSpacer, ...rowPool, bottomSpacer);
+            const setSpacerHeight = (row: HTMLTableRowElement, height: number): void => {
+                row.style.display = height > 0 ? "" : "none";
+                row.cells[0].style.height = `${height}px`;
+            };
+            const renderMatrixWindow = (): void => {
+                const start = Math.max(0, Math.min(preparedRows.length - poolSize, Math.floor(tableWrap.scrollTop / virtualRowHeight) - overscan));
+                const end = Math.min(preparedRows.length, start + poolSize);
+                setSpacerHeight(topSpacer, start * virtualRowHeight);
+                rowPool.forEach((row, poolIndex) => {
+                    const sourceIndex = start + poolIndex;
+                    row.style.display = sourceIndex < end ? "" : "none";
+                    if (sourceIndex < end) populatePreparedRow(row, preparedRows[sourceIndex], sourceIndex);
+                });
+                setSpacerHeight(bottomSpacer, (preparedRows.length - end) * virtualRowHeight);
+            };
+            renderMatrixWindow();
+            let virtualFrame: number | null = null;
+            tableWrap.addEventListener("scroll", () => {
+                if (virtualFrame !== null) return;
+                virtualFrame = requestAnimationFrame(() => {
+                    virtualFrame = null;
+                    renderMatrixWindow();
+                });
+            }, { passive: true });
+        }
         table.appendChild(body);
-        this.attachMatrixCopyMenu(table, "thead tr", "tbody tr", "th, td");
+        let selectedCell: HTMLTableCellElement | null = null;
+        const toggleMatrixSelection = (target: EventTarget | null): void => {
+            const cell = target instanceof Element ? target.closest("tbody td") : null;
+            if (!(cell instanceof HTMLTableCellElement) || !table.contains(cell)) return;
+            const wasSelected = cell === selectedCell;
+            if (selectedCell) {
+                selectedCell.classList.remove("is-selected");
+                selectedCell.setAttribute("aria-selected", "false");
+                selectedCell.parentElement?.classList.remove("is-selected");
+            }
+            selectedCell = wasSelected ? null : cell;
+            if (selectedCell) {
+                selectedCell.classList.add("is-selected");
+                selectedCell.setAttribute("aria-selected", "true");
+                selectedCell.parentElement?.classList.add("is-selected");
+            }
+        };
+        table.addEventListener("click", (event) => toggleMatrixSelection(event.target));
+        table.addEventListener("keydown", (event: KeyboardEvent) => {
+            if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                toggleMatrixSelection(event.target);
+            }
+        });
+        this.attachMatrixCopyMenu(
+            table,
+            "thead tr",
+            "tbody tr:not(.evm-virtual-spacer-row)",
+            "th, td",
+            preparedRows.map((row) => row.map((cell) => cell.formatted.replace(/^S\/\s*/i, "")))
+        );
         tableWrap.appendChild(table);
         card.appendChild(tableWrap);
         return card;
@@ -2589,6 +2987,14 @@ export class Visual implements IVisual {
             this.updateCarouselPages(pages);
         });
         return button;
+    }
+
+    private createLazyCarouselPage(className: string, active: boolean, render: (page: HTMLElement) => void): HTMLElement {
+        return this.lazyCarousel.create(className, active, render);
+    }
+
+    private mountCarouselPage(page: HTMLElement): void {
+        this.lazyCarousel.mount(page);
     }
 
     private renderCarouselDots(pages: HTMLElement[]): HTMLElement {
@@ -2611,6 +3017,8 @@ export class Visual implements IVisual {
 
     private updateCarouselPages(pages: HTMLElement[]): void {
         const carouselIndex = this.getCarouselIndex(pages);
+        const activePage = pages[carouselIndex];
+        if (activePage) this.mountCarouselPage(activePage);
         pages.forEach((page, index) => {
             const active = index === carouselIndex;
             page.classList.toggle("active", active);
@@ -2726,6 +3134,10 @@ export class Visual implements IVisual {
     }
 
     private unitForProject(projectId: string): string | null {
+        const indexedProject = this.navigatorIndex.get(projectId);
+        const indexedUnit = this.navigatorText(indexedProject?.UnidadGerencial);
+        if (indexedUnit) return indexedUnit;
+
         const currentProject = this.currentDashboardData?.projects.find((project) => project.IdIntervencion === projectId);
         if (currentProject?.UnidadGerencial) {
             return currentProject.UnidadGerencial;
@@ -2742,7 +3154,8 @@ export class Visual implements IVisual {
             return null;
         }
 
-        return this.currentDashboardData?.navigator?.projects.find((project) => this.navigatorText(project.IdIntervencion) === cleanProjectId)
+        return this.navigatorIndex.get(cleanProjectId)
+            ?? this.currentDashboardData?.navigator?.projects.find((project) => this.navigatorText(project.IdIntervencion) === cleanProjectId)
             ?? this.currentDashboardData?.projects.find((project) => this.navigatorText(project.IdIntervencion) === cleanProjectId)
             ?? null;
     }
@@ -2784,17 +3197,20 @@ export class Visual implements IVisual {
         const navigatorProject = project as unknown as NavigatorProject;
         const projectRecord = navigatorProject as Record<string, unknown>;
         const projectId = this.getProjectId(navigatorProject);
-        this.navigationDebug.clickedProjectObject = JSON.stringify(project, null, 2);
-        this.navigationDebug.clickedProjectKeys = Object.keys(projectRecord).join(", ");
-        this.navigationDebug.clickedProjectId = projectId;
-        this.navigationDebug.clickedProjectIdType = projectId === null ? null : typeof projectId;
-        this.navigationDebug.requestedProjectId = projectId;
+        if (this.navigationDebugPanelEnabled) {
+            this.navigationDebug.clickedProjectObject = JSON.stringify(project, null, 2);
+            this.navigationDebug.clickedProjectKeys = Object.keys(projectRecord).join(", ");
+        }
+        if (this.navigationDebugPanelEnabled) {
+            this.navigationDebug.clickedProjectId = projectId;
+            this.navigationDebug.clickedProjectIdType = projectId === null ? null : typeof projectId;
+            this.navigationDebug.requestedProjectId = projectId;
+        }
 
         this.openProjectDashboard(navigatorProject);
     }
 
     private openProniedDashboard(): void {
-        console.debug("Navegando a PRONIED");
         this.filterState.level = "PRONIED";
         this.filterState.selectedUnit = null;
         this.filterState.selectedProjectId = null;
@@ -2803,7 +3219,6 @@ export class Visual implements IVisual {
     }
 
     private openRiskDashboard(): void {
-        console.debug("Navegando a RIESGOS");
         this.filterState.level = "RIESGOS";
         this.filterState.selectedUnit = null;
         this.filterState.selectedProjectId = null;
@@ -2819,16 +3234,49 @@ export class Visual implements IVisual {
             return;
         }
 
-        console.debug("Solicitando navegación", {
-            level: "UNIDAD",
-            unit: selectedUnit
-        });
         this.filterState.level = "UNIDAD";
         this.filterState.selectedUnit = selectedUnit;
         this.filterState.lastNavigableUnit = selectedUnit;
         this.filterState.selectedProjectId = null;
         this.pendingNavigationLevel = "UNIDAD";
-        this.applyLevelFilter("UNIDAD");
+        this.applyUnitDashboardFilters(selectedUnit);
+    }
+
+    private openRiskView(view: "summary" | "matrix"): void {
+        if (this.currentDashboardData?.context.Level !== "RIESGOS") return;
+        this.riskCarouselIndex = view === "summary" ? 0 : 1;
+        const riskMain = this.rootElement?.querySelector(".evm-main--risk-dashboard");
+        if (riskMain instanceof HTMLElement && this.currentDashboardData.riskDashboard) {
+            mountRiskDashboardPage(riskMain, this.riskCarouselIndex, this.currentDashboardData.riskDashboard);
+        }
+        this.rootElement?.querySelectorAll(".evm-risk-carousel-page").forEach((page, index) => {
+            page.classList.toggle("active", index === this.riskCarouselIndex);
+        });
+        this.rootElement?.querySelectorAll('.evm-project-subtab[data-carousel-scope="risk"]').forEach((tab) => {
+            tab.classList.toggle("active", (tab as HTMLElement).dataset.projectView === view);
+        });
+    }
+
+    /**
+     * Nivel y unidad deben viajar en el mismo selfFilter. Power BI solo conserva
+     * de forma fiable un filtro propio por visual; si se envían por separado,
+     * la unidad (con un solo proyecto) puede hacer que el DAX resuelva PROYECTO.
+     */
+    private applyUnitDashboardFilters(unit: string): void {
+        const cleanUnit = unit.trim().split(/\s|-/)[0].toUpperCase();
+        if (!cleanUnit) return;
+
+        this.clearInternalFilter("projectFilter", true);
+        this.clearInternalFilter("unitFilter", true);
+
+        this.navigationFilters.applyTuple(
+            `unit:${cleanUnit}`,
+            [
+                { table: "Dim_NivelDashboard", column: "Nivel" },
+                { table: "Dim_Intervenciones", column: "UnidadGerencial" }
+            ],
+            [["UNIDAD", cleanUnit]]
+        );
     }
 
     private disableProjectNavigation(projectId: string | null): void {
@@ -2845,39 +3293,43 @@ export class Visual implements IVisual {
         const projectId = this.getProjectId(project);
         if (!projectId) {
             console.warn("No hay proyecto seleccionado.");
-            this.navigationDebug.lastError = "IdIntervencion vacío";
-            this.renderNavigationDebugPanel();
+            if (this.navigationDebugPanelEnabled) {
+                this.navigationDebug.lastError = "IdIntervencion vacío";
+                this.renderNavigationDebugPanel();
+            }
             return;
         }
 
-        console.debug("Solicitando navegación", {
-            level: "PROYECTO",
-            projectId
-        });
-        this.navigationDebug.requestedLevel = "PROYECTO";
-        this.navigationDebug.clickedProjectId = projectId;
-        this.navigationDebug.clickedProjectIdType = typeof projectId;
-        this.navigationDebug.requestedProjectId = projectId;
-        this.navigationDebug.lastAction = "Aplicando filtro de proyecto";
-        this.navigationDebug.externalProjectFilterApplied = false;
-        this.navigationDebug.selfProjectFilterApplied = false;
-        this.navigationDebug.lastError = null;
+        if (this.navigationDebugPanelEnabled) {
+            this.navigationDebug.requestedLevel = "PROYECTO";
+            this.navigationDebug.clickedProjectId = projectId;
+            this.navigationDebug.clickedProjectIdType = typeof projectId;
+            this.navigationDebug.requestedProjectId = projectId;
+            this.navigationDebug.lastAction = "Aplicando filtro de proyecto";
+            this.navigationDebug.externalProjectFilterApplied = false;
+            this.navigationDebug.selfProjectFilterApplied = false;
+            this.navigationDebug.lastError = null;
+            this.navigationDebug.applyJsonFilterCalled = true;
+            this.navigationDebug.lastFilterJson = JSON.stringify({
+                filter: "Dim_Intervenciones[IdIntervencion]",
+                projectId
+            });
+            this.renderNavigationDebugPanel();
+        }
+        this.filterState.level = "PROYECTO";
         this.filterState.selectedProjectId = projectId;
         this.filterState.lastNavigableProjectId = projectId;
-        this.navigationDebug.applyJsonFilterCalled = true;
-        this.navigationDebug.lastFilterJson = JSON.stringify({
-            filter: "Dim_Intervenciones[IdIntervencion]",
-            projectId
-        });
-        this.renderNavigationDebugPanel();
-
-        this.applyProjectFilter(projectId);
-        this.navigationDebug.externalProjectFilterApplied = true;
-        this.navigationDebug.selfProjectFilterApplied = true;
-        this.navigationDebug.lastAction = "Filtro de proyecto enviado";
-        this.navigationDebug.lastError = null;
-        this.navigationDebug.timestamp = new Date().toISOString();
-        this.renderNavigationDebugPanel();
+        this.pendingNavigationLevel = "PROYECTO";
+        this.pendingProjectSelectionId = projectId;
+        this.applyProjectDashboardFilters(projectId);
+        if (this.navigationDebugPanelEnabled) {
+            this.navigationDebug.externalProjectFilterApplied = true;
+            this.navigationDebug.selfProjectFilterApplied = true;
+            this.navigationDebug.lastAction = "Filtro de proyecto enviado";
+            this.navigationDebug.lastError = null;
+            this.navigationDebug.timestamp = new Date().toISOString();
+            this.renderNavigationDebugPanel();
+        }
     }
 
     private openProjectView(view: "summary" | "milestones" | "risks"): void {
@@ -3452,7 +3904,7 @@ export class Visual implements IVisual {
         };
 
         const closeModal = (): void => overlay.remove();
-        query.addEventListener("input", renderResults);
+        query.addEventListener("input", debounceInput(renderResults));
         filterDefinitions.forEach((definition) => selectors[definition.key].addEventListener("change", () => {
             refreshSelectorOptions(definition.key);
             renderResults();
@@ -3538,16 +3990,38 @@ export class Visual implements IVisual {
     }
 
     private navigatorProjectsForOptions(excludedFilter: "unit" | "region" | "province" | "district" | "status" | null): NavigatorProject[] {
-        const projects = this.navigatorProjectCatalog.length
-            ? this.navigatorProjectCatalog
+        const filterDefinitions: Array<{ name: "unit" | "region" | "province" | "district" | "status"; key: keyof NavigatorProject; value: string | null }> = [
+            { name: "unit", key: "UnidadGerencial", value: this.filterState.selectedUnit },
+            { name: "region", key: "Region", value: this.filterState.region },
+            { name: "province", key: "Provincia", value: this.filterState.province },
+            { name: "district", key: "Distrito", value: this.filterState.district },
+            { name: "status", key: "EstadoProyecto", value: this.filterState.status }
+        ];
+        const activeFilters = filterDefinitions.filter((filter): filter is typeof filter & { value: string } => filter.name !== excludedFilter && Boolean(filter.value));
+        const cacheKey = [
+            this.navigatorIndex.revision,
+            excludedFilter ?? "*",
+            ...activeFilters.map((filter) => String(filter.key) + "=" + filter.value)
+        ].join("|");
+        const cached = this.filteredProjectsCache.get(cacheKey);
+        if (cached) return cached;
+        const indexedProjects = this.navigatorProjectCatalog;
+        const projects = indexedProjects.length
+            ? this.navigatorIndex.candidates(activeFilters.map(({ key, value }) => ({ key, value })))
             : this.currentDashboardData?.navigator?.projects ?? this.currentDashboardData?.projects ?? [];
-        return projects.filter((project) => {
+        const filtered = projects.filter((project) => {
             return (excludedFilter === "unit" || this.matchesFilter(project.UnidadGerencial, this.filterState.selectedUnit))
                 && (excludedFilter === "region" || this.matchesFilter(project.Region, this.filterState.region))
                 && (excludedFilter === "province" || this.matchesFilter(project.Provincia, this.filterState.province))
                 && (excludedFilter === "district" || this.matchesFilter(project.Distrito, this.filterState.district))
                 && (excludedFilter === "status" || this.matchesFilter(project.EstadoProyecto, this.filterState.status));
         });
+        this.filteredProjectsCache.set(cacheKey, filtered);
+        if (this.filteredProjectsCache.size > 40) {
+            const oldest = this.filteredProjectsCache.keys().next().value as string | undefined;
+            if (oldest !== undefined) this.filteredProjectsCache.delete(oldest);
+        }
+        return filtered;
     }
 
     private reconcileProjectSelection(): void {
@@ -3594,14 +4068,11 @@ export class Visual implements IVisual {
     }
 
     private rememberNavigatorProjects(projects: NavigatorProject[]): void {
-        const catalog = new Map<string, NavigatorProject>();
-        [...this.navigatorProjectCatalog, ...projects].forEach((project) => {
-            const projectId = this.getProjectId(project);
-            if (projectId) {
-                catalog.set(projectId, project);
-            }
-        });
-        this.navigatorProjectCatalog = Array.from(catalog.values());
+        this.navigatorIndex.add(projects);
+    }
+
+    private get navigatorProjectCatalog(): NavigatorProject[] {
+        return this.navigatorIndex.values();
     }
 
     private matchesFilter(value: unknown, filter: string | null): boolean {
@@ -3613,7 +4084,6 @@ export class Visual implements IVisual {
     }
 
     private handleNavigationClick(level: "PRONIED" | "UNIDAD" | "PROYECTO", unit: string | null = null, projectId: string | null = null): void {
-        console.debug("[NAV] Click detectado", level);
         this.navigationDebug.clickCount += 1;
         this.navigationDebug.lastAction = `Click navegación ${level}`;
         this.navigationDebug.requestedLevel = level;
@@ -3636,9 +4106,6 @@ export class Visual implements IVisual {
             this.navigationDebug.lastError = null;
             this.navigationDebug.timestamp = new Date().toISOString();
 
-            console.debug("[NAV] Aplicando nivel", {
-                level
-            });
             this.renderNavigationDebugPanel();
 
             this.applyLevelFilter(level);
@@ -3655,65 +4122,42 @@ export class Visual implements IVisual {
         }
     }
 
-    private applyLevelFilter(level: DashboardLevel): void {
-        const filterSignature = `level:${level}`;
-        if (this.generalNavigationFilterValue === filterSignature) {
-            return;
-        }
-        const filter = new BasicFilter(
-            {
-                table: "Dim_NivelDashboard",
-                column: "Nivel"
-            },
-            "In",
-            [level]
-        );
-
-        const filterJson = filter.toJSON();
-
-        this.beginFilterLoading();
-        this.host.applyJsonFilter(filterJson as powerbi.IFilter, "general", "filter", powerbi.FilterAction.merge);
-        this.host.applyJsonFilter(filterJson as powerbi.IFilter, "general", "selfFilter", powerbi.FilterAction.merge);
-        this.generalNavigationFilterValue = filterSignature;
+    private applyLevelFilter(level: DashboardLevel, force: boolean = false): void {
+        this.navigationFilters.applyBasic(`level:${level}`, { table: "Dim_NivelDashboard", column: "Nivel" }, [level], force);
     }
 
-    private clearGeneralNavigationFilters(): void {
-        if (this.generalNavigationFilterValue === null) {
-            return;
-        }
-        this.beginFilterLoading();
-        this.host.applyJsonFilter(null as unknown as powerbi.IFilter, "general", "filter", powerbi.FilterAction.remove);
-        this.host.applyJsonFilter(null as unknown as powerbi.IFilter, "general", "selfFilter", powerbi.FilterAction.remove);
-        this.generalNavigationFilterValue = null;
+    private applyProjectDashboardFilters(projectId: string): void {
+        const cleanProjectId = projectId.trim();
+        if (!cleanProjectId) return;
+        this.navigationFilters.applyTuple(
+            `project-dashboard:${cleanProjectId}`,
+            [
+                { table: "Dim_NivelDashboard", column: "Nivel" },
+                { table: "Dim_Intervenciones", column: "IdIntervencion" }
+            ],
+            [["PROYECTO", cleanProjectId]]
+        );
+    }
+
+    private clearGeneralNavigationFilters(force: boolean = false): void {
+        this.navigationFilters.clear(force);
     }
 
     private applyProjectFilter(projectId: string): void {
         const cleanProjectId = projectId.trim();
         if (!cleanProjectId) {
-            this.navigationDebug.lastError = "IdIntervencion vacío";
-            this.navigationDebug.lastAction = "Navegación cancelada";
-            this.renderNavigationDebugPanel();
+            if (this.navigationDebugPanelEnabled) {
+                this.navigationDebug.lastError = "IdIntervencion vacío";
+                this.navigationDebug.lastAction = "Navegación cancelada";
+                this.renderNavigationDebugPanel();
+            }
             return;
         }
-        const filterSignature = `project:${cleanProjectId}`;
-        if (this.generalNavigationFilterValue === filterSignature) {
-            return;
-        }
-
-        const projectFilter = new BasicFilter(
-            {
-                table: "Dim_Intervenciones",
-                column: "IdIntervencion"
-            },
-            "In",
+        this.navigationFilters.applyBasic(
+            `project:${cleanProjectId}`,
+            { table: "Dim_Intervenciones", column: "IdIntervencion" },
             [cleanProjectId]
         );
-        const projectFilterJson = projectFilter.toJSON();
-
-        this.beginFilterLoading();
-        this.host.applyJsonFilter(projectFilterJson as powerbi.IFilter, "general", "filter", powerbi.FilterAction.merge);
-        this.host.applyJsonFilter(projectFilterJson as powerbi.IFilter, "general", "selfFilter", powerbi.FilterAction.merge);
-        this.generalNavigationFilterValue = filterSignature;
     }
 
     private testProjectNavigationFilter(projectId: string): void {
@@ -3776,61 +4220,17 @@ export class Visual implements IVisual {
         return typeof value === "string" ? value : JSON.stringify(value);
     }
 
-    private applyBasicFilter(table: string, column: string, values: Array<string | number>, propertyName: string): void {
+    private applyBasicFilter(table: string, column: string, values: Array<string | number>, propertyName: string, force: boolean = false): void {
         const nextValue = values[0] ?? null;
-        if (this.isSameFilterValue(this.appliedFilterValues[propertyName] ?? null, nextValue === null ? null : String(nextValue))) {
-            console.debug("Filtro omitido por valor idéntico", {
-                table,
-                column,
-                values,
-                propertyName
-            });
+        if (nextValue === null) {
+            this.internalFilters.remove(propertyName);
             return;
         }
-
-        const filter = {
-            $schema: ["http", "://powerbi.com/product/schema#basic"].join(""),
-            filterType: 1,
-            target: { table, column },
-            operator: "In",
-            values
-        } as unknown as powerbi.IFilter;
-
-        console.debug("Aplicando filtro", {
-            table,
-            column,
-            values,
-            propertyName,
-            filter
-        });
-        this.beginFilterLoading();
-        this.host.applyJsonFilter(filter, "internalFilters", propertyName, powerbi.FilterAction.merge);
-        this.host.applyJsonFilter(filter, "internalFilters", this.selfFilterPropertyName(propertyName), powerbi.FilterAction.merge);
-        this.appliedFilterValues[propertyName] = nextValue === null ? null : String(nextValue);
+        this.internalFilters.set(propertyName, { table, column }, nextValue);
     }
 
-    private clearInternalFilter(propertyName: string, force: boolean = false): void {
-        if (!force && this.appliedFilterValues[propertyName] == null) {
-            return;
-        }
-        console.debug("Limpiando filtro", {
-            propertyName
-        });
-        this.beginFilterLoading();
-        this.host.applyJsonFilter(null as unknown as powerbi.IFilter, "internalFilters", propertyName, powerbi.FilterAction.remove);
-        this.host.applyJsonFilter(
-            null as unknown as powerbi.IFilter,
-            "internalFilters",
-            this.selfFilterPropertyName(propertyName),
-            powerbi.FilterAction.remove
-        );
-        this.appliedFilterValues[propertyName] = null;
-    }
-
-    private selfFilterPropertyName(propertyName: string): string {
-        return propertyName === "projectFilter"
-            ? "selfProjectFilter"
-            : propertyName.replace(/Filter$/, "SelfFilter");
+    private clearInternalFilter(propertyName: string, _force: boolean = false): void {
+        this.internalFilters.remove(propertyName);
     }
 
     private restoreDefaultProjectFilters(): void {
@@ -3838,7 +4238,7 @@ export class Visual implements IVisual {
         if (!projectId) {
             return;
         }
-        const project = this.navigatorProjectCatalog.find((item) => this.getProjectId(item) === projectId)
+        const project = this.navigatorIndex.get(projectId)
             ?? this.currentDashboardData?.navigator?.projects.find((item) => this.getProjectId(item) === projectId)
             ?? null;
         if (!project) {
@@ -3862,10 +4262,7 @@ export class Visual implements IVisual {
     }
 
     private clearAllInteractiveFilters(): void {
-        this.beginFilterLoading();
-        this.host.applyJsonFilter(null as unknown as powerbi.IFilter, "general", "filter", powerbi.FilterAction.remove);
-        this.host.applyJsonFilter(null as unknown as powerbi.IFilter, "general", "selfFilter", powerbi.FilterAction.remove);
-        this.generalNavigationFilterValue = null;
+        this.navigationFilters.clear(true);
         ["unitFilter", "regionFilter", "provinceFilter", "districtFilter", "statusFilter", "projectFilter"]
             .forEach((property) => this.clearInternalFilter(property));
         this.filterState.level = "PRONIED";
@@ -3888,10 +4285,6 @@ export class Visual implements IVisual {
         this.filterState.status = null;
     }
 
-    private isSameFilterValue(current: string | null, next: string | null): boolean {
-        return current === next;
-    }
-
     private formatInteger(value: DataValue): string {
         const parsed = numberValue(value);
         return parsed === null ? "—" : parsed.toLocaleString("en-US", { maximumFractionDigits: 0 });
@@ -3910,7 +4303,7 @@ export class Visual implements IVisual {
         this.visibleGaugeSeries = ["CPI", "SPI (w)", "TCPI", "TSPI (w)"];
         this.isGaugeHistoryModalOpen = true;
         this.renderGaugeHistoryModal();
-        this.target.ownerDocument.addEventListener("keydown", this.handleGaugeModalKeydown);
+        this.viewLifecycle.listen(this.target.ownerDocument, "keydown", this.handleGaugeModalKeydown);
     }
 
     private closeGaugeHistoryModal(): void {
@@ -3922,29 +4315,10 @@ export class Visual implements IVisual {
     private renderGaugeHistoryModal(): void {
         this.removeExistingGaugeHistoryModal();
 
-        const dashboard = this.currentDashboardData;
-        const hasRows = dashboard?.context.Level === "PROYECTO"
-            ? Boolean(dashboard.gauges.length)
-            : Boolean(dashboard?.aggregateGauges.length);
-        if (!this.rootElement || !dashboard || !hasRows) {
+        const renderData = this.gaugeHistoryRenderData();
+        if (!this.rootElement || !renderData) {
             return;
         }
-
-        const aggregateRows = dashboard.context.Level === "PROYECTO" ? [] : this.windowAggregateGaugeRows(dashboard);
-        const rawSeries = dashboard.context.Level === "PROYECTO"
-            ? this.buildGaugeHistorySeries(dashboard.gauges)
-            : this.buildAggregateGaugeHistorySeries(aggregateRows);
-        const weekRange = this.gaugeHistoryWeekRange(dashboard, rawSeries);
-        const series = rawSeries.map((item) => ({
-            ...item,
-            points: item.points.filter((point) => point.week >= weekRange.min && point.week <= weekRange.max)
-        }));
-        console.debug("Gauge history modal", {
-            selectedGaugeKey: this.selectedGaugeKey,
-            level: dashboard.context.Level,
-            gaugeRows: dashboard.context.Level === "PROYECTO" ? dashboard.gauges.length : aggregateRows.length,
-            series
-        });
 
         const overlay = document.createElement("div");
         overlay.className = "gauge-history-modal-overlay";
@@ -3959,9 +4333,30 @@ export class Visual implements IVisual {
         });
 
         modal.appendChild(this.renderGaugeHistoryHeader());
-        modal.appendChild(this.renderGaugeHistoryBody(series, weekRange));
+        modal.appendChild(this.renderGaugeHistoryBody(renderData.series, renderData.weekRange));
         overlay.appendChild(modal);
         this.rootElement.appendChild(overlay);
+    }
+
+    private gaugeHistoryRenderData(): { series: GaugeChartSeries[]; weekRange: { min: number; max: number } } | null {
+        const dashboard = this.currentDashboardData;
+        const hasRows = dashboard?.context.Level === "PROYECTO"
+            ? Boolean(dashboard.gauges.length)
+            : Boolean(dashboard?.aggregateGauges.length);
+        if (!dashboard || !hasRows) return null;
+
+        const aggregateRows = dashboard.context.Level === "PROYECTO" ? [] : this.windowAggregateGaugeRows(dashboard);
+        const rawSeries = dashboard.context.Level === "PROYECTO"
+            ? this.buildGaugeHistorySeries(dashboard.gauges)
+            : this.buildAggregateGaugeHistorySeries(aggregateRows);
+        const weekRange = this.gaugeHistoryWeekRange(dashboard, rawSeries);
+        return {
+            weekRange,
+            series: rawSeries.map((item) => ({
+                ...item,
+                points: item.points.filter((point) => point.week >= weekRange.min && point.week <= weekRange.max)
+            }))
+        };
     }
 
     private renderGaugeHistoryHeader(): HTMLElement {
@@ -4140,20 +4535,46 @@ export class Visual implements IVisual {
         hitbox.setAttribute("height", String(plot.height));
         hitbox.setAttribute("class", "gauge-history-hover-hitbox");
 
-        hitbox.addEventListener("mousemove", (event: MouseEvent) => {
+        let pendingFrame: number | null = null;
+        let pendingEvent: MouseEvent | null = null;
+        let lastWeek: number | null = null;
+        const nearestWeek = (x: number): number => {
+            let low = 0;
+            let high = weeks.length - 1;
+            while (low < high) {
+                const middle = Math.floor((low + high) / 2);
+                if (xScale(weeks[middle]) < x) low = middle + 1;
+                else high = middle;
+            }
+            if (low === 0) return weeks[0];
+            const previous = weeks[low - 1];
+            return Math.abs(xScale(previous) - x) <= Math.abs(xScale(weeks[low]) - x) ? previous : weeks[low];
+        };
+        const updateHover = (event: MouseEvent): void => {
             const pointer = this.svgPointer(svg, event, width, height);
             const clampedX = Math.min(plot.left + plot.width, Math.max(plot.left, pointer.x));
-            const week = weeks.reduce((nearest, candidate) => {
-                return Math.abs(xScale(candidate) - clampedX) < Math.abs(xScale(nearest) - clampedX) ? candidate : nearest;
-            }, weeks[0]);
+            const week = nearestWeek(clampedX);
             const x = xScale(week);
             hoverLine.setAttribute("x1", String(x));
             hoverLine.setAttribute("x2", String(x));
             hoverLine.setAttribute("visibility", "visible");
-            this.showGaugeWeekTooltip(tooltip, series, week, (x / width) * 100, (pointer.y / height) * 100);
+            if (week !== lastWeek) {
+                lastWeek = week;
+                this.showGaugeWeekTooltip(tooltip, series, week);
+            }
+        };
+        hitbox.addEventListener("mousemove", (event: MouseEvent) => {
+            pendingEvent = event;
+            if (pendingFrame !== null) return;
+            pendingFrame = requestAnimationFrame(() => {
+                pendingFrame = null;
+                if (pendingEvent) updateHover(pendingEvent);
+            });
         });
 
         hitbox.addEventListener("mouseleave", () => {
+            pendingEvent = null;
+            lastWeek = null;
             hoverLine.setAttribute("visibility", "hidden");
             this.hideGaugeTooltip(tooltip);
         });
@@ -4267,11 +4688,15 @@ export class Visual implements IVisual {
         this.visibleGaugeSeries = isVisible
             ? this.visibleGaugeSeries.filter((item) => item !== key)
             : [...this.visibleGaugeSeries, key];
-        this.renderGaugeHistoryModal();
+        const renderData = this.gaugeHistoryRenderData();
+        const currentBody = this.rootElement?.querySelector(".gauge-history-modal-body");
+        if (renderData && currentBody) {
+            currentBody.replaceWith(this.renderGaugeHistoryBody(renderData.series, renderData.weekRange));
+        }
     }
 
     private buildGaugeHistorySeries(rows: GaugeHistoryRow[]): GaugeChartSeries[] {
-        const orderedRows = [...rows].sort((a, b) => a.Semana - b.Semana);
+        const orderedRows = rows;
         const definitions: Array<{ key: GaugeMetricKey; label: string }> = [
             { key: "SPI (w)", label: "SPI" },
             { key: "CPI", label: "CPI" },
@@ -4315,7 +4740,7 @@ export class Visual implements IVisual {
     }
 
     private buildAggregateGaugeHistorySeries(rows: AggregateGaugeData[]): GaugeChartSeries[] {
-        const orderedRows = [...rows].sort((a, b) => a.OrdenSemana - b.OrdenSemana);
+        const orderedRows = rows;
         const definitions: Array<{ key: GaugeMetricKey; label: string; value: (row: AggregateGaugeData) => number | null }> = [
             { key: "SPI (w)", label: "SPI", value: (row) => row.SPIW },
             { key: "CPI", label: "CPI", value: (row) => row.CPI },
@@ -4395,7 +4820,7 @@ export class Visual implements IVisual {
         svg.appendChild(group);
     }
 
-    private showGaugeWeekTooltip(tooltip: HTMLElement, series: GaugeChartSeries[], week: number, xPercent: number, yPercent: number): void {
+    private showGaugeWeekTooltip(tooltip: HTMLElement, series: GaugeChartSeries[], week: number): void {
         tooltip.replaceChildren();
         tooltip.appendChild(this.tooltipLine(`Semana ${week}`, "title"));
         series.forEach((item) => {
@@ -4411,8 +4836,6 @@ export class Visual implements IVisual {
             const variation = previous ? point.value - previous.value : null;
             tooltip.appendChild(this.tooltipMetricRow(item.key, label, point.value, variation));
         });
-        tooltip.style.left = `${Math.min(86, Math.max(10, xPercent))}%`;
-        tooltip.style.top = `${Math.min(82, Math.max(12, yPercent))}%`;
         tooltip.classList.add("visible");
     }
 

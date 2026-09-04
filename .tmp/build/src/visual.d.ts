@@ -7,16 +7,16 @@ export declare class Visual implements IVisual {
     private readonly host;
     private readonly events;
     private readonly target;
-    private formattingSettings;
-    private readonly formattingSettingsService;
     private rootElement;
     private currentDashboardData;
     private filterPanelOpen;
     private filterFocus;
     private readonly filterState;
-    private readonly appliedFilterValues;
-    private generalNavigationFilterValue;
-    private navigatorProjectCatalog;
+    private readonly navigationFilters;
+    private readonly internalFilters;
+    private readonly navigatorIndex;
+    private readonly filteredProjectsCache;
+    private readonly viewLifecycle;
     private navigationDebugHidden;
     private readonly navigationDebugPanelEnabled;
     private pendingNavigationLevel;
@@ -32,13 +32,15 @@ export declare class Visual implements IVisual {
     private filterLoadingSafetyTimer;
     private projectCarouselIndex;
     private portfolioCarouselIndex;
+    private riskCarouselIndex;
+    private readonly lazyCarousel;
     private matrixVisibleColumns;
+    private matrixCostProjectionMethod;
     private selectedGaugeKey;
     private visibleGaugeSeries;
     private readonly handleGaugeModalKeydown;
     constructor(options: VisualConstructorOptions);
     update(options: VisualUpdateOptions): void;
-    getFormattingModel(): powerbi.visuals.FormattingModel;
     private renderNavigationDebugPanel;
     private renderNavigationDebugButton;
     private renderNavigationLevelTestButton;
@@ -64,6 +66,7 @@ export declare class Visual implements IVisual {
     private renderUnitProgressHeader;
     private renderUnitProgressIcon;
     private renderUnitDashboard;
+    private openUnitSelectorModal;
     private renderDashboardError;
     private renderPortfolioHeader;
     private renderBreadcrumb;
@@ -100,6 +103,8 @@ export declare class Visual implements IVisual {
     private renderBodyCarousel;
     private renderProjectCurveMatrix;
     private renderCarouselButton;
+    private createLazyCarouselPage;
+    private mountCarouselPage;
     private renderCarouselDots;
     private updateCarouselPages;
     private updateCarouselDots;
@@ -120,6 +125,13 @@ export declare class Visual implements IVisual {
     private openProniedDashboard;
     private openRiskDashboard;
     private openUnitDashboard;
+    private openRiskView;
+    /**
+     * Nivel y unidad deben viajar en el mismo selfFilter. Power BI solo conserva
+     * de forma fiable un filtro propio por visual; si se envían por separado,
+     * la unidad (con un solo proyecto) puede hacer que el DAX resuelva PROYECTO.
+     */
+    private applyUnitDashboardFilters;
     private disableProjectNavigation;
     private openProjectDashboard;
     private openProjectView;
@@ -143,11 +155,13 @@ export declare class Visual implements IVisual {
     private uniqueFromProjects;
     private projectOptions;
     private rememberNavigatorProjects;
+    private get navigatorProjectCatalog();
     private matchesFilter;
     private navigatorText;
     private handleNavigationClick;
     private navigateLevelForDebug;
     private applyLevelFilter;
+    private applyProjectDashboardFilters;
     private clearGeneralNavigationFilters;
     private applyProjectFilter;
     private testProjectNavigationFilter;
@@ -157,15 +171,14 @@ export declare class Visual implements IVisual {
     private toDebugText;
     private applyBasicFilter;
     private clearInternalFilter;
-    private selfFilterPropertyName;
     private restoreDefaultProjectFilters;
     private clearAllInteractiveFilters;
     private clearProjectDimensionFilters;
-    private isSameFilterValue;
     private formatInteger;
     private openGaugeHistoryModal;
     private closeGaugeHistoryModal;
     private renderGaugeHistoryModal;
+    private gaugeHistoryRenderData;
     private renderGaugeHistoryHeader;
     private renderGaugeHistoryBody;
     private renderGaugeHistoryChart;

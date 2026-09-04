@@ -25,7 +25,7 @@ export function renderMilestones(milestones: MilestoneItem[]): HTMLElement {
     const card = createElement("section", "evm-card evm-milestone-card milestone-card");
     const title = createElement("div", "evm-section-title evm-milestone-title", "Hitos Principales del Proyecto");
 
-    const ordered = [...milestones].sort((a, b) => (numberValue(a.OrdenHito) ?? 0) - (numberValue(b.OrdenHito) ?? 0));
+    const ordered = milestones;
     const wrap = createElement("div", "milestone-svg-wrap");
     const pageSize = 4;
     const pageCount = Math.max(1, Math.ceil(ordered.length / pageSize));

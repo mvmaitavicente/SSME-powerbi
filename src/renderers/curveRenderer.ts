@@ -2,6 +2,7 @@
 
 import { CurveHistoryPoint, CurveReferences, DataValue, RenderCurveData, VisualPalette } from "../types";
 import { createElement, decimal, decimalUpTo, numberValue, svgElement, text } from "../utils/format";
+import { LifecycleSink } from "../controllers/ViewLifecycle";
 
 type SeriesKey = "PV" | "EV" | "AC";
 type TimelineMarkerKey = "at" | "es" | "sac" | "eac";
@@ -31,6 +32,7 @@ interface SeriesCallout {
 
 interface CurveRenderOptions {
     portfolio?: boolean;
+    unit?: boolean;
     showYearBracket?: boolean;
 }
 
@@ -73,8 +75,7 @@ const series: Array<{ key: SeriesKey; label: string; className: string }> = [
     { key: "EV", label: "EV (Valor Ganado)", className: "ev" },
     { key: "AC", label: "AC (Costo Actual)", className: "ac" }
 ];
-
-export function renderCurve(curve: RenderCurveData, palette: VisualPalette, options: CurveRenderOptions = {}): HTMLElement {
+export function renderCurve(curve: RenderCurveData, palette: VisualPalette, options: CurveRenderOptions = {}, lifecycle?: LifecycleSink): HTMLElement {
     const card = createElement("section", "evm-card evm-curve-card");
     const title = createElement("div", "evm-section-title", "Curva S - Desempeno del Proyecto (EVM)");
     const wrap = createElement("div", "evm-curve-svg-wrap");
@@ -98,18 +99,40 @@ export function renderCurve(curve: RenderCurveData, palette: VisualPalette, opti
     wrap.appendChild(svg);
     card.appendChild(title);
     card.appendChild(wrap);
-    card.appendChild(renderCurveSummary(curve));
-    render();
+    card.appendChild(renderCurveSummary(curve, options));
+    let animationFrame: number | null = null;
+    let lastWidth = -1;
+    let lastHeight = -1;
+    const scheduleRender = (): void => {
+        if (animationFrame !== null) return;
+        animationFrame = window.requestAnimationFrame(() => {
+            animationFrame = null;
+            if (!wrap.isConnected) return;
+            const rect = wrap.getBoundingClientRect();
+            const width = Math.round(rect.width);
+            const height = Math.round(rect.height);
+            if (width === lastWidth && height === lastHeight) return;
+            lastWidth = width;
+            lastHeight = height;
+            render();
+        });
+    };
+    scheduleRender();
+    let observer: ResizeObserver | null = null;
     if (typeof ResizeObserver !== "undefined") {
-        const observer = new ResizeObserver(() => {
+        observer = new ResizeObserver(() => {
             if (!wrap.isConnected) {
-                observer.disconnect();
+                observer?.disconnect();
                 return;
             }
-            render();
+            scheduleRender();
         });
         observer.observe(wrap);
     }
+    lifecycle?.register(() => {
+        if (animationFrame !== null) window.cancelAnimationFrame(animationFrame);
+        observer?.disconnect();
+    });
     return card;
 }
 
@@ -138,44 +161,38 @@ function drawCurve(svg: SVGSVGElement, curve: RenderCurveData, palette: VisualPa
     const currentPoint = curve.current;
     const sacWeek = numberValue(references.SAC);
     const eacWeek = numberValue(references.EACT);
+    const visibleEacWeek = options.portfolio ? null : eacWeek;
+    const visibleReferences: CurveReferences = options.portfolio
+        ? { ...references, ES: null, EACT: null, VACT: null }
+        : references;
     const atWeek = numberValue(references.AT);
     const allWeeks = points.map((point) => numberValue(point.SemanaProyecto)).filter((week): week is number => week !== null);
-    const scalarMaxWeek = maxNumber([eacWeek, sacWeek]);
+    const scalarMaxWeek = maxNumber([visibleEacWeek, sacWeek]);
     const rawMaxCurveWeek = allWeeks.length ? Math.max(...allWeeks) : null;
     const maxCurveWeek = scalarMaxWeek !== null && rawMaxCurveWeek !== null ? Math.min(rawMaxCurveWeek, scalarMaxWeek) : rawMaxCurveWeek;
     const axisMinWeek = Math.max(0, (atWeek ?? 0) - 5);
-    const rawAxisMaxWeek = Math.max(eacWeek ?? 0, sacWeek ?? 0, atWeek ?? 0, maxCurveWeek ?? 0, axisMinWeek + 1);
+    const rawAxisMaxWeek = Math.max(visibleEacWeek ?? 0, sacWeek ?? 0, atWeek ?? 0, maxCurveWeek ?? 0, axisMinWeek + 1);
     const axisMaxWeek = Math.max(rawAxisMaxWeek, axisMinWeek + 1);
-    const axisSpan = axisMaxWeek - axisMinWeek;
-    const visiblePoints = [...points]
+    const visiblePoints = points
         .filter((point) => {
             const week = numberValue(point.SemanaProyecto);
             return week !== null && week >= axisMinWeek && week <= axisMaxWeek;
         })
-        .sort((a, b) => (numberValue(a.SemanaProyecto) ?? 0) - (numberValue(b.SemanaProyecto) ?? 0));
+        .sort((left, right) => (numberValue(left.SemanaProyecto) ?? 0) - (numberValue(right.SemanaProyecto) ?? 0));
     const pointsToDraw = visiblePoints.length ? visiblePoints : points;
     const yDomain = chartDomain(pointsToDraw, currentPoint, references);
+    const axisSpan = axisMaxWeek - axisMinWeek;
     const xScale = (week: number): number => plot.left + ((week - axisMinWeek) / axisSpan) * plot.width;
-    const referenceXScale = spacedReferenceXScale(xScale, sacWeek, eacWeek);
+    const referenceXScale = spacedReferenceXScale(xScale, sacWeek, visibleEacWeek);
     const yScale = (value: number): number => plot.top + plot.height - ((value - yDomain.min) / (yDomain.max - yDomain.min)) * plot.height;
     const referenceYScale = options.portfolio ? spacedEacCostYScale(yScale, references) : yScale;
+    const costProjectionWeek = options.portfolio ? sacWeek : eacWeek;
 
-    console.debug("Curve roles read", {
-        curvaSAC: sacWeek,
-        curvaEACT: eacWeek,
-        curvaAT: atWeek,
-        curvaES: numberValue(references.ES),
-        xMin: axisMinWeek,
-        xMax: axisMaxWeek,
-        yMin: yDomain.min,
-        yMax: yDomain.max,
-        source: "curve-only"
-    });
-    drawAxes(svg, axisMinWeek, axisMaxWeek, yDomain, xScale, referenceXScale, yScale, eacWeek, references, Boolean(options.showYearBracket));
+    drawAxes(svg, axisMinWeek, axisMaxWeek, yDomain, xScale, referenceXScale, yScale, visibleEacWeek, visibleReferences, Boolean(options.showYearBracket));
     drawCurrentLine(svg, references, xScale);
     drawBacLine(svg, references, yScale);
-    drawAcProjection(svg, currentPoint, references, referenceXScale, yScale, referenceYScale);
-    drawEacCostLine(svg, references, referenceXScale, referenceYScale);
+    drawAcProjection(svg, currentPoint, references, costProjectionWeek, referenceXScale, yScale, referenceYScale);
+    drawEacCostLine(svg, references, costProjectionWeek, referenceXScale, referenceYScale);
     drawSacLine(svg, references, referenceXScale);
 
     const seriesLayer = svgElement("g");
@@ -197,11 +214,15 @@ function drawCurve(svg: SVGSVGElement, curve: RenderCurveData, palette: VisualPa
     });
     svg.appendChild(seriesLayer);
 
-    drawEacTimeLine(svg, references, referenceXScale, referenceYScale);
+    if (!options.portfolio) {
+        drawEacTimeLine(svg, references, referenceXScale, referenceYScale);
+    }
     drawCurrentValueLabels(svg, pointsToDraw, references, xScale, referenceXScale, yScale, referenceYScale, visualOffsets, segments, atWeek, options);
-    drawTimelineMarkerLabels(svg, references, referenceXScale, true);
+    drawTimelineMarkerLabels(svg, visibleReferences, referenceXScale, true);
     drawVacCost(svg, references, xScale, yScale, referenceYScale);
-    drawVacTime(svg, references, referenceXScale);
+    if (!options.portfolio) {
+        drawVacTime(svg, references, referenceXScale);
+    }
 }
 
 function spacedReferenceXScale(xScale: (week: number) => number, sacWeek: number | null, eacWeek: number | null): (week: number) => number {
@@ -513,29 +534,32 @@ function emphasizeSubtlePortfolioPvTrend(coordinates: Array<PointCoordinate | nu
     return adjusted;
 }
 
-function drawAcProjection(svg: SVGSVGElement, currentPoint: CurveHistoryPoint, references: CurveReferences, xScale: (week: number) => number, yScale: (value: number) => number, referenceYScale: (value: number) => number): void {
+function drawAcProjection(svg: SVGSVGElement, currentPoint: CurveHistoryPoint, references: CurveReferences, projectionEndWeek: number | null, xScale: (week: number) => number, yScale: (value: number) => number, referenceYScale: (value: number) => number): void {
     const atWeek = numberValue(references.AT);
     const currentAc = numberValue(currentPoint.AC);
-    const eacWeek = numberValue(references.EACT);
     const eacCost = numberValue(references.EACC);
-    if (atWeek === null || currentAc === null || eacWeek === null || eacCost === null || eacWeek <= atWeek) {
+    if (atWeek === null || currentAc === null || projectionEndWeek === null || eacCost === null || projectionEndWeek <= atWeek) {
         return;
     }
 
-    const remainingTime = eacWeek - atWeek;
+    const remainingTime = projectionEndWeek - atWeek;
     const remainingCost = eacCost - currentAc;
     const weeklyIncrement = remainingCost / remainingTime;
-    const projection: PointCoordinate[] = [{ x: xScale(atWeek), y: yScale(currentAc), week: atWeek, value: currentAc }];
+    const projectionStartY = yScale(currentAc);
+    const projectionEndY = referenceYScale(eacCost);
+    const projection: PointCoordinate[] = [{ x: xScale(atWeek), y: projectionStartY, week: atWeek, value: currentAc }];
 
     for (let elapsed = 1; elapsed < remainingTime; elapsed += 1) {
         const week = atWeek + elapsed;
-        if (Math.abs(eacWeek - Math.round(eacWeek)) >= 0.000001 && Math.abs(week - Math.floor(eacWeek)) < 0.000001) {
+        if (Math.abs(projectionEndWeek - Math.round(projectionEndWeek)) >= 0.000001 && Math.abs(week - Math.floor(projectionEndWeek)) < 0.000001) {
             continue;
         }
         const value = currentAc + weeklyIncrement * elapsed;
-        projection.push({ x: xScale(week), y: yScale(value), week, value });
+        const progress = elapsed / remainingTime;
+        const projectedY = projectionStartY + ((projectionEndY - projectionStartY) * progress);
+        projection.push({ x: xScale(week), y: projectedY, week, value });
     }
-    projection.push({ x: xScale(eacWeek), y: referenceYScale(eacCost), week: eacWeek, value: eacCost });
+    projection.push({ x: xScale(projectionEndWeek), y: projectionEndY, week: projectionEndWeek, value: eacCost });
 
     const layer = svgElement("g");
     layer.setAttribute("class", "evm-ac-projection-layer");
@@ -551,13 +575,12 @@ function drawAcProjection(svg: SVGSVGElement, currentPoint: CurveHistoryPoint, r
     svg.appendChild(layer);
 }
 
-function drawEacCostLine(svg: SVGSVGElement, references: CurveReferences, xScale: (week: number) => number, yScale: (value: number) => number): void {
-    const eacWeek = numberValue(references.EACT);
+function drawEacCostLine(svg: SVGSVGElement, references: CurveReferences, costWeek: number | null, xScale: (week: number) => number, yScale: (value: number) => number): void {
     const eacCost = numberValue(references.EACC);
-    if (eacWeek === null || eacCost === null) {
+    if (costWeek === null || eacCost === null) {
         return;
     }
-    const x2 = xScale(eacWeek);
+    const x2 = xScale(costWeek);
     const y2 = yScale(eacCost);
     drawLine(svg, plot.left, y2, x2, y2, "evm-eac-cost-line");
 
@@ -616,16 +639,16 @@ function drawCurrentValueLabels(svg: SVGSVGElement, points: CurveHistoryPoint[],
     const bacPoint = lastSeriesPoint(points, "PV", xScale, yScale, visualOffsets.PV);
     if (bac !== null && bacPoint) {
         callouts.push({
-            label: options.portfolio ? `BAC =\n${fullCurrency(bac)}` : `BAC = ${fullCurrency(bac)}`,
+            label: options.portfolio && !options.unit ? `BAC =\n${fullCurrency(bac)}` : `BAC = ${fullCurrency(bac)}`,
             className: "pv",
             point: bacPoint,
             labelY: bacPoint.y - (options.portfolio ? 34 : 28),
-            side: options.portfolio ? "right" : "left",
-            placement: options.portfolio ? "above" : undefined
+            side: options.unit ? "left" : options.portfolio ? "right" : "left",
+            placement: options.portfolio && !options.unit ? "above" : undefined
         });
     }
 
-    const eacWeek = numberValue(references.EACT);
+    const eacWeek = options.portfolio ? numberValue(references.SAC) : numberValue(references.EACT);
     const eacCost = numberValue(references.EACC);
     if (eacWeek !== null && eacCost !== null) {
         const eacPoint = { x: referenceXScale(eacWeek), y: referenceYScale(eacCost), week: eacWeek, value: eacCost };
@@ -634,14 +657,38 @@ function drawCurrentValueLabels(svg: SVGSVGElement, points: CurveHistoryPoint[],
             className: "ac",
             point: eacPoint,
             labelY: eacPoint.y - (options.portfolio ? 58 : 28),
-            placement: options.portfolio ? "above" : undefined
+            placement: options.portfolio && !options.unit ? "above" : undefined
         });
     }
 
     applyCoincidentPointOffsets(callouts);
+    if (options.unit) {
+        distributeUnitReferenceLanes(callouts);
+    }
     callouts.sort((a, b) => a.labelY - b.labelY);
-    distributeCalloutLabels(callouts, segments);
+    distributeCalloutLabels(callouts, segments, options.unit ? 34 : 24);
     callouts.forEach((item) => drawLeaderLabel(svg, item));
+}
+
+function distributeUnitReferenceLanes(callouts: SeriesCallout[]): void {
+    const bac = callouts.find((item) => item.label.startsWith("BAC ="));
+    const eac = callouts.find((item) => item.label.startsWith("EAC(c)"));
+    if (!bac || !eac) {
+        return;
+    }
+
+    // Cuando BAC y EAC terminan en alturas cercanas, sus etiquetas reciben
+    // carriles propios para evitar que texto, fondos y líneas se crucen.
+    if (Math.abs(bac.point.y - eac.point.y) <= 82) {
+        eac.labelY = plot.top + 28;
+        bac.labelY = plot.top + 78;
+        eac.placement = undefined;
+        bac.placement = undefined;
+        return;
+    }
+
+    eac.labelY = clamp(eac.point.y - 72, plot.top + 22, plot.top + plot.height - 22);
+    bac.labelY = clamp(bac.point.y - 38, plot.top + 22, plot.top + plot.height - 22);
 }
 
 function lastSeriesPoint(points: CurveHistoryPoint[], key: SeriesKey, xScale: (week: number) => number, yScale: (value: number) => number, yOffset: number = 0, maxWeek: number | null = null): PointCoordinate | null {
@@ -679,8 +726,7 @@ function seriesVisualOffsets(points: CurveHistoryPoint[], yScale: (value: number
     };
 }
 
-function distributeCalloutLabels(callouts: SeriesCallout[], segments: LineSegment[]): void {
-    const minGap = 24;
+function distributeCalloutLabels(callouts: SeriesCallout[], segments: LineSegment[], minGap: number = 24): void {
     const topLimit = plot.top + 18;
     const bottomLimit = plot.top + plot.height - 18;
     if (!callouts.length) {
@@ -1069,22 +1115,36 @@ function addTextBackground(svg: SVGSVGElement, textElement: SVGTextElement, clas
     svg.insertBefore(background, textElement);
 }
 
-function renderCurveSummary(curve: RenderCurveData): HTMLElement {
+function renderCurveSummary(curve: RenderCurveData, options: CurveRenderOptions): HTMLElement {
     const row = createElement("div", "evm-summary-grid");
     const currentPoint = curve.current;
     const references = curve.references;
-    [
+    const ev = numberValue(currentPoint.EV);
+    const ac = numberValue(currentPoint.AC);
+    const pv = numberValue(currentPoint.PV);
+    const eacCost = numberValue(references.EACC);
+    const cv = ev !== null && ac !== null ? ev - ac : null;
+    const sv = ev !== null && pv !== null ? ev - pv : null;
+    const etcCost = eacCost !== null && ac !== null ? eacCost - ac : null;
+    const metrics = [
         ["BAC", fullCurrency(references.BAC), "blue"],
         ["PV", fullCurrency(currentPoint.PV), "blue"],
         ["EV", fullCurrency(currentPoint.EV), "green"],
         ["AC", fullCurrency(currentPoint.AC), "red"],
         ["TSPI(t)", decimal(references.TSPIT), "blue"],
         ["SPI(t)", decimal(references.SPIT), "blue"],
+        ["CV", fullCurrency(cv), "red"],
+        ["SV", fullCurrency(sv), "blue"],
         ["EAC(c)", fullCurrency(references.EACC), "blue"],
         ["EAC(t)", decimalUpTo(references.EACT), "blue"],
         ["VAC(c)", fullCurrency(references.VACC), "red"],
+        ["ETC(c)", fullCurrency(etcCost), "blue"],
         ["VAC(t)", `${decimalUpTo(references.VACT)} sem.`, "red"]
-    ].forEach(([label, value, tone]) => {
+    ];
+    metrics
+        .filter(([label]) => options.portfolio || !["CV", "SV", "ETC(c)"].includes(label))
+        .filter(([label]) => !options.portfolio || !["TSPI(t)", "SPI(t)", "EAC(t)", "VAC(t)"].includes(label))
+        .forEach(([label, value, tone]) => {
         const cell = createElement("div", `evm-key-cell evm-key-cell-${tone}`);
         cell.appendChild(createElement("span", undefined, label));
         cell.appendChild(createElement("strong", undefined, value));

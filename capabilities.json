@@ -28,27 +28,28 @@
               "selfFilter": true
             }
           }
-        },
-        "showShadow": {
-          "type": {
-            "bool": true
-          }
-        },
-        "fontSize": {
-          "type": {
-            "formatting": {
-              "fontSize": true
-            }
-          }
         }
       }
     },
     "internalFilters": {
       "displayName": "Filtros internos",
       "properties": {
+        "combinedFilter": {
+          "type": { "filter": true }
+        },
+        "combinedSelfFilter": {
+          "type": { "filter": { "selfFilter": true } }
+        },
         "levelFilter": {
           "type": {
             "filter": true
+          }
+        },
+        "levelSelfFilter": {
+          "type": {
+            "filter": {
+              "selfFilter": true
+            }
           }
         },
         "unitFilter": {
