@@ -45,6 +45,7 @@ export interface CurveHistoryPoint {
     AC?: DataValue;
 }
 export interface CurveReferences {
+    Finalizado?: DataValue;
     BAC?: DataValue;
     SAC?: DataValue;
     AT?: DataValue;
@@ -228,6 +229,7 @@ export interface DashboardJsonPayload {
     milestones?: JsonTablePayload;
     risks?: JsonTablePayload;
     portfolioSummary?: JsonTablePayload;
+    criticalInterventionsDetail?: JsonTablePayload;
     UnidadGerencialSummary?: JsonTablePayload;
     evolution?: JsonTablePayload;
     categories?: JsonTablePayload;
@@ -235,6 +237,21 @@ export interface DashboardJsonPayload {
     responsible?: JsonTablePayload;
     response?: JsonTablePayload;
     detail?: JsonTablePayload;
+}
+export interface CriticalIntervention extends Record<string, unknown> {
+    ManagementUnit: string;
+    CUI: string | number;
+    Project: string;
+    Location?: string;
+    CPI: number | null;
+    SPI: number | null;
+    Status: string;
+    CutoffWeek: number | null;
+    BAC: number | null;
+    SAC: number | null;
+    PV: number | null;
+    EV: number | null;
+    AC: number | null;
 }
 export type RiskDashboardRow = Record<string, unknown>;
 export interface RiskDashboardData {
@@ -382,9 +399,15 @@ export interface CurveData extends Record<string, unknown> {
     "TSPI (w) Proy": number | null;
     "TSPI (t) Proy": number | null;
     "EAC (c)": number | null;
+    "_VAC (c)"?: number | null;
+    "_EAC (c)"?: number | null;
+    "_ETC (c)"?: number | null;
+    MetodoProyeccion?: string | null;
+    Finalizado?: number | null;
     "EAC (t)": number | null;
     "IEAC (c)": number | null;
     "IEAC (t)": number | null;
+    IETC?: string | null;
     "IVAC (t)": number | null;
     "VAC (c)": number | null;
     "VAC (c2)": number | null;
@@ -463,6 +486,7 @@ export interface ParsedDashboardData {
     aggregateCurve: AggregateCurveData[];
     units: UnitSummaryData[];
     portfolioSummary: PortfolioSummaryData | null;
+    criticalInterventions: CriticalIntervention[];
     projects: UnitProjectSummaryData[];
     risks: RiskItem[];
     milestones: MilestoneItem[];

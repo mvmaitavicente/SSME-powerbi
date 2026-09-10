@@ -12,7 +12,7 @@ import { renderPerformance } from "./renderers/performanceRenderer";
 import { renderRisks } from "./renderers/riskRenderer";
 import { mountRiskDashboardPage, renderRiskDashboard } from "./renderers/riskDashboardRenderer";
 import { renderPortfolioDashboard } from "./portfolioSummary/Dashboard";
-import { AggregateCurveData, AggregateGaugeData, CurveData, CurveHistoryPoint, CurveReferences, DashboardData, DashboardLevel, DataValue, GaugeChartPoint, GaugeChartSeries, GaugeData, GaugeHistoryRow, GaugeMetricKey, NavigatorProject, ParsedDashboardData, PortfolioSummaryData, ProjectHeader, RenderCurveData, RiskItem, SummaryData, UnitProjectSummaryData, UnitSummaryData, VisualPalette } from "./types";
+import { AggregateCurveData, AggregateGaugeData, CriticalIntervention, CurveData, CurveHistoryPoint, CurveReferences, DashboardData, DashboardLevel, DataValue, GaugeChartPoint, GaugeChartSeries, GaugeData, GaugeHistoryRow, GaugeMetricKey, NavigatorProject, ParsedDashboardData, PortfolioSummaryData, ProjectHeader, RenderCurveData, RiskItem, SummaryData, UnitProjectSummaryData, UnitSummaryData, VisualPalette } from "./types";
 import { createElement, currency, date, decimal, numberValue, shortCurrency, text } from "./utils/format";
 import { debounceInput } from "./utils/interaction";
 import { NavigationFilterController } from "./controllers/NavigationFilterController";
@@ -203,6 +203,11 @@ export class Visual implements IVisual {
             this.closeGaugeHistoryModal();
         }
     };
+    private readonly handleCriticalModalKeydown = (event: KeyboardEvent): void => {
+        if (event.key === "Escape") {
+            this.closeCriticalInterventionsModal();
+        }
+    };
 
     constructor(options: VisualConstructorOptions) {
         this.host = options.host;
@@ -214,11 +219,17 @@ export class Visual implements IVisual {
         this.target.classList.add("evm-visual-host");
     }
 
+    private selectedProjectWeek: number | null = null;
+    private weekFilterProjectId: string | null = null;
+    private lastWeekFilterUpdateOptions: VisualUpdateOptions | null = null;
+    private forceWeekFilterRender = false;
+
     public update(options: VisualUpdateOptions): void {
+        this.lastWeekFilterUpdateOptions = options;
         this.events.renderingStarted(options);
         const resizeMask = powerbi.VisualUpdateType.Resize | powerbi.VisualUpdateType.ResizeEnd;
         const isResizeOnly = Boolean(options.type & resizeMask) && (options.type & ~resizeMask) === 0;
-        if (isResizeOnly && this.rootElement && this.currentDashboardData) {
+        if (!this.forceWeekFilterRender && isResizeOnly && this.rootElement && this.currentDashboardData) {
             this.rootElement.style.width = `${options.viewport.width}px`;
             this.rootElement.style.height = `${options.viewport.height}px`;
             const main = this.rootElement.querySelector(".evm-main");
@@ -242,13 +253,14 @@ export class Visual implements IVisual {
         try {
             const dataView = options.dataViews?.[0];
             const dashboard = parseDashboardJsonData(dataView);
-            if (dashboard && dashboard === this.currentDashboardData && this.rootElement) {
+            if (!this.forceWeekFilterRender && dashboard && dashboard === this.currentDashboardData && this.rootElement) {
                 this.rootElement.style.width = `${options.viewport.width}px`;
                 this.rootElement.style.height = `${options.viewport.height}px`;
                 this.finishFilterLoading();
                 this.events.renderingFinished(options);
                 return;
             }
+            this.closeCriticalInterventionsModal();
             this.viewLifecycle.reset();
             this.target.replaceChildren();
             if (dashboard?.context?.Level === this.pendingNavigationLevel) {
@@ -312,6 +324,7 @@ export class Visual implements IVisual {
                     expanded: this.sidebarExpanded,
                     activeLevel: dashboard.context.Level,
                     portfolioViewActive: this.portfolioCarouselIndex === 0 ? "summary" : "matrix",
+                    unitViewActive: this.unitMatrixPageActive ? "matrix" : "summary",
                     projectViewActive: this.projectCarouselIndex === 1 ? "milestones" : "summary",
                     riskViewActive: this.riskCarouselIndex === 1 ? "matrix" : "summary",
                     canOpenUnit: Boolean(sidebarUnit),
@@ -328,6 +341,9 @@ export class Visual implements IVisual {
                         this.disableProjectNavigation(sidebarProject ?? null);
                     },
                     onPortfolioView: (view) => this.openPortfolioView(view),
+                    onUnitView: (view) => {
+                        if (this.currentDashboardData?.context.Level === "UNIDAD") this.activateUnitPage?.(view === "matrix" ? 1 : 0);
+                    },
                     onProjectView: (view) => this.openProjectView(view),
                     onRiskView: (view) => this.openRiskView(view),
                     onOpenFilters: () => this.openFilterPanel(),
@@ -790,6 +806,11 @@ export class Visual implements IVisual {
         });
     }
 
+    public destroy(): void {
+        this.closeCriticalInterventionsModal();
+        this.viewLifecycle.reset();
+    }
+
     private copyMatrixText(content: string, htmlContent?: string): void {
         if (htmlContent) {
             const richCopy = document.createElement("div");
@@ -961,8 +982,24 @@ export class Visual implements IVisual {
         }
     }
 
+    private projectFilterWeeks(dashboard: ParsedDashboardData): number[] {
+        const at = dashboard.curve.map((row) => numberValue(row.AT)).find((value) => value !== null) ?? null;
+        return Array.from(new Set(dashboard.curve.map((row) => row.Semana)
+            .filter((week) => Number.isFinite(week) && week >= 1 && at !== null && week <= at)))
+            .sort((a, b) => a - b);
+    }
+
     private renderProjectDashboard(dashboard: ParsedDashboardData, viewport: powerbi.IViewport): HTMLElement {
-        const projectDashboard = adaptJsonDashboardData(dashboard);
+        const projectId = dashboard.context.ProjectId ?? dashboard.idIntervencion;
+        if (this.weekFilterProjectId !== projectId) {
+            this.weekFilterProjectId = projectId;
+            this.selectedProjectWeek = null;
+        }
+        const availableWeeks = this.projectFilterWeeks(dashboard);
+        if (this.selectedProjectWeek === null || !availableWeeks.includes(this.selectedProjectWeek)) {
+            this.selectedProjectWeek = availableWeeks[availableWeeks.length - 1] ?? null;
+        }
+        const projectDashboard = adaptJsonDashboardData(dashboard, this.selectedProjectWeek);
         const main = document.createElement("main");
         main.className = "evm-main evm-main--project";
         main.classList.toggle("evm-main--project-details", this.projectCarouselIndex === 1);
@@ -1017,7 +1054,11 @@ export class Visual implements IVisual {
             }
             left.appendChild(curveCard);
             const right = createElement("div", "evm-right-column");
-            right.appendChild(renderPortfolioDashboard(dashboard.portfolioSummary));
+            right.appendChild(renderPortfolioDashboard(
+                dashboard.portfolioSummary,
+                undefined,
+                () => this.openCriticalInterventionsModal(dashboard.criticalInterventions)
+            ));
             page.append(left, right);
         });
 
@@ -1566,6 +1607,7 @@ export class Visual implements IVisual {
 
     private renderUnitDashboard(dashboard: ParsedDashboardData, viewport: powerbi.IViewport): HTMLElement {
         const main = createElement("main", "evm-main evm-main--unit");
+        main.classList.toggle("evm-main--unit-matrix", this.unitMatrixPageActive);
         main.style.minWidth = `${Math.min(780, Math.max(0, viewport.width - 92))}px`;
         const unitName = text(this.resolveUnitForNavigation(dashboard), "UGEO");
         const unitHeader = renderHeader(
@@ -1588,7 +1630,8 @@ export class Visual implements IVisual {
         main.appendChild(this.renderPortfolioBody(
             this.buildAggregateRenderCurve(dashboard),
             renderPortfolioDashboard(dashboard.portfolioSummary, unitName),
-            unitName
+            unitName,
+            dashboard.projects
         ));
         return main;
     }
@@ -1815,8 +1858,12 @@ export class Visual implements IVisual {
         };
     }
 
-    private renderPortfolioBody(curve: RenderCurveData, sidePanel: HTMLElement, unitName: string): HTMLElement {
+    private unitMatrixPageActive = false;
+    private activateUnitPage: ((index: number) => void) | null = null;
+
+    private renderPortfolioBody(curve: RenderCurveData, sidePanel: HTMLElement, unitName: string, projects: UnitProjectSummaryData[]): HTMLElement {
         const carousel = createElement("section", "evm-body-carousel");
+        carousel.classList.add("evm-unit-body-carousel");
         const viewport = createElement("div", "evm-body-carousel-viewport");
         const page = createElement("div", "evm-body-carousel-page evm-body-carousel-page--evm active");
         const left = createElement("div", "evm-left-column");
@@ -1834,8 +1881,102 @@ export class Visual implements IVisual {
         page.appendChild(left);
         page.appendChild(right);
         viewport.appendChild(page);
+        const matrixPage = createElement("div", "evm-body-carousel-page evm-unit-matrix-page");
+        let matrixMounted = false;
+        viewport.appendChild(matrixPage);
+        const activate = (index: number): void => {
+            this.unitMatrixPageActive = index === 1;
+            carousel.closest(".evm-main--unit")?.classList.toggle("evm-main--unit-matrix", this.unitMatrixPageActive);
+            if (index === 1 && !matrixMounted) {
+                matrixPage.appendChild(this.renderUnitProjectsMatrix(projects));
+                matrixMounted = true;
+            }
+            [page, matrixPage].forEach((item, itemIndex) => {
+                item.classList.toggle("active", itemIndex === index);
+                item.setAttribute("aria-hidden", String(itemIndex !== index));
+                item.setAttribute("role", "region");
+                item.setAttribute("aria-label", itemIndex === 0 ? "Resumen" : "Matriz EVM");
+            });
+            this.rootElement?.querySelectorAll<HTMLElement>('.evm-project-subtab[data-carousel-scope="unit"]').forEach((tab) => {
+                tab.classList.toggle("active", tab.dataset.projectView === (index === 0 ? "summary" : "matrix"));
+            });
+            carousel.querySelectorAll<HTMLElement>(".evm-carousel-button").forEach((button) => {
+                const label = index === 0 ? "Ver matriz de proyectos de la unidad" : "Volver al resumen de la unidad";
+                button.setAttribute("aria-label", label);
+                button.setAttribute("title", label);
+                button.dataset.tooltip = label;
+            });
+        };
         carousel.appendChild(viewport);
+        (["prev", "next"] as const).forEach((direction) => {
+            const arrow = createElement("button", `evm-carousel-button evm-carousel-button--${direction}`, direction === "prev" ? "‹" : "›");
+            arrow.type = "button";
+            arrow.addEventListener("click", () => activate(this.unitMatrixPageActive ? 0 : 1));
+            carousel.appendChild(arrow);
+        });
+        this.activateUnitPage = activate;
+        activate(this.unitMatrixPageActive ? 1 : 0);
         return carousel;
+    }
+
+    private renderUnitProjectsMatrix(projects: UnitProjectSummaryData[]): HTMLElement {
+        const card = createElement("section", "evm-card evm-project-curve-matrix-card evm-unit-projects-matrix-card");
+        card.appendChild(createElement("div", "evm-section-title", "MATRIZ DE EVM - PROYECTOS DE LA UNIDAD"));
+        if (!projects.length) {
+            card.appendChild(createElement("div", "evm-empty", "No se recibieron proyectos de la unidad."));
+            return card;
+        }
+        const groups = [
+            { fields: ["CUI", "Proyecto", "BAC", "SAC", "AT", "PV", "AC", "EV", "CV", "CPI", "SV", "SPI (w)", "EAC (c)", "ETC (c)", "TCPI", "VAC (c)"] }
+        ];
+        const aliases: Record<string, string[]> = {
+            CUI: ["Cui", "CUI"], Proyecto: ["NombreIntervencion", "Proyecto"],
+            "SPI (w)": ["SPI (w)", "SPIW"],
+            SV: ["SV", "SV (w)"],
+            "VAC (c)": ["VAC (c)", "VACC"],
+            "EAC (c)": ["EAC (c)", "EACC"],
+            "ETC (c)": ["ETC (c)", "ETCC"]
+        };
+        const moneyFields = new Set(["BAC", "PV", "EV", "AC", "CV", "SV", "VAC (c)", "EAC (c)", "ETC (c)"]);
+        const wrap = createElement("div", "evm-project-curve-matrix-wrap");
+        const table = createElement("table", "evm-project-curve-matrix evm-unit-projects-matrix");
+        const head = document.createElement("thead");
+        const fieldRow = document.createElement("tr");
+        const decorate = (cell: HTMLElement, field: string): void => {
+            if (field === "Proyecto") cell.classList.add("evm-unit-matrix-project-name");
+        };
+        groups.forEach((group) => {
+            group.fields.forEach((field) => {
+                const th = createElement("th", undefined, field);
+                th.scope = "col";
+                decorate(th, field);
+                fieldRow.appendChild(th);
+            });
+        });
+        head.appendChild(fieldRow);
+        table.appendChild(head);
+        const body = document.createElement("tbody");
+        projects.forEach((project) => {
+            const row = document.createElement("tr");
+            groups.forEach((group) => group.fields.forEach((field) => {
+                const keys = aliases[field] ?? [field, field.replace(/\s|[()]/g, "").toUpperCase()];
+                const raw = keys.map((key) => project[key]).find((value) => value !== null && value !== undefined && value !== "");
+                const numeric = numberValue(raw as DataValue);
+                const formatted = raw === undefined ? "—" : ["CUI", "Proyecto"].includes(field)
+                    ? String(raw) : numeric === null ? "—" : moneyFields.has(field)
+                        ? `S/ ${Math.round(numeric).toLocaleString("en-US")}`
+                        : numeric.toLocaleString("en-US", { minimumFractionDigits: field === "SAC" || field === "AT" ? 0 : 2, maximumFractionDigits: 2 });
+                const cell = createElement("td", undefined, formatted);
+                cell.title = `${field}: ${formatted}`;
+                decorate(cell, field);
+                row.appendChild(cell);
+            }));
+            body.appendChild(row);
+        });
+        table.appendChild(body);
+        wrap.appendChild(table);
+        card.appendChild(wrap);
+        return card;
     }
 
     private renderUnitsPanel(units: UnitSummaryData[]): HTMLElement {
@@ -2379,10 +2520,6 @@ export class Visual implements IVisual {
         const evmPage = this.createLazyCarouselPage("evm-body-carousel-page evm-body-carousel-page--evm", this.projectCarouselIndex === 0, (page) => {
             const evmLeft = createElement("div", "evm-left-column");
             const curveCard = renderCurve(dashboard.curve, palette, {}, this.viewLifecycle);
-            const curveTitle = curveCard.querySelector(".evm-section-title");
-            if (curveTitle instanceof HTMLElement) {
-                curveTitle.insertAdjacentElement("afterend", this.renderPortfolioCurveLegend());
-            }
             evmLeft.appendChild(curveCard);
             const evmRight = createElement("div", "evm-right-column");
             evmRight.appendChild(renderPerformance(dashboard.performance));
@@ -2416,7 +2553,7 @@ export class Visual implements IVisual {
 
     private renderProjectCurveMatrix(curveRows: CurveData[]): HTMLElement {
         const card = createElement("section", "evm-card evm-project-curve-matrix-card");
-        type MatrixField = { key: keyof CurveData; label: string; title: string; kind: "week" | "money" | "index" | "time" };
+        type MatrixField = { key: keyof CurveData; label: string; title: string; kind: "week" | "money" | "index" | "time" | "date" };
         const weekField: MatrixField = { key: "Semana", label: "SEMANA", title: "Semana del proyecto", kind: "week" };
         const groups: Array<{ name: string; className: string; fields: MatrixField[] }> = [
             {
@@ -2451,18 +2588,19 @@ export class Visual implements IVisual {
                 fields: [
                     { key: "TCPI", label: "TCPI", title: "Índice de desempeño requerido del costo", kind: "index" },
                     { key: "TCPI Proy", label: "TCPI **", title: "TCPI proyectado", kind: "index" },
+                    { key: "TSPI (w)", label: "TSPI (w)", title: "Índice de desempeño requerido del cronograma por valor", kind: "index" },
+                    { key: "TSPI (t)", label: "TSPI (t)", title: "Índice de desempeño requerido del cronograma por tiempo", kind: "index" },
+                    { key: "TSPI (w) Proy", label: "TSPI (w) ***", title: "TSPI por valor proyectado", kind: "index" },
+                    { key: "TSPI (t) Proy", label: "TSPI (t) ***", title: "TSPI por tiempo proyectado", kind: "index" },
                     { key: "VAC (c)", label: "VAC (c)", title: "Variación de costo a la conclusión", kind: "money" },
                     { key: "EAC (c)", label: "EAC (c)", title: "Estimado de costo a la conclusión", kind: "money" },
                     { key: "ETC (c)", label: "ETC (c)", title: "Costo restante estimado", kind: "money" },
-                    { key: "TSPI (w)", label: "TSPI (w)", title: "Índice de desempeño requerido del cronograma por valor", kind: "index" },
-                    { key: "TSPI (t)", label: "TSPI (t)", title: "Índice de desempeño requerido del cronograma por tiempo", kind: "index" },
                     { key: "VAC (t)", label: "VAC (t)", title: "Variación de tiempo a la conclusión", kind: "time" },
                     { key: "EAC (t)", label: "EAC (t)", title: "Estimado de tiempo a la conclusión", kind: "time" },
                     { key: "ETC (t)", label: "ETC (t)", title: "Tiempo restante estimado", kind: "time" },
-                    { key: "TSPI (w) Proy", label: "TSPI (w) ***", title: "TSPI por valor proyectado", kind: "index" },
-                    { key: "TSPI (t) Proy", label: "TSPI (t) ***", title: "TSPI por tiempo proyectado", kind: "index" },
                     { key: "IEAC (c)", label: "IEAC (c)", title: "Estimado independiente de costo a la conclusión", kind: "money" },
-                    { key: "IEAC (t)", label: "IEAC (t)", title: "Estimado independiente de tiempo a la conclusión", kind: "time" }
+                    { key: "IEAC (t)", label: "IEAC (t)", title: "Estimado independiente de tiempo a la conclusión", kind: "time" },
+                    { key: "IETC", label: "IETC", title: "IETC", kind: "date" }
                 ]
             }
         ];
@@ -2704,64 +2842,6 @@ export class Visual implements IVisual {
         heading.appendChild(headingActions);
         card.appendChild(heading);
 
-        const projectionSelector = createElement("div", "evm-matrix-projection-selector");
-        projectionSelector.appendChild(createElement("strong", "evm-matrix-projection-caption", "Método de proyección EAC:"));
-        const projectionMethods: Array<{ value: 1 | 2 | 3 | 4; label: string; formula: string; description: string; icon: string; className: string }> = [
-            { value: 1, label: "Si se espera que el CPI sea el mismo para el resto del proyecto", formula: "EAC = BAC / CPI", description: "Se asume que la eficiencia de costos observada continuará hasta la finalización del proyecto.", icon: "↗", className: "cpi" },
-            { value: 2, label: "Si el trabajo futuro sera realizado al ritmo previsto", formula: "EAC = AC + (BAC - EV)", description: "Se asume que el trabajo pendiente se ejecutará según la eficiencia originalmente planificada.", icon: "▣", className: "plan" },
-            { value: 3, label: "Si el plan inicial ya no es válido", formula: "EAC = AC + ETC ascendente", description: "Se utiliza una nueva estimación del costo necesario para completar el trabajo restante.", icon: "⌁", className: "etc" },
-            { value: 4, label: "Si tanto el CPI como el SPI influyen en el trabajo restante", formula: "EAC = AC + (BAC - EV) / (CPI × SPI)", description: "Se asume que las eficiencias de costo y cronograma influirán en el trabajo restante.", icon: "⇄", className: "combined" }
-        ];
-        const activeProjection = projectionMethods.find((method) => method.value === this.matrixCostProjectionMethod) ?? projectionMethods[0];
-        const dropdown = createElement("div", "evm-matrix-projection-dropdown");
-        const trigger = createElement("button", "evm-matrix-projection-trigger");
-        trigger.type = "button";
-        trigger.setAttribute("aria-haspopup", "listbox");
-        trigger.setAttribute("aria-expanded", "false");
-        trigger.appendChild(createElement("span", undefined, activeProjection.label));
-        trigger.appendChild(createElement("span", "evm-matrix-projection-chevron", "⌄"));
-        const menu = createElement("div", "evm-matrix-projection-menu");
-        menu.setAttribute("role", "listbox");
-        projectionMethods.forEach((method) => {
-            const option = createElement("button", `evm-matrix-projection-option ${method.className}${method.value === this.matrixCostProjectionMethod ? " active" : ""}`);
-            option.type = "button";
-            option.setAttribute("role", "option");
-            option.setAttribute("aria-selected", String(method.value === this.matrixCostProjectionMethod));
-            option.appendChild(createElement("span", "evm-matrix-projection-option-icon", method.icon));
-            const copy = createElement("span", "evm-matrix-projection-option-copy");
-            copy.appendChild(createElement("strong", undefined, method.label));
-            copy.appendChild(createElement("small", undefined, method.formula));
-            option.appendChild(copy);
-            option.addEventListener("click", () => {
-                this.matrixCostProjectionMethod = method.value;
-                card.replaceWith(this.renderProjectCurveMatrix(curveRows));
-            });
-            menu.appendChild(option);
-        });
-        trigger.addEventListener("click", () => {
-            const isOpen = dropdown.classList.toggle("open");
-            trigger.setAttribute("aria-expanded", String(isOpen));
-        });
-        dropdown.appendChild(trigger);
-        dropdown.appendChild(menu);
-        projectionSelector.appendChild(dropdown);
-        const infoButton = createElement("button", "evm-matrix-projection-info-button", "ⓘ");
-        infoButton.type = "button";
-        infoButton.setAttribute("aria-label", "Información del método de proyección");
-        infoButton.setAttribute("aria-describedby", "evm-matrix-projection-tooltip");
-        const infoCard = createElement("div", `evm-matrix-projection-info-card ${activeProjection.className}`);
-        infoCard.id = "evm-matrix-projection-tooltip";
-        infoCard.setAttribute("role", "tooltip");
-        const infoTitle = createElement("div", "evm-matrix-projection-info-title");
-        infoTitle.appendChild(createElement("span", undefined, "ⓘ"));
-        infoTitle.appendChild(createElement("strong", undefined, activeProjection.label));
-        infoCard.appendChild(infoTitle);
-        infoCard.appendChild(createElement("b", undefined, `Fórmula: ${activeProjection.formula}`));
-        infoButton.addEventListener("click", () => infoCard.classList.toggle("open"));
-        projectionSelector.appendChild(infoButton);
-        projectionSelector.appendChild(infoCard);
-        heading.insertBefore(projectionSelector, headingActions);
-
         const tableWrap = createElement("div", "evm-project-curve-matrix-wrap");
         const matrixCutoffValues = curveRows
             .map((row) => numberValue(row.SemanaEstado))
@@ -2777,15 +2857,27 @@ export class Visual implements IVisual {
         const table = createElement("table", "evm-project-curve-matrix");
         table.classList.add(`evm-matrix-projection-method-${this.matrixCostProjectionMethod}`);
         const visibleFields = [weekField, ...groups.flatMap((group) => group.fields.filter(isColumnVisible))];
+        const sectionStartFields = new Set(groups.flatMap((group) => {
+            const firstVisible = group.fields.find(isColumnVisible);
+            return firstVisible ? [firstVisible.key] : [];
+        }));
+        const styleProjectionGroup = (element: HTMLElement, field: MatrixField): void => {
+            const block = [
+                ["VAC (c)", "EAC (c)", "ETC (c)"],
+                ["VAC (t)", "EAC (t)", "ETC (t)"]
+            ].find((keys) => keys.includes(String(field.key)));
+            if (!block) return;
+            const visibleBlock = block.filter((key) => visibleFields.some((item) => item.key === key));
+            element.classList.add("evm-matrix-projection-group-cell");
+            if (field.key === visibleBlock[0]) element.classList.add("evm-matrix-projection-group-start");
+            if (field.key === visibleBlock[visibleBlock.length - 1]) element.classList.add("evm-matrix-projection-group-end");
+        };
         const matrixFieldValue = (row: CurveData, field: MatrixField): number | null => {
             if (field.key === "AT") return numberValue(row.AT_Matriz);
-            const scenarioKeys: Partial<Record<keyof CurveData, Array<keyof CurveData>>> = {
-                "VAC (c)": ["VAC (c)", "VAC (c2)", "VAC (c3)", "VAC (c4)"],
-                "EAC (c)": ["EAC (c)", "EAC (c2)", "EAC (c3)", "EAC (c4)"],
-                "ETC (c)": ["ETC (c)", "ETC (c2)", "ETC (c3)", "ETC (c4)"]
-            };
-            const scenarioKey = scenarioKeys[field.key]?.[this.matrixCostProjectionMethod - 1] ?? field.key;
-            return numberValue(row[scenarioKey] as DataValue);
+            if (field.key === "VAC (c)" || field.key === "EAC (c)" || field.key === "ETC (c)") {
+                return numberValue(row[`_${field.key}`] as DataValue);
+            }
+            return numberValue(row[field.key] as DataValue);
         };
         const matrixHeaderParts = (field: MatrixField): string[] => {
             if (field.key === "SPI (w)(*)") return ["SPI", "(w)", "*"];
@@ -2795,14 +2887,26 @@ export class Visual implements IVisual {
             const match = field.label.match(/^(.+?)\s+(\([^)]*\))$/);
             return match ? [match[1], match[2]] : [field.label];
         };
-        type PreparedMatrixCell = { field: MatrixField; value: number | null; formatted: string; title: string };
+        type PreparedMatrixCell = { field: MatrixField; value: number | null; formatted: string; title: string; projectionMethod: string };
+        const projectionMethodTooltip = (method: string | null | undefined): string => {
+            const labels: Record<string, string> = {
+                "1": "Si se espera que el CPI sea el mismo para el resto del proyecto",
+                "2": "Si el trabajo futuro sera realizado al ritmo previsto",
+                "3": "Si el plan inicial ya no es válido",
+                "4": "Si tanto el CPI como el SPI influyen en el trabajo restante"
+            };
+            const text = String(method ?? "").trim();
+            const key = text.match(/^\(?([1-4])\)?$/)?.[1];
+            return key ? `Método de Proyección N.° ${key}\n\n${labels[key]}` : text;
+        };
         const formatEarnedSchedule = (value: number): string => value.toLocaleString("en-US", {
             minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
             maximumFractionDigits: 2
         });
         const preparedRows: PreparedMatrixCell[][] = visibleRows.map((row) => visibleFields.map((field) => {
-            const value = matrixFieldValue(row, field);
-            const formatted = value === null
+            const value = field.kind === "date" ? null : matrixFieldValue(row, field);
+            const dateText = field.kind === "date" ? row.IETC : null;
+            const formatted = field.kind === "date" ? dateText ?? "—" : value === null
                 ? "—"
                 : field.kind === "money"
                     ? `S/ ${Math.round(value).toLocaleString("en-US")}`
@@ -2815,7 +2919,11 @@ export class Visual implements IVisual {
                 field,
                 value,
                 formatted,
-                title: value === null ? "Sin dato" : `${field.title}: ${value.toLocaleString("en-US", { maximumFractionDigits: 4 })}`
+                projectionMethod: String(row.MetodoProyeccion ?? "").trim().match(/^\(?([1-4])\)?$/)?.[1] ?? "",
+                title: field.key === "VAC (c)" || field.key === "EAC (c)" || field.key === "ETC (c)"
+                    ? projectionMethodTooltip(row.MetodoProyeccion)
+                    : field.kind === "date" ? dateText == null ? "Sin dato" : `${field.title}: ${dateText}`
+                    : value === null ? "Sin dato" : `${field.title}: ${value.toLocaleString("en-US", { maximumFractionDigits: 4 })}`
             };
         }));
         const colgroup = document.createElement("colgroup");
@@ -2823,8 +2931,8 @@ export class Visual implements IVisual {
             const headerParts = matrixHeaderParts(field);
             const headerLength = Math.max(...headerParts.map((part) => part.length));
             const contentLength = preparedRows.reduce((maximum, row) => Math.max(maximum, row[fieldIndex].formatted.length), headerLength);
-            const minimumWidth = field.kind === "week" ? 56 : field.kind === "time" ? 58 : field.kind === "index" ? 68 : 78;
-            const maximumWidth = field.kind === "money" ? 116 : field.kind === "time" ? 92 : field.kind === "index" ? 96 : 76;
+            const minimumWidth = field.kind === "date" ? 110 : field.kind === "week" ? 56 : field.kind === "time" ? 58 : field.kind === "index" ? 68 : 78;
+            const maximumWidth = field.kind === "date" ? 300 : field.kind === "money" ? 116 : field.kind === "time" ? 92 : field.kind === "index" ? 96 : 76;
             const col = document.createElement("col");
             col.style.width = `${Math.max(minimumWidth, Math.min(maximumWidth, contentLength * 9 + 18))}px`;
             colgroup.appendChild(col);
@@ -2841,6 +2949,7 @@ export class Visual implements IVisual {
             const visibleGroupFields = group.fields.filter(isColumnVisible);
             if (!visibleGroupFields.length) return;
             const groupHead = createElement("th", `evm-project-curve-matrix-group ${group.className}`, group.name);
+            groupHead.classList.add("evm-matrix-section-start");
             groupHead.colSpan = visibleGroupFields.length;
             groupHeadRow.appendChild(groupHead);
         });
@@ -2852,7 +2961,10 @@ export class Visual implements IVisual {
                     return;
                 }
                 const th = createElement("th");
+                styleProjectionGroup(th, field);
+                if (sectionStartFields.has(field.key)) th.classList.add("evm-matrix-section-start");
                 if (field.key === "VAC (c)") th.classList.add("evm-matrix-header-vac-cost");
+                if (field.key === "VAC (t)" || field.key === "EAC (t)" || field.key === "ETC (t)") th.classList.add("evm-matrix-header-time-projection");
                 if (field.key === "EAC (c)" || field.key === "ETC (c)") th.classList.add("evm-matrix-header-eac-cost");
                 const headerParts = matrixHeaderParts(field);
                 if (headerParts.length > 1) {
@@ -2877,10 +2989,28 @@ export class Visual implements IVisual {
                     const td = tr.cells[cellIndex] ?? createElement("td");
                     td.textContent = cell.formatted;
                     td.className = "";
+                    styleProjectionGroup(td, cell.field);
+                    if (sectionStartFields.has(cell.field.key)) td.classList.add("evm-matrix-section-start");
+                    if (rowIndex === preparedRows.length - 1 && td.classList.contains("evm-matrix-projection-group-cell")) {
+                        td.classList.add("evm-matrix-projection-group-bottom");
+                    }
                     if (cell.field.key === "VAC (c)" || cell.field.key === "EAC (c)" || cell.field.key === "ETC (c)") {
                         td.classList.add("evm-matrix-cell-cost-projection");
                     }
-                    td.title = cell.title;
+                    if (td.classList.contains("evm-matrix-cell-cost-projection")) {
+                        td.removeAttribute("title");
+                        td.dataset.projectionTooltip = cell.title;
+                        td.dataset.projectionMethod = cell.projectionMethod;
+                        td.setAttribute("aria-label", `${cell.field.title}: ${cell.formatted}. ${cell.title}`);
+                    } else {
+                        td.title = cell.title;
+                        delete td.dataset.projectionTooltip;
+                        delete td.dataset.projectionMethod;
+                        td.removeAttribute("aria-label");
+                    }
+                    if (cell.field.key === "VAC (t)" || cell.field.key === "EAC (t)" || cell.field.key === "ETC (t)") {
+                        td.classList.add("evm-matrix-cell-time-projection");
+                    }
                     td.tabIndex = 0;
                     td.setAttribute("role", "gridcell");
                     td.setAttribute("aria-selected", "false");
@@ -2938,6 +3068,63 @@ export class Visual implements IVisual {
             }, { passive: true });
         }
         table.appendChild(body);
+        const projectionTooltip = createElement("div", "evm-projection-tooltip");
+        projectionTooltip.setAttribute("role", "tooltip");
+        projectionTooltip.setAttribute("popover", "manual");
+        projectionTooltip.hidden = true;
+        card.appendChild(projectionTooltip);
+        const hideProjectionTooltip = (): void => {
+            if (projectionTooltip.matches(":popover-open")) projectionTooltip.hidePopover();
+            projectionTooltip.hidden = true;
+        };
+        const showProjectionTooltip = (target: EventTarget | null): void => {
+            const cell = target instanceof Element ? target.closest<HTMLElement>("[data-projection-tooltip]") : null;
+            if (!cell || !table.contains(cell)) {
+                hideProjectionTooltip();
+                return;
+            }
+            const [title, ...description] = (cell.dataset.projectionTooltip ?? "").split("\n\n");
+            projectionTooltip.dataset.method = cell.dataset.projectionMethod ?? "";
+            projectionTooltip.replaceChildren(
+                createElement("div", "evm-projection-tooltip-eyebrow", "PROYECCIÓN DE COSTOS"),
+                createElement("strong", "evm-projection-tooltip-title", title),
+                createElement("p", "evm-projection-tooltip-description", description.join("\n\n"))
+            );
+            const projectionFormulas: Record<string, string> = {
+                "1": "EAC = BAC / CPI",
+                "2": "EAC = AC + BAC − EV",
+                "3": "EAC = AC + ETC reestimate",
+                "4": "EAC = AC + [(BAC − EV) / (CPI × SPI)]"
+            };
+            const formula = projectionFormulas[projectionTooltip.dataset.method];
+            if (formula) {
+                const formulaBlock = createElement("div", "evm-projection-tooltip-formula");
+                formulaBlock.append(
+                    createElement("span", "evm-projection-tooltip-eyebrow", "FÓRMULA"),
+                    createElement("strong", undefined, formula)
+                );
+                projectionTooltip.appendChild(formulaBlock);
+            }
+            projectionTooltip.hidden = false;
+            if (typeof projectionTooltip.showPopover === "function" && !projectionTooltip.matches(":popover-open")) {
+                projectionTooltip.showPopover();
+            }
+            const bounds = cell.getBoundingClientRect();
+            const tooltipBounds = projectionTooltip.getBoundingClientRect();
+            const left = Math.max(8, Math.min(bounds.left + bounds.width / 2 - tooltipBounds.width / 2, window.innerWidth - tooltipBounds.width - 8));
+            const top = bounds.bottom + tooltipBounds.height + 10 <= window.innerHeight
+                ? bounds.bottom + 8 : Math.max(8, bounds.top - tooltipBounds.height - 8);
+            projectionTooltip.style.left = `${left}px`;
+            projectionTooltip.style.top = `${top}px`;
+        };
+        table.addEventListener("pointerover", (event) => showProjectionTooltip(event.target));
+        table.addEventListener("pointerleave", hideProjectionTooltip);
+        table.addEventListener("focusin", (event) => showProjectionTooltip(event.target));
+        table.addEventListener("focusout", hideProjectionTooltip);
+        table.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") hideProjectionTooltip();
+        });
+        card.addEventListener("scroll", hideProjectionTooltip, true);
         let selectedCell: HTMLTableCellElement | null = null;
         const toggleMatrixSelection = (target: EventTarget | null): void => {
             const cell = target instanceof Element ? target.closest("tbody td") : null;
@@ -3500,6 +3687,23 @@ export class Visual implements IVisual {
             value ? this.applyBasicFilter("Dim_Intervenciones", "Distrito", [value], "districtFilter") : this.clearInternalFilter("districtFilter");
             this.reconcileProjectSelection();
         }, true, true));
+        if (this.currentDashboardData?.context.Level === "PROYECTO") {
+            const weeks = this.projectFilterWeeks(this.currentDashboardData);
+            const weekField = this.renderFilterSelect("Semana", "week", weeks.map((week) => ({
+                value: String(week), label: String(week)
+            })), this.selectedProjectWeek === null ? null : String(this.selectedProjectWeek), (value) => {
+                this.selectedProjectWeek = value === null ? null : Number(value);
+                if (this.lastWeekFilterUpdateOptions) {
+                    this.forceWeekFilterRender = true;
+                    try {
+                        this.update(this.lastWeekFilterUpdateOptions);
+                    } finally {
+                        this.forceWeekFilterRender = false;
+                    }
+                }
+            }, false, weeks.length === 0);
+            panel.appendChild(weekField);
+        }
         const clear = createElement(
             "button",
             "evm-filter-clear",
@@ -3533,7 +3737,7 @@ export class Visual implements IVisual {
 
     private renderUnitProjectTreeFilter(): HTMLElement {
         const field = createElement("label", "evm-filter-field evm-unit-project-filter");
-        field.appendChild(createElement("span", undefined, "UNIDAD GERENCIAL - PROYECTOS"));
+        field.appendChild(createElement("span", undefined, "UNIDAD GERENCIAL"));
         const control = createElement("div", "evm-unit-project-control");
         const projects = this.navigatorProjectCatalog.length
             ? this.navigatorProjectCatalog
@@ -3543,8 +3747,8 @@ export class Visual implements IVisual {
             "button",
             "evm-unit-project-trigger",
             selectedProject
-                ? `${this.navigatorText(selectedProject.UnidadGerencial)} — ${this.navigatorText(selectedProject.NombreIntervencion)}`
-                : "Seleccione una UG y proyecto"
+                ? this.navigatorText(selectedProject.UnidadGerencial)
+                : "Seleccione una Unidad Gerencial"
         );
         trigger.type = "button";
         const fixedProjectHeader = this.currentDashboardData?.context.Level === "PROYECTO";
@@ -4320,6 +4524,13 @@ export class Visual implements IVisual {
             return;
         }
 
+        this.rootElement.classList.add("evm-gauge-history-modal-open");
+        this.rootElement.querySelectorAll(".evm-cpi-help.open").forEach((help) => help.classList.remove("open"));
+        this.rootElement.querySelectorAll<HTMLButtonElement>(".evm-cpi-help-button").forEach((button) => {
+            button.disabled = true;
+            button.setAttribute("aria-expanded", "false");
+        });
+
         const overlay = document.createElement("div");
         overlay.className = "gauge-history-modal-overlay";
         overlay.addEventListener("click", () => this.closeGaugeHistoryModal());
@@ -4336,6 +4547,143 @@ export class Visual implements IVisual {
         modal.appendChild(this.renderGaugeHistoryBody(renderData.series, renderData.weekRange));
         overlay.appendChild(modal);
         this.rootElement.appendChild(overlay);
+    }
+
+    private openCriticalInterventionsModal(interventions: CriticalIntervention[]): void {
+        const host = this.rootElement;
+        if (!host || this.currentDashboardData?.context.Level !== "PRONIED") {
+            return;
+        }
+
+        this.closeCriticalInterventionsModal();
+        host.classList.add("evm-critical-modal-open");
+        host.querySelectorAll(".evm-cpi-help.open").forEach((help) => help.classList.remove("open"));
+        const overlay = createElement("div", "evm-critical-modal-overlay");
+        const modal = createElement("section", "evm-critical-modal");
+        modal.setAttribute("role", "dialog");
+        modal.setAttribute("aria-modal", "true");
+        modal.setAttribute("aria-label", "Detalle de intervenciones críticas");
+
+        const header = createElement("header", "evm-critical-modal-header");
+        const heading = createElement("div");
+        heading.appendChild(createElement("h2", undefined, "Intervenciones Críticas"));
+        heading.appendChild(createElement(
+            "p",
+            undefined,
+            `${interventions.length} ${interventions.length === 1 ? "intervención requiere atención" : "intervenciones requieren atención"}`
+        ));
+        const closeButton = createElement("button", "evm-critical-modal-close", "×") as HTMLButtonElement;
+        closeButton.type = "button";
+        closeButton.setAttribute("aria-label", "Cerrar");
+        closeButton.addEventListener("click", () => this.closeCriticalInterventionsModal());
+        header.append(heading, closeButton);
+
+        const body = createElement("div", "evm-critical-modal-body");
+        if (interventions.length === 0) {
+            body.appendChild(createElement(
+                "p",
+                "evm-critical-modal-empty",
+                "No se encontraron intervenciones críticas para el contexto seleccionado."
+            ));
+        } else {
+            interventions.forEach((intervention) => body.appendChild(this.renderCriticalIntervention(intervention)));
+        }
+
+        modal.append(header, body);
+        modal.addEventListener("click", (event) => event.stopPropagation());
+        overlay.addEventListener("click", () => this.closeCriticalInterventionsModal());
+        overlay.appendChild(modal);
+        host.appendChild(overlay);
+        document.addEventListener("keydown", this.handleCriticalModalKeydown);
+        closeButton.focus();
+    }
+
+    private renderCriticalIntervention(intervention: CriticalIntervention): HTMLElement {
+        const card = createElement("article", "evm-critical-detail-card");
+        const meta = createElement("div", "evm-critical-detail-meta");
+        meta.appendChild(this.renderCriticalMetaItem("Unidad Gerencial", intervention.ManagementUnit));
+        meta.appendChild(this.renderCriticalMetaItem("CUI", intervention.CUI));
+        if (intervention.Location !== undefined && intervention.Location !== null && String(intervention.Location).trim()) {
+            meta.appendChild(this.renderCriticalMetaItem("Ubicación", intervention.Location));
+        }
+        const status = createElement("div", "evm-critical-detail-status");
+        const badge = createElement("strong", "evm-critical-status-badge");
+        badge.appendChild(createElement("i"));
+        badge.appendChild(document.createTextNode(this.criticalText(intervention.Status)));
+        status.appendChild(badge);
+        status.appendChild(createElement("span", undefined, `Semana de corte: ${this.criticalText(intervention.CutoffWeek)}`));
+        meta.appendChild(status);
+        card.appendChild(meta);
+
+        const project = createElement("div", "evm-critical-detail-project");
+        project.appendChild(createElement("span", undefined, "Proyecto / Intervención"));
+        project.appendChild(createElement("h3", undefined, this.criticalText(intervention.Project)));
+        card.appendChild(project);
+
+        const metrics = createElement("div", "evm-critical-detail-metrics");
+        metrics.appendChild(this.renderCriticalMetricGroup(
+            "Línea base",
+            "baseline",
+            [["BAC", intervention.BAC], ["SAC", intervention.SAC]]
+        ));
+        metrics.appendChild(this.renderCriticalMetricGroup(
+            "Avance",
+            "progress",
+            [["PV", intervention.PV], ["EV", intervention.EV], ["AC", intervention.AC]]
+        ));
+        metrics.appendChild(this.renderCriticalMetricGroup(
+            "Desempeño",
+            "performance",
+            [["CPI", intervention.CPI], ["SPI", intervention.SPI]]
+        ));
+        card.appendChild(metrics);
+        return card;
+    }
+
+    private renderCriticalMetaItem(label: string, value: unknown): HTMLElement {
+        const item = createElement("div", "evm-critical-meta-item");
+        item.appendChild(createElement("span", undefined, label));
+        item.appendChild(createElement("strong", undefined, this.criticalText(value)));
+        return item;
+    }
+
+    private renderCriticalMetricGroup(
+        title: string,
+        tone: "performance" | "baseline" | "progress",
+        values: Array<["CPI" | "SPI" | "BAC" | "SAC" | "PV" | "EV" | "AC", unknown]>
+    ): HTMLElement {
+        const group = createElement("section", `evm-critical-metric-group is-${tone}`);
+        const header = createElement("header", "evm-critical-metric-group-header");
+        header.appendChild(createElement("strong", undefined, title));
+        group.appendChild(header);
+        const grid = createElement("div", "evm-critical-metric-group-values");
+        values.forEach(([key, value]) => {
+            const metric = createElement("div", "evm-critical-detail-metric");
+            metric.appendChild(createElement("span", undefined, key));
+            metric.appendChild(createElement("strong", undefined, this.formatCriticalMetric(key, value)));
+            grid.appendChild(metric);
+        });
+        group.appendChild(grid);
+        return group;
+    }
+
+    private formatCriticalMetric(key: "CPI" | "SPI" | "BAC" | "SAC" | "PV" | "EV" | "AC", value: unknown): string {
+        const parsed = numberValue(value as DataValue);
+        if (parsed === null) return "—";
+        if (key === "CPI" || key === "SPI") {
+            return parsed.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        return parsed.toLocaleString("en-US", { maximumFractionDigits: 2 });
+    }
+
+    private criticalText(value: unknown): string {
+        return value === null || value === undefined || String(value).trim() === "" ? "—" : String(value);
+    }
+
+    private closeCriticalInterventionsModal(): void {
+        document.removeEventListener("keydown", this.handleCriticalModalKeydown);
+        this.rootElement?.classList.remove("evm-critical-modal-open");
+        this.rootElement?.querySelector(".evm-critical-modal-overlay")?.remove();
     }
 
     private gaugeHistoryRenderData(): { series: GaugeChartSeries[]; weekRange: { min: number; max: number } } | null {
@@ -4778,6 +5126,10 @@ export class Visual implements IVisual {
     }
 
     private removeExistingGaugeHistoryModal(): void {
+        this.rootElement?.classList.remove("evm-gauge-history-modal-open");
+        this.rootElement?.querySelectorAll<HTMLButtonElement>(".evm-cpi-help-button").forEach((button) => {
+            button.disabled = false;
+        });
         this.rootElement?.querySelector(".gauge-history-modal-overlay")?.remove();
     }
 

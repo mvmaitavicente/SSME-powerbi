@@ -237,6 +237,22 @@
 .evm-main--portfolio-details .evm-portfolio-gauge-grid {
   display: none;
 }
+.evm-main--unit.evm-main--unit-matrix {
+  grid-template-rows: 98px minmax(0, 1fr);
+}
+.evm-main--unit.evm-main--unit-matrix > .evm-gauge-grid {
+  display: none;
+}
+.evm-main--unit .evm-unit-body-carousel {
+  overflow: visible;
+}
+/* Compensate half the gauge row (349px) and gap (18px) in the summary. */
+.evm-main--unit:not(.evm-main--unit-matrix) .evm-carousel-button {
+  top: calc(50% - 183.5px);
+}
+.evm-main--unit.evm-main--unit-matrix .evm-carousel-button {
+  top: 50%;
+}
 /* Center portfolio controls against the full dashboard body on both pages. */
 .evm-main--pronied .evm-body-carousel--portfolio {
   overflow: visible;
@@ -576,7 +592,7 @@
   display: grid;
   width: 100%;
   height: 94px;
-  grid-template-columns: minmax(360px, 2.1fr) minmax(115px, 0.75fr) repeat(3, minmax(130px, 1fr)) 240px;
+  grid-template-columns: minmax(150px, 1.2fr) minmax(100px, 0.75fr) repeat(3, minmax(110px, 1fr)) minmax(80px, 0.55fr) 240px;
   grid-template-rows: minmax(0, 1fr);
   align-items: end;
   gap: 10px;
@@ -1085,10 +1101,6 @@
 .evm-dashboard-error {
   padding: 24px;
 }
-.evm-header.evm-unit-dashboard-header {
-  grid-template-columns: minmax(0, 1fr) 600px minmax(145px, 12%);
-  padding: 10px 18px;
-}
 .evm-unit-dashboard-header .evm-project-title {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1548,6 +1560,145 @@
   text-align: center;
   overflow: hidden;
 }
+.evm-project-state.stable,
+.evm-project-state.risk,
+.evm-project-state.critical,
+.evm-project-state.neutral {
+  --state-color: #00833F;
+  --state-background: #F2F8F5;
+  --state-border: #D3E9DF;
+  --state-divider: #ACD5C3;
+  --state-icon-background: #D2E9DE;
+  grid-template-columns: 58px minmax(0, 1fr);
+  column-gap: 12px;
+  min-height: 76px;
+  height: 76px;
+  box-sizing: border-box;
+  margin: -4px 0;
+  padding: 12px 18px;
+  border: 1.5px solid var(--state-border);
+  border-radius: 10px;
+  background: var(--state-background);
+  color: var(--state-color);
+}
+.evm-project-state.stable.risk,
+.evm-project-state.risk.risk,
+.evm-project-state.critical.risk,
+.evm-project-state.neutral.risk {
+  --state-color: #B86500;
+  --state-background: #FFF8EF;
+  --state-border: #F1DFC5;
+  --state-divider: #E3C18F;
+  --state-icon-background: #F7E5CA;
+}
+.evm-project-state.stable.critical,
+.evm-project-state.risk.critical,
+.evm-project-state.critical.critical,
+.evm-project-state.neutral.critical {
+  --state-color: #D71920;
+  --state-background: #FFF3F3;
+  --state-border: #F0D0D2;
+  --state-divider: #E5AAAE;
+  --state-icon-background: #F6DADC;
+}
+.evm-project-state.stable.neutral,
+.evm-project-state.risk.neutral,
+.evm-project-state.critical.neutral,
+.evm-project-state.neutral.neutral {
+  --state-color: #001B8E;
+  --state-background: #F3F5FB;
+  --state-border: #D6DDEF;
+  --state-divider: #B5C2E1;
+  --state-icon-background: #DEE5F5;
+}
+.evm-project-state.stable::before,
+.evm-project-state.risk::before,
+.evm-project-state.critical::before,
+.evm-project-state.neutral::before {
+  display: none;
+}
+.evm-project-state.stable .evm-project-state-icon,
+.evm-project-state.risk .evm-project-state-icon,
+.evm-project-state.critical .evm-project-state-icon,
+.evm-project-state.neutral .evm-project-state-icon {
+  width: auto;
+  height: 100%;
+  margin-left: -18px;
+  border-right: 1.5px solid var(--state-divider);
+}
+.evm-project-state.stable .evm-project-state-icon span,
+.evm-project-state.risk .evm-project-state-icon span,
+.evm-project-state.critical .evm-project-state-icon span,
+.evm-project-state.neutral .evm-project-state-icon span {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  clip-path: none;
+  border-radius: 50%;
+  padding: 0;
+  background: var(--state-icon-background);
+  color: var(--state-color);
+  font-size: 28px;
+}
+.evm-project-state.stable .evm-project-state-body,
+.evm-project-state.risk .evm-project-state-body,
+.evm-project-state.critical .evm-project-state-body,
+.evm-project-state.neutral .evm-project-state-body {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.evm-project-state.stable .evm-project-state-copy,
+.evm-project-state.risk .evm-project-state-copy,
+.evm-project-state.critical .evm-project-state-copy,
+.evm-project-state.neutral .evm-project-state-copy {
+  align-items: flex-start;
+  padding: 0 10px;
+  text-align: left;
+}
+.evm-project-state.stable .evm-project-state-copy span,
+.evm-project-state.risk .evm-project-state-copy span,
+.evm-project-state.critical .evm-project-state-copy span,
+.evm-project-state.neutral .evm-project-state-copy span {
+  align-self: stretch;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 850;
+  line-height: 1.2;
+  white-space: normal;
+}
+.evm-project-state.stable .evm-project-state-copy strong,
+.evm-project-state.risk .evm-project-state-copy strong,
+.evm-project-state.critical .evm-project-state-copy strong,
+.evm-project-state.neutral .evm-project-state-copy strong {
+  align-self: stretch;
+  text-align: center;
+  margin-top: 3px;
+  font-size: clamp(22px, 2.2vw, 31px);
+  font-weight: 900;
+}
+.evm-project-state.stable .evm-project-state-message,
+.evm-project-state.risk .evm-project-state-message,
+.evm-project-state.critical .evm-project-state-message,
+.evm-project-state.neutral .evm-project-state-message {
+  justify-content: center;
+  height: auto;
+  padding: 0 8px 0 16px;
+  border-left: 1.5px solid var(--state-divider);
+  font-size: 16px;
+  font-weight: 850;
+  line-height: 1.12;
+  text-align: center;
+  overflow: visible;
+}
+.evm-project-state.evm-project-state--portfolio .evm-project-state-copy span {
+  font-size: 16px;
+  font-weight: 850;
+  white-space: normal;
+}
 .evm-project-dates {
   display: flex;
   flex-direction: column;
@@ -1609,6 +1760,10 @@
   cursor: pointer;
   z-index: 2;
   transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease, background-color 180ms ease;
+}
+.gauge-history-card[role="button"],
+.gauge-history-card[role="button"] * {
+  cursor: pointer;
 }
 .gauge-history-card:hover,
 .gauge-history-card:focus-visible {
@@ -1892,8 +2047,8 @@
 .evm-cpi-help-panel {
   position: fixed;
   z-index: 10000;
-  top: 50%;
-  left: 50%;
+  top: 0;
+  left: 0;
   display: none;
   width: min(920px, calc(100vw - 48px));
   max-height: calc(100vh - 48px);
@@ -1905,7 +2060,6 @@
   background: #FFF;
   color: #071B55;
   box-shadow: 0 18px 55px rgba(15, 42, 90, 0.25);
-  transform: translate(-50%, -50%);
 }
 .evm-cpi-help:hover .evm-cpi-help-panel,
 .evm-cpi-help:focus-within .evm-cpi-help-panel,
@@ -1919,18 +2073,18 @@
 }
 .evm-cpi-help-panel header > strong {
   color: #001B72;
-  font-size: 42px;
+  font-size: 30px;
   font-weight: 950;
 }
 .evm-cpi-help-panel header > i {
   width: 1px;
-  height: 38px;
+  height: 28px;
   background: #AEB8CA;
 }
 .evm-cpi-help-panel h3 {
   margin: 0;
   color: #001B72;
-  font-size: 30px;
+  font-size: 22px;
   font-weight: 900;
 }
 .evm-cpi-help-close {
@@ -1973,28 +2127,20 @@
 .evm-cpi-help-content {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 34px;
+  gap: 24px;
   align-items: center;
   margin-top: 18px;
 }
 .evm-cpi-help-range {
   display: grid;
-  grid-template-columns: 52px 145px minmax(0, 1fr);
+  grid-template-columns: 150px minmax(0, 1fr);
   align-items: center;
   gap: 14px;
   min-height: 82px;
   border-bottom: 1px solid #D7DCE5;
 }
 .evm-cpi-help-range > span {
-  display: grid;
-  width: 46px;
-  height: 46px;
-  place-items: center;
-  border-radius: 50%;
-  background: currentColor;
-  color: #FFF;
-  font-size: 32px;
-  font-weight: 900;
+  display: none;
 }
 .evm-cpi-help-range > b {
   color: inherit;
@@ -2072,17 +2218,71 @@
     width: 100%;
   }
   .evm-cpi-help-range {
-    grid-template-columns: 46px 120px minmax(0, 1fr);
+    grid-template-columns: max-content minmax(0, 1fr);
   }
   .evm-cpi-help-panel header > strong {
-    font-size: 32px;
+    font-size: 24px;
   }
   .evm-cpi-help-panel h3 {
-    font-size: 22px;
+    font-size: 18px;
   }
 }
 .evm-performance-row.favorable strong {
   color: #00A651;
+}
+.evm-unit-body-carousel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.evm-unit-body-carousel > .evm-body-carousel-viewport {
+  flex: 1 1 auto;
+  height: auto;
+}
+.evm-unit-body-carousel .evm-carousel-button {
+  opacity: 1;
+  pointer-events: auto;
+}
+.evm-body-carousel-page.evm-unit-matrix-page {
+  grid-template-columns: minmax(0, 1fr);
+}
+.evm-unit-projects-matrix-card .evm-project-curve-matrix-wrap {
+  overflow: auto;
+}
+.evm-unit-projects-matrix-card .evm-unit-projects-matrix {
+  width: max-content;
+  min-width: 100%;
+  height: auto;
+  table-layout: auto;
+}
+.evm-unit-projects-matrix-card .evm-unit-projects-matrix th,
+.evm-unit-projects-matrix-card .evm-unit-projects-matrix td {
+  min-width: 78px;
+  padding: 10px 8px;
+  white-space: nowrap;
+}
+.evm-unit-projects-matrix-card .evm-unit-projects-matrix .evm-unit-matrix-project-name {
+  min-width: 260px;
+  max-width: 380px;
+  white-space: normal;
+  text-align: left;
+}
+.evm-unit-projects-matrix-card .evm-unit-projects-matrix thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding-top: 15px;
+  padding-bottom: 15px;
+  background: #FFFFFF;
+  border-bottom: 2px solid #DCE5F1;
+  border-right-color: #EEF1F6;
+  color: #001B72;
+}
+.evm-unit-projects-matrix-card .evm-unit-projects-matrix tbody td {
+  padding-top: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #E0E7F1;
+  border-right-color: #EEF1F6;
 }
 .evm-body-carousel {
   position: relative;
@@ -2784,10 +2984,6 @@
   box-sizing: border-box;
   transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
-.evm-portfolio-summary-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.07);
-}
 .evm-portfolio-summary-card.is-blue {
   --summary-accent: #1677E8;
   --summary-tint: rgba(22, 119, 232, 0.08);
@@ -2949,6 +3145,273 @@
 }
 .evm-portfolio-summary-card--primary .evm-portfolio-summary-main span {
   font-size: 14px;
+}
+.evm-critical-interventions-trigger {
+  cursor: pointer;
+}
+.evm-critical-interventions-trigger:hover,
+.evm-critical-interventions-trigger:focus-visible {
+  border-color: rgba(245, 124, 0, 0.55);
+  box-shadow: 0 6px 16px rgba(245, 124, 0, 0.14);
+  outline: none;
+  transform: translateY(-2px);
+}
+.evm-critical-modal-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.25);
+  box-sizing: border-box;
+}
+.evm-dashboard:has([role="dialog"]:not([hidden]):not([aria-hidden="true"])) .evm-cpi-help,
+.evm-dashboard:has([role="dialog"]:not([hidden]):not([aria-hidden="true"])) .evm-matrix-projection-info-button {
+  visibility: hidden;
+  pointer-events: none;
+}
+.evm-dashboard:has([role="dialog"]:not([hidden]):not([aria-hidden="true"])) .evm-cpi-help-panel,
+.evm-dashboard:has([role="dialog"]:not([hidden]):not([aria-hidden="true"])) .evm-matrix-projection-info-card {
+  display: none !important;
+}
+.evm-critical-modal-open .evm-cpi-help-panel,
+.evm-critical-modal-open .gauge-history-tooltip,
+.evm-critical-modal-open [role="tooltip"] {
+  display: none !important;
+}
+.evm-critical-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(1120px, calc(100% - 20px));
+  max-height: calc(100% - 20px);
+  overflow: hidden;
+  border: 1px solid #DDE3F0;
+  border-radius: 12px;
+  background: #FFFFFF;
+  box-shadow: 0 18px 48px rgba(0, 20, 92, 0.2);
+  color: #00145C;
+}
+.evm-critical-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 26px 30px 21px;
+  border-bottom: 1px solid #E7EAF0;
+}
+.evm-critical-modal-header h2,
+.evm-critical-modal-header p {
+  margin: 0;
+}
+.evm-critical-modal-header h2 {
+  font-size: clamp(23px, 2.4vw, 30px);
+}
+.evm-critical-modal-header p {
+  margin-top: 2px;
+  color: #40527A;
+  font-size: 17px;
+  font-weight: 600;
+}
+.evm-critical-modal-close {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(245, 124, 0, 0.1);
+  color: #F57C00;
+  cursor: pointer;
+  font: inherit;
+  font-size: 27px;
+  line-height: 1;
+}
+.evm-critical-modal-close:hover {
+  background: rgba(245, 124, 0, 0.17);
+}
+.evm-critical-modal-close:focus-visible {
+  outline: 2px solid #F57C00;
+  outline-offset: 2px;
+}
+.evm-critical-modal-body {
+  display: grid;
+  gap: 18px;
+  padding: 27px 34px 34px;
+  overflow-y: auto;
+}
+.evm-critical-detail-card {
+  padding: 26px;
+  border: 1px solid #E1E7F0;
+  border-left: 4px solid #F57C00;
+  border-radius: 10px;
+  background: #FFFFFF;
+}
+.evm-critical-detail-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 16px;
+  align-items: center;
+}
+.evm-critical-meta-item {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 12px;
+  border-right: 1px solid #E4E9F1;
+}
+.evm-critical-meta-item span,
+.evm-critical-detail-status > span,
+.evm-critical-detail-project > span {
+  color: #40527A;
+  font-size: 16px;
+  font-weight: 600;
+}
+.evm-critical-meta-item strong {
+  overflow-wrap: anywhere;
+  color: #00145C;
+  font-size: 24px;
+  font-weight: 750;
+}
+.evm-critical-detail-status {
+  display: flex;
+  min-width: 150px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  text-align: right;
+}
+.evm-critical-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 15px;
+  border-radius: 999px;
+  background: rgba(211, 47, 47, 0.09);
+  color: #D32F2F;
+  font-size: 18px;
+  font-weight: 750;
+}
+.evm-critical-status-badge i {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: #D32F2F;
+}
+.evm-critical-detail-project {
+  margin-top: 24px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid #E4E9F1;
+}
+.evm-critical-detail-project h3 {
+  margin: 5px 0 0;
+  overflow-wrap: anywhere;
+  color: #00145C;
+  font-size: 24px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+.evm-critical-detail-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 1fr;
+  gap: 18px;
+  margin-top: 23px;
+}
+.evm-critical-metric-group {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid #E7ECF3;
+  border-radius: 10px;
+}
+.evm-critical-metric-group.is-performance {
+  background: rgba(245, 124, 0, 0.045);
+}
+.evm-critical-metric-group.is-baseline {
+  background: rgba(22, 119, 232, 0.045);
+}
+.evm-critical-metric-group.is-progress {
+  background: rgba(0, 166, 81, 0.045);
+}
+.evm-critical-metric-group-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 13px;
+}
+.evm-critical-metric-group-header strong {
+  color: #00145C;
+  font-size: 19px;
+}
+.evm-critical-metric-group-values {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(62px, 1fr));
+  gap: 9px;
+}
+.evm-critical-detail-metric {
+  min-width: 0;
+  padding: 15px 13px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: inset 0 0 0 1px rgba(221, 227, 240, 0.65);
+  text-align: left;
+}
+.evm-critical-detail-metric span,
+.evm-critical-detail-metric strong {
+  display: block;
+}
+.evm-critical-detail-metric span {
+  margin-bottom: 4px;
+  color: #F57C00;
+  font-size: 14px;
+  font-weight: 700;
+}
+.evm-critical-detail-metric strong {
+  color: #00145C;
+  font-size: 25px;
+  overflow-wrap: anywhere;
+}
+.evm-critical-modal-empty {
+  margin: 10px 0;
+  padding: 24px;
+  border-radius: 9px;
+  background: #F7F9FC;
+  color: #667085;
+  text-align: center;
+}
+@media (max-width: 900px) {
+  .evm-critical-detail-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .evm-critical-metric-group.is-performance {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 700px) {
+  .evm-critical-modal {
+    width: calc(100% - 24px);
+    max-height: calc(100% - 24px);
+  }
+  .evm-critical-modal-header,
+  .evm-critical-modal-body {
+    padding: 16px;
+  }
+  .evm-critical-detail-metrics {
+    grid-template-columns: 1fr;
+  }
+  .evm-critical-detail-meta {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+  .evm-critical-detail-status {
+    align-items: flex-start;
+    text-align: left;
+  }
+  .evm-critical-meta-item {
+    border-right: 0;
+  }
+  .evm-critical-metric-group.is-performance {
+    grid-column: auto;
+  }
 }
 .evm-portfolio-summary-card--primary.is-blue .evm-portfolio-summary-main span {
   white-space: pre-line;
@@ -5150,7 +5613,7 @@
 }
 .gauge-history-hover-hitbox {
   fill: transparent;
-  cursor: crosshair;
+  cursor: default;
   pointer-events: all;
 }
 .gauge-history-legend {
@@ -5937,6 +6400,92 @@
   grid-template-rows: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
+.evm-projection-tooltip {
+  --projection-accent: #001B72;
+  --projection-border: #B9C9E8;
+  --projection-background: #F0F5FF;
+  --projection-text: #00145C;
+  position: fixed;
+  inset: auto;
+  z-index: 10000;
+  width: 460px;
+  max-width: calc(100vw - 16px);
+  margin: 0;
+  padding: 24px 26px;
+  box-sizing: border-box;
+  border: 1px solid var(--projection-border);
+  border-top: 4px solid var(--projection-accent);
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--projection-background) 0%, #FFFFFF 100%);
+  box-shadow: 0 10px 28px rgba(0, 27, 92, 0.22);
+  color: var(--projection-text);
+  font-family: "Segoe UI", sans-serif;
+  pointer-events: none;
+}
+.evm-projection-tooltip[data-method="1"] {
+  --projection-accent: #B38A16;
+  --projection-border: #E8CE78;
+  --projection-background: #FFF5CE;
+  --projection-text: #594300;
+}
+.evm-projection-tooltip[data-method="2"] {
+  --projection-accent: #588B34;
+  --projection-border: #B7D69A;
+  --projection-background: #EDF6E5;
+  --projection-text: #17380F;
+}
+.evm-projection-tooltip[data-method="3"] {
+  --projection-accent: #C47500;
+  --projection-border: #F3C178;
+  --projection-background: #FFF1DC;
+  --projection-text: #704000;
+}
+.evm-projection-tooltip[data-method="4"] {
+  --projection-accent: #737373;
+  --projection-border: #D2D2D2;
+  --projection-background: #EEEEF0;
+  --projection-text: #303030;
+}
+.evm-projection-tooltip[hidden] {
+  display: none;
+}
+.evm-projection-tooltip .evm-projection-tooltip-eyebrow {
+  margin-bottom: 7px;
+  color: var(--projection-text);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.evm-projection-tooltip .evm-projection-tooltip-title {
+  display: block;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--projection-border);
+  color: var(--projection-text);
+  font-size: 21px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+.evm-projection-tooltip .evm-projection-tooltip-description {
+  margin: 10px 0 0;
+  font-size: 19px;
+  line-height: 1.55;
+}
+.evm-projection-tooltip .evm-projection-tooltip-formula {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--projection-border);
+  border-radius: 7px;
+  background: var(--projection-background);
+  font-size: 19px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.evm-projection-tooltip .evm-projection-tooltip-formula .evm-projection-tooltip-eyebrow {
+  display: block;
+}
+.evm-projection-tooltip .evm-projection-tooltip-formula strong {
+  font-weight: 700;
+}
 .evm-project-curve-matrix-card {
   position: relative;
   display: flex;
@@ -6543,56 +7092,23 @@
   color: #D71920;
   font-weight: 950;
 }
-.evm-project-curve-matrix thead th.evm-matrix-header-vac-cost {
-  background: #FFE58A;
-  color: #332700;
+.evm-project-curve-matrix thead th.evm-matrix-projection-group-cell {
+  border-top: 2px solid #8396B8;
 }
-.evm-project-curve-matrix thead th.evm-matrix-header-eac-cost {
-  background: #FFE58A;
-  color: #332700;
+.evm-project-curve-matrix thead th.evm-matrix-projection-group-start,
+.evm-project-curve-matrix tbody tr td.evm-matrix-projection-group-start {
+  border-left: 2px solid #8396B8;
 }
-.evm-project-curve-matrix tbody td.evm-matrix-cell-cost-projection {
-  background: linear-gradient(90deg, rgba(255, 229, 138, 0.22), rgba(255, 251, 234, 0.72));
-  box-shadow: inset 0 0 12px rgba(244, 197, 66, 0.08);
+.evm-project-curve-matrix thead th.evm-matrix-projection-group-end,
+.evm-project-curve-matrix tbody tr td.evm-matrix-projection-group-end {
+  border-right: 2px solid #8396B8;
 }
-.evm-project-curve-matrix tbody tr:hover td.evm-matrix-cell-cost-projection {
-  background: linear-gradient(90deg, rgba(255, 229, 138, 0.34), rgba(255, 248, 217, 0.82));
+.evm-project-curve-matrix tbody tr td.evm-matrix-projection-group-bottom {
+  border-bottom: 2px solid #8396B8;
 }
-.evm-project-curve-matrix tbody tr.current td.evm-matrix-cell-cost-projection {
-  background: linear-gradient(90deg, rgba(255, 229, 138, 0.28), rgba(255, 251, 234, 0.78));
-}
-/* Método 2: trabajo futuro al ritmo previsto. */
-.evm-project-curve-matrix.evm-matrix-projection-method-2 thead th.evm-matrix-header-vac-cost,
-.evm-project-curve-matrix.evm-matrix-projection-method-2 thead th.evm-matrix-header-eac-cost {
-  background: #B7D69A;
-  color: #17380F;
-}
-.evm-project-curve-matrix.evm-matrix-projection-method-2 tbody td.evm-matrix-cell-cost-projection,
-.evm-project-curve-matrix.evm-matrix-projection-method-2 tbody tr.current td.evm-matrix-cell-cost-projection {
-  background: linear-gradient(90deg, rgba(183, 214, 154, 0.28), rgba(244, 250, 238, 0.82));
-  box-shadow: inset 0 0 12px rgba(88, 139, 52, 0.08);
-}
-/* Método 3: el plan inicial ya no es válido. */
-.evm-project-curve-matrix.evm-matrix-projection-method-3 thead th.evm-matrix-header-vac-cost,
-.evm-project-curve-matrix.evm-matrix-projection-method-3 thead th.evm-matrix-header-eac-cost {
-  background: #F3C178;
-  color: #704000;
-}
-.evm-project-curve-matrix.evm-matrix-projection-method-3 tbody td.evm-matrix-cell-cost-projection,
-.evm-project-curve-matrix.evm-matrix-projection-method-3 tbody tr.current td.evm-matrix-cell-cost-projection {
-  background: #FFF1DC;
-  box-shadow: inset 0 0 12px rgba(196, 117, 0, 0.06);
-}
-/* Método 4: CPI y SPI influyen en el trabajo restante. */
-.evm-project-curve-matrix.evm-matrix-projection-method-4 thead th.evm-matrix-header-vac-cost,
-.evm-project-curve-matrix.evm-matrix-projection-method-4 thead th.evm-matrix-header-eac-cost {
-  background: #D2D2D2;
-  color: #303030;
-}
-.evm-project-curve-matrix.evm-matrix-projection-method-4 tbody td.evm-matrix-cell-cost-projection,
-.evm-project-curve-matrix.evm-matrix-projection-method-4 tbody tr.current td.evm-matrix-cell-cost-projection {
-  background: linear-gradient(90deg, rgba(210, 210, 210, 0.3), rgba(248, 248, 248, 0.84));
-  box-shadow: inset 0 0 12px rgba(80, 80, 80, 0.06);
+.evm-project-curve-matrix thead tr th.evm-matrix-section-start,
+.evm-project-curve-matrix tbody tr td.evm-matrix-section-start {
+  border-left: 2px solid #8396B8;
 }
 .evm-project-curve-matrix thead .evm-project-curve-matrix-group-row th {
   padding: 7px 4px;
@@ -8292,5 +8808,46 @@
 .evm-unit-progress-body .evm-unit-progress-row.evm-unit-progress-row--total > :last-child {
   border-right: 1px solid #9DBCF2;
   border-radius: 0 5px 5px 0;
+}
+/* Cursor contract shared by PRONIED, Unidad and Proyecto. */
+.evm-dashboard,
+.evm-dashboard .evm-card,
+.evm-dashboard .evm-portfolio-summary-card,
+.evm-dashboard .evm-gauge-card,
+.evm-dashboard .evm-section-title,
+.evm-dashboard svg {
+  cursor: default;
+}
+.evm-dashboard button:not(:disabled),
+.evm-dashboard a[href],
+.evm-dashboard [role="button"]:not([aria-disabled="true"]):not(:disabled),
+.evm-dashboard [role="gridcell"][tabindex],
+.evm-dashboard input[type="checkbox"]:not(:disabled),
+.evm-dashboard input[type="radio"]:not(:disabled),
+.evm-dashboard select:not(:disabled),
+.evm-dashboard label[for] {
+  cursor: pointer;
+}
+.evm-dashboard .evm-unit-selector-overlay,
+.evm-dashboard .evm-project-curve-column-overlay,
+.evm-dashboard .evm-advanced-search-overlay,
+.evm-dashboard .gauge-history-modal-overlay,
+.evm-dashboard .evm-critical-modal-overlay {
+  cursor: pointer;
+}
+.evm-dashboard .evm-unit-selector-modal,
+.evm-dashboard .evm-project-curve-column-panel,
+.evm-dashboard .evm-advanced-search-modal,
+.evm-dashboard .gauge-history-modal,
+.evm-dashboard .evm-critical-modal {
+  cursor: default;
+}
+.evm-dashboard button:disabled,
+.evm-dashboard [aria-disabled="true"] {
+  cursor: default;
+}
+.evm-dashboard input[type="text"],
+.evm-dashboard input[type="search"] {
+  cursor: text;
 }
 

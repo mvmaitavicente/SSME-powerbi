@@ -24,7 +24,11 @@ function percentage(value: DataValue, signed: boolean): string {
     return `${sign}${normalized.toLocaleString("en-US", { maximumFractionDigits: 1 })}%`;
 }
 
-export function renderPortfolioDashboard(summary: PortfolioSummaryData | null, unit?: string | null): HTMLElement {
+export function renderPortfolioDashboard(
+    summary: PortfolioSummaryData | null,
+    unit?: string | null,
+    onCriticalInterventionsClick?: () => void
+): HTMLElement {
     const panel = createElement("section", `evm-card evm-performance-card ${portfolioClasses.panel}`);
     panel.appendChild(createElement("div", "evm-section-title", "Resumen General"));
     if (!summary) {
@@ -58,7 +62,25 @@ export function renderPortfolioDashboard(summary: PortfolioSummaryData | null, u
     deviations.appendChild(renderHorizontalCard("orange", "cost", percentage(summary.DesviacionCostoPct, true), "Desviación del Portafolio", "(Costo)"));
     grid.appendChild(deviations);
     const bottom = createElement("div", portfolioClasses.bottom);
-    bottom.appendChild(renderCompactCard("orange", "critical", integer(summary.IntervencionesCriticas), "Intervenciones Críticas"));
+    const criticalCard = renderCompactCard("orange", "critical", integer(summary.IntervencionesCriticas), "Intervenciones Críticas");
+    if (onCriticalInterventionsClick) {
+        criticalCard.classList.add("evm-critical-interventions-trigger");
+        criticalCard.setAttribute("role", "button");
+        criticalCard.setAttribute("tabindex", "0");
+        criticalCard.setAttribute("aria-label", "Ver detalle de intervenciones críticas");
+        criticalCard.addEventListener("click", (event) => {
+            event.stopPropagation();
+            onCriticalInterventionsClick();
+        });
+        criticalCard.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                event.stopPropagation();
+                onCriticalInterventionsClick();
+            }
+        });
+    }
+    bottom.appendChild(criticalCard);
     bottom.appendChild(renderCompactCard("red", "risk", percentage(summary.RiesgoPortafolioPct, false), "Riesgo del Portafolio"));
     grid.appendChild(bottom);
     panel.appendChild(grid);

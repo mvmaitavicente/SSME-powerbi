@@ -1,7 +1,7 @@
 "use strict";
 
 import powerbi from "powerbi-visuals-api";
-import { AggregateCurveData, AggregateGaugeData, CurrentSnapshot, CurveData, CurveHistoryPoint, CurveReferences, DashboardContextData, DashboardData, DashboardJsonPayload, DashboardLevel, DataValue, FieldValueMap, GaugeData, GaugeHistory, GaugeHistoryRow, JsonTablePayload, MilestoneItem, NavigatorData, NavigatorJsonPayload, NavigatorProject, ParsedDashboardData, ParserDebugData, PerformanceData, PortfolioSummaryData, ProjectData, ProjectHeader, RenderCurveData, RiskDashboardData, RiskDashboardRow, RiskItem, SummaryData, UnitProjectSummaryData, UnitSummaryData } from "./types";
+import { AggregateCurveData, AggregateGaugeData, CriticalIntervention, CurrentSnapshot, CurveData, CurveHistoryPoint, CurveReferences, DashboardContextData, DashboardData, DashboardJsonPayload, DashboardLevel, DataValue, FieldValueMap, GaugeData, GaugeHistory, GaugeHistoryRow, JsonTablePayload, MilestoneItem, NavigatorData, NavigatorJsonPayload, NavigatorProject, ParsedDashboardData, ParserDebugData, PerformanceData, PortfolioSummaryData, ProjectData, ProjectHeader, RenderCurveData, RiskDashboardData, RiskDashboardRow, RiskItem, SummaryData, UnitProjectSummaryData, UnitSummaryData } from "./types";
 
 type DataViewTable = powerbi.DataViewTable;
 type DataViewMetadataColumn = powerbi.DataViewMetadataColumn;
@@ -679,6 +679,9 @@ function parseDashboardPayload(
     const portfolioSummaryRows = isAggregate && summaryDashboardPayload
         ? jsonTableToObjects<Record<string, unknown>>(summaryDashboardPayload)
         : [];
+    const criticalInterventionRows = context.Level === "PRONIED" && payload.criticalInterventionsDetail
+        ? jsonTableToObjects<Record<string, unknown>>(payload.criticalInterventionsDetail).map(normalizeCriticalIntervention)
+        : [];
     const projectSummaryRows = context.Level === "UNIDAD" && payload.projects ? jsonTableToObjects<Record<string, unknown>>(payload.projects) : [];
     const riskRows = (isProject || context.Level === "PRONIED") && payload.risks ? jsonTableToObjects<Record<string, unknown>>(payload.risks) : [];
     const milestoneRows = isProject && (payload.milestone || payload.milestones)
@@ -701,6 +704,7 @@ function parseDashboardPayload(
     validateJsonTableRowCount(payload.curve, "JSON curve");
     validateJsonTableRowCount(payload.units, "JSON units");
     validateJsonTableRowCount(payload.portfolioSummary, "JSON portfolioSummary");
+    validateJsonTableRowCount(payload.criticalInterventionsDetail, "JSON criticalInterventionsDetail");
     validateJsonTableRowCount(payload.UnidadGerencialSummary, "JSON UnidadGerencialSummary");
     validateJsonTableRowCount(payload.projects, "JSON projects");
     validateJsonTableRowCount(payload.risks, "JSON risks");
@@ -773,6 +777,7 @@ function parseDashboardPayload(
         aggregateCurve: normalizedAggregateCurve,
         units: normalizedUnits,
         portfolioSummary: normalizedPortfolioSummary,
+        criticalInterventions: criticalInterventionRows,
         projects: normalizedProjects,
         risks: normalizedRisks,
         milestones: normalizedMilestones,
@@ -865,6 +870,35 @@ function normalizeSummary(row: Record<string, unknown> | null): SummaryData | nu
     };
 }
 
+function normalizeCriticalIntervention(row: Record<string, unknown>): CriticalIntervention {
+    const cui = firstKnownValue(row, "CUI", "Cui", "cui");
+    const location = nullableText(firstKnownValue(row, "Location", "Ubicacion", "Ubicación"));
+    return {
+        ...row,
+        ManagementUnit: textValue(firstKnownValue(row, "ManagementUnit", "UnidadGerencial", "UNIDAD GERENCIAL", "Unidad")),
+        CUI: typeof cui === "number" || typeof cui === "string" ? cui : "",
+        Project: textValue(firstKnownValue(
+            row,
+            "Project",
+            "Proyecto",
+            "PROYECTO",
+            "PROYECTO / INTERVENCION",
+            "PROYECTO / INTERVENCIÓN",
+            "NombreIntervencion"
+        )),
+        ...(location ? { Location: location } : {}),
+        CPI: readNullableNumber(row, ["CPI"]),
+        SPI: readNullableNumber(row, ["SPI", "SPI (w)", "SPIW"]),
+        Status: textValue(firstKnownValue(row, "Status", "Estado", "ESTADO", "EstadoProyecto")),
+        CutoffWeek: readNullableNumber(row, ["CutoffWeek", "SemanaCorte", "SEMANA CORTE", "Semana"]),
+        BAC: readNullableNumber(row, ["BAC"]),
+        SAC: readNullableNumber(row, ["SAC", "Sac"]),
+        PV: readNullableNumber(row, ["PV", "Pv"]),
+        EV: readNullableNumber(row, ["EV", "Ev"]),
+        AC: readNullableNumber(row, ["AC", "Ac"])
+    };
+}
+
 function normalizeJsonGauge(row: Record<string, unknown>): GaugeHistoryRow {
     return {
         ...row,
@@ -888,7 +922,7 @@ function normalizeJsonCurve(row: Record<string, unknown>): CurveData {
         SAC: readNullableNumber(row, ["SAC"]),
         ES: readNullableNumber(row, ["ES"]),
         AT: readNullableNumber(row, ["AT"]),
-        AT_Matriz: readNullableNumber(row, ["AT_Matriz"]),
+        AT_Matriz: readNullableNumber(row, ["AT_Matriz", "AT_matriz"]),
         SemanaEstado: readNullableNumber(row, ["SemanaEstado"]),
         PV: readNullableNumber(row, ["PV"]),
         EV: readNullableNumber(row, ["EV"]),
@@ -935,9 +969,15 @@ function normalizeJsonCurve(row: Record<string, unknown>): CurveData {
             "TSPITProy"
         ]),
         "EAC (c)": readNullableNumber(row, ["EAC (c)", "EACC"]),
+        "_VAC (c)": readNullableNumber(row, ["_VAC (c)"]),
+        "_EAC (c)": readNullableNumber(row, ["_EAC (c)"]),
+        "_ETC (c)": readNullableNumber(row, ["_ETC (c)"]),
+        MetodoProyeccion: nullableText(firstKnownValue(row, "MetodoProyeccion")),
+        Finalizado: readNullableNumber(row, ["Finalizado"]),
         "EAC (t)": readNullableNumber(row, ["EAC (t)", "EACT"]),
         "IEAC (c)": readNullableNumber(row, ["IEAC (c)", "IEACC"]),
         "IEAC (t)": readNullableNumber(row, ["IEAC (t)", "IEACT"]),
+        IETC: nullableText(firstKnownValue(row, "IETC")),
         "IVAC (t)": readNullableNumber(row, ["IVAC (t)", "IVACT"]),
         "VAC (c)": readNullableNumber(row, ["VAC (c)", "VACC"]),
         "VAC (c2)": readNullableNumber(row, ["VAC (c2)", "VACC2"]),
@@ -1069,17 +1109,18 @@ function normalizeProjectData(project: ProjectData | null): ProjectData | null {
     };
 }
 
-export function adaptJsonDashboardData(parsed: ParsedDashboardData): DashboardData {
-    const currentRow = getCurrentCurveRow(parsed.curve);
-    const currentGaugeRow = getCurrentGaugeRow(parsed.gauges);
+export function adaptJsonDashboardData(parsed: ParsedDashboardData, selectedWeek: number | null = null): DashboardData {
+    const currentRow = selectedWeek === null ? getCurrentCurveRow(parsed.curve) : parsed.curve.find((row) => row.Semana === selectedWeek) ?? null;
+    const gaugeRows = selectedWeek === null ? parsed.gauges : parsed.gauges.filter((row) => row.Semana <= selectedWeek);
+    const currentGaugeRow = getCurrentGaugeRow(gaugeRows);
     const project = parsed.project;
     const current: CurrentSnapshot = buildJsonCurrentSnapshot(project, currentRow, currentGaugeRow);
     const curve: RenderCurveData = {
         history: parsed.curve.map((row) => ({
             SemanaProyecto: row.Semana,
             PV: row.PV,
-            EV: row.EV,
-            AC: row.AC
+            EV: selectedWeek === null || row.Semana <= selectedWeek ? row.EV : null,
+            AC: selectedWeek === null || row.Semana <= selectedWeek ? row.AC : null
         })),
         current: currentRow
             ? {
@@ -1090,9 +1131,10 @@ export function adaptJsonDashboardData(parsed: ParsedDashboardData): DashboardDa
             }
             : {},
         references: {
+            Finalizado: currentRow?.Finalizado ?? readNullableNumber(project ?? {}, ["Finalizado"]),
             BAC: currentRow?.BAC,
             SAC: currentRow?.SAC,
-            AT: currentRow?.AT,
+            AT: currentRow?.AT_Matriz,
             ES: currentRow?.ES,
             EACC: currentRow?.["EAC (c)"],
             EACT: currentRow?.["EAC (t)"],
@@ -1105,9 +1147,9 @@ export function adaptJsonDashboardData(parsed: ParsedDashboardData): DashboardDa
     };
 
     return {
-        header: buildJsonHeader(project),
+        header: { ...buildJsonHeader(project), ...(selectedWeek === null ? {} : { SemanaActual: selectedWeek }) },
         current,
-        gauges: buildJsonGauges(parsed.gauges),
+        gauges: buildJsonGauges(gaugeRows),
         curve,
         performance: buildJsonPerformance(currentRow),
         risks: parsed.risks,
@@ -1272,6 +1314,7 @@ function buildJsonCurrentSnapshot(project: ProjectData | null, currentRow: Curve
         PlazoProgramadoTotalSemanas: currentRow?.SAC ?? null,
         PlazoProyectadoSemanas: eacT,
         RetrasoProyectadoSemanas: vacT,
+        TerminoProyectado: currentRow?.IETC ?? null,
         PresupuestoConsumidoPct: ratio(ac, bac),
         PresupuestoRestante: difference(bac, ac),
         PresupuestoProgramadoBAC: bac,
@@ -1295,6 +1338,7 @@ function buildJsonPerformance(currentRow: CurveData | null): PerformanceData {
         PlazoProgramadoTotalSemanas: currentRow?.SAC ?? null,
         PlazoProyectadoSemanas: eacT,
         RetrasoProyectadoSemanas: vacT,
+        TerminoProyectado: currentRow?.IETC ?? null,
         PresupuestoConsumidoPct: ratio(ac, bac),
         PresupuestoRestante: difference(bac, ac),
         PresupuestoProgramadoBAC: bac,

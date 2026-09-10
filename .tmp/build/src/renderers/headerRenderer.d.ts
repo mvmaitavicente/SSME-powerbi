@@ -3,6 +3,7 @@ export interface SidebarOptions {
     expanded: boolean;
     activeLevel: DashboardLevel;
     portfolioViewActive: "summary" | "matrix";
+    unitViewActive: "summary" | "matrix";
     projectViewActive: "summary" | "milestones" | "risks";
     riskViewActive: "summary" | "matrix";
     canOpenUnit: boolean;
@@ -12,6 +13,7 @@ export interface SidebarOptions {
     onOpenUnit: () => void;
     onOpenProject: () => void;
     onPortfolioView: (view: "summary" | "matrix") => void;
+    onUnitView: (view: "summary" | "matrix") => void;
     onProjectView: (view: "summary" | "milestones" | "risks") => void;
     onRiskView: (view: "summary" | "matrix") => void;
     onOpenFilters: () => void;

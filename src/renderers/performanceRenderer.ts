@@ -18,6 +18,9 @@ export function renderPerformance(data: PerformanceData): HTMLElement {
     const card = createElement("section", "evm-card evm-performance-card");
     const projectedCost = numberValue(data.SobreCostoProyectadoVAC) ?? 0;
     const projectedTime = numberValue(data.RetrasoProyectadoSemanas) ?? 0;
+    const projectedEnd = typeof data.TerminoProyectado === "string" && data.TerminoProyectado !== ""
+        ? data.TerminoProyectado
+        : date(data.TerminoProyectado);
     const projectedCostLabel = projectedCost > 0
         ? "Ahorro Proyectado"
         : (projectedCost < 0 ? "Sobre Costo Proyectado" : "Sin Variación de Costo");
@@ -28,7 +31,7 @@ export function renderPerformance(data: PerformanceData): HTMLElement {
 
     card.appendChild(progressRow("clock", "Plazo Consumido", data.PlazoConsumidoPct, `${percent(data.PlazoConsumidoPct)}`, "Plazo Restante", `${decimalUpTo(data.PlazoRestanteSemanas)} sem.`));
     card.appendChild(metricPair("calendar", "Plazo Programado Total", `${decimalUpTo(data.PlazoProgramadoTotalSemanas)} semanas`, "Plazo Proyectado", `${decimalUpTo(data.PlazoProyectadoSemanas)} semanas`));
-    card.appendChild(metricPair("check", projectedTimeLabel, `${decimalUpTo(data.RetrasoProyectadoSemanas)} semanas`, "Termino Proyectado", date(data.TerminoProyectado), projectedTime > 0 ? "favorable" : (projectedTime < 0 ? "alert" : null)));
+    card.appendChild(metricPair("check", projectedTimeLabel, `${decimalUpTo(data.RetrasoProyectadoSemanas)} semanas`, "Termino Proyectado", projectedEnd, projectedTime > 0 ? "favorable" : (projectedTime < 0 ? "alert" : null)));
     card.appendChild(progressRow("money", "Presupuesto Consumido", data.PresupuestoConsumidoPct, `${percent(data.PresupuestoConsumidoPct)}`, "Presupuesto Restante", currency(data.PresupuestoRestante)));
     card.appendChild(metricPair("coins", "Presupuesto Programado (BAC)", currency(data.PresupuestoProgramadoBAC), "Costo Estimado al Termino (EAC)", currency(data.CostoEstimadoTerminoEAC)));
     const projectedCostPct = numberValue(data.SobreCostoProyectadoPct);

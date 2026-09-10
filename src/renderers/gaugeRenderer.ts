@@ -41,7 +41,7 @@ export function renderGauge(data: GaugeData, palette: VisualPalette, onHistoryOp
     svg.setAttribute("aria-label", `${data.title} ${displayDecimal(data.value)}`);
     svg.classList.add("evm-gauge-svg");
     card.appendChild(svg);
-    card.appendChild(renderGaugeHelp(data));
+    card.appendChild(renderGaugeHelp(data, lifecycle));
     card.appendChild(renderHistoryCard(data, onHistoryOpen));
 
     const render = (): void => {
@@ -282,7 +282,7 @@ interface GaugeHelpConfig {
     example: (value: string, numericValue: number | null) => string;
 }
 
-function renderGaugeHelp(data: GaugeData): HTMLElement {
+function renderGaugeHelp(data: GaugeData, lifecycle?: LifecycleSink): HTMLElement {
     const config = gaugeHelpConfig(data.key);
     const wrapper = createElement("div", "evm-cpi-help");
     const button = createElement("button", "evm-cpi-help-button", "?");
@@ -317,10 +317,44 @@ function renderGaugeHelp(data: GaugeData): HTMLElement {
     content.append(ranges, exampleCard);
     panel.append(header, createElement("p", "evm-cpi-help-intro", config.intro), formula, content);
 
+    const positionPanel = (): void => {
+        if (!panel.getClientRects().length || button.disabled) return;
+        const anchor = button.getBoundingClientRect();
+        const margin = 12;
+        const gap = 6;
+        const viewportWidth = document.documentElement.clientWidth;
+        const viewportHeight = document.documentElement.clientHeight;
+        panel.style.left = "0px";
+        panel.style.top = "0px";
+        const initial = panel.getBoundingClientRect();
+        const scale = initial.width / panel.offsetWidth || 1;
+        panel.style.maxWidth = `${Math.max(0, viewportWidth - margin * 2) / scale}px`;
+        const below = Math.max(0, viewportHeight - anchor.bottom - gap - margin);
+        const above = Math.max(0, anchor.top - gap - margin);
+        const placeBelow = below >= Math.min(panel.scrollHeight * scale, 400) || below >= above;
+        panel.style.maxHeight = `${(placeBelow ? below : above) / scale}px`;
+        const rect = panel.getBoundingClientRect();
+        const left = Math.max(margin, Math.min(anchor.left, viewportWidth - rect.width - margin));
+        const top = placeBelow ? anchor.bottom + gap : anchor.top - gap - rect.height;
+        panel.style.left = `${(left - rect.left) / scale}px`;
+        panel.style.top = `${(top - rect.top) / scale}px`;
+    };
+    wrapper.addEventListener("mouseenter", positionPanel);
+    wrapper.addEventListener("focusin", positionPanel);
+    if (lifecycle) {
+        window.addEventListener("resize", positionPanel);
+        document.addEventListener("scroll", positionPanel, true);
+        lifecycle.register(() => {
+            window.removeEventListener("resize", positionPanel);
+            document.removeEventListener("scroll", positionPanel, true);
+        });
+    }
+
     button.addEventListener("click", (event) => {
         event.stopPropagation();
         const open = wrapper.classList.toggle("open");
         button.setAttribute("aria-expanded", String(open));
+        positionPanel();
     });
     panel.addEventListener("click", event => event.stopPropagation());
     wrapper.append(button, panel);
@@ -329,14 +363,14 @@ function renderGaugeHelp(data: GaugeData): HTMLElement {
 
 function gaugeHelpConfig(key: GaugeData["key"]): GaugeHelpConfig {
     const performanceRanges: GaugeHelpConfig["ranges"] = [
-        ["blue", "⌃", "≥ 1.20", "SOBREDIMENSIONADO", "El desempeño está significativamente por encima de lo planificado."],
-        ["green", "✓", "1.00 - 1.19", "ESTABLE", "El proyecto se encuentra dentro de lo planificado."],
-        ["orange", "!", "0.90 - 0.99", "EN RIESGO", "Existe una desviación moderada respecto de lo planificado."],
-        ["red", "×", "0.00 - 0.89", "CRÍTICO", "Existe una desviación significativa respecto de lo planificado."]
+        ["red", "×", "≥ 0.01 - 0.89", "CRÍTICO", "Existe una desviación significativa respecto de lo planificado."],
+        ["orange", "!", "≥ 0.90 - 0.99", "EN RIESGO", "Existe una desviación moderada respecto de lo planificado."],
+        ["green", "✓", "≥ 1.00 - 1.19", "ESTABLE", "El proyecto se encuentra dentro de lo planificado."],
+        ["blue", "⌃", "≥ 1.20", "SOBREDIMENSIONADO", "El desempeño está significativamente por encima de lo planificado."]
     ];
     const completionRanges: GaugeHelpConfig["ranges"] = [
-        ["green", "✓", "0.00 - 1.00", "ESTABLE", "El rendimiento requerido para completar el proyecto se mantiene dentro de un nivel razonable."],
-        ["orange", "!", "1.01 - 1.10", "EN RIESGO", "Se necesita mejorar moderadamente el rendimiento restante."],
+        ["green", "✓", "≥ 0.01 - 1.00", "ESTABLE", "El rendimiento requerido para completar el proyecto se mantiene dentro de un nivel razonable."],
+        ["orange", "!", "≥ 1.01 - 1.10", "EN RIESGO", "Se necesita mejorar moderadamente el rendimiento restante."],
         ["red", "×", "≥ 1.11", "CRÍTICO", "Se requiere un rendimiento futuro difícil de alcanzar."]
     ];
     if (key === "SPIW") return { acronym: "SPI (w)", title: "Índice de Desempeño del Cronograma", intro: "Mide la eficiencia del avance físico respecto de lo planificado.", numerator: "EV", denominator: "PV", ranges: performanceRanges, example: (_value, numericValue) => `Significa que avanzamos al ${numericValue === null ? "—" : (numericValue * 100).toLocaleString("es-PE", { maximumFractionDigits: 0 })}% del ritmo previsto originalmente.` };

@@ -39,7 +39,12 @@ export declare class Visual implements IVisual {
     private selectedGaugeKey;
     private visibleGaugeSeries;
     private readonly handleGaugeModalKeydown;
+    private readonly handleCriticalModalKeydown;
     constructor(options: VisualConstructorOptions);
+    private selectedProjectWeek;
+    private weekFilterProjectId;
+    private lastWeekFilterUpdateOptions;
+    private forceWeekFilterRender;
     update(options: VisualUpdateOptions): void;
     private renderNavigationDebugPanel;
     private renderNavigationDebugButton;
@@ -48,6 +53,7 @@ export declare class Visual implements IVisual {
     private navigationDebugStatusLabel;
     private navigationDebugStatusColor;
     private attachMatrixCopyMenu;
+    destroy(): void;
     private copyMatrixText;
     private showMatrixCopyNotice;
     private showMatrixCopyFallback;
@@ -55,6 +61,7 @@ export declare class Visual implements IVisual {
     private showNavigationDebugTextarea;
     private resetNavigationDebug;
     private renderCurrentDashboard;
+    private projectFilterWeeks;
     private renderProjectDashboard;
     private renderProniedDashboard;
     private renderProniedBodyCarousel;
@@ -75,7 +82,10 @@ export declare class Visual implements IVisual {
     private renderPortfolioInsight;
     private insightMetric;
     private portfolioHeaderData;
+    private unitMatrixPageActive;
+    private activateUnitPage;
     private renderPortfolioBody;
+    private renderUnitProjectsMatrix;
     private renderUnitsPanel;
     private renderPortfolioSummary;
     private portfolioCompositeCard;
@@ -178,6 +188,13 @@ export declare class Visual implements IVisual {
     private openGaugeHistoryModal;
     private closeGaugeHistoryModal;
     private renderGaugeHistoryModal;
+    private openCriticalInterventionsModal;
+    private renderCriticalIntervention;
+    private renderCriticalMetaItem;
+    private renderCriticalMetricGroup;
+    private formatCriticalMetric;
+    private criticalText;
+    private closeCriticalInterventionsModal;
     private gaugeHistoryRenderData;
     private renderGaugeHistoryHeader;
     private renderGaugeHistoryBody;

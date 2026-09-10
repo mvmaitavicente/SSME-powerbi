@@ -28,6 +28,8 @@ interface SeriesCallout {
     labelY: number;
     side?: "left" | "right";
     placement?: "above" | "below";
+    fixedLabel?: boolean;
+    lineHeight?: number;
 }
 
 interface CurveRenderOptions {
@@ -84,7 +86,7 @@ export function renderCurve(curve: RenderCurveData, palette: VisualPalette, opti
 
     const render = (): void => {
         const rect = wrap.getBoundingClientRect();
-        const layout = curveLayout(rect.width, rect.height);
+        const layout = curveLayout(rect.width, rect.height, !options.portfolio);
         plot = layout.plot;
         svg.replaceChildren();
         svg.setAttribute("viewBox", `0 0 ${layout.width} ${layout.height}`);
@@ -136,13 +138,13 @@ export function renderCurve(curve: RenderCurveData, palette: VisualPalette, opti
     return card;
 }
 
-function curveLayout(rawWidth: number, rawHeight: number): CurveLayout {
+function curveLayout(rawWidth: number, rawHeight: number, projectLabels: boolean): CurveLayout {
     const width = Math.max(920, Math.round(rawWidth || 980));
     const height = Math.max(560, Math.round(rawHeight || 620));
     const left = 128;
-    const top = 54;
+    const top = projectLabels ? 88 : 54;
     const right = 172;
-    const bottom = 130;
+    const bottom = projectLabels ? 100 : 130;
     return {
         width,
         height,
@@ -200,8 +202,12 @@ function drawCurve(svg: SVGSVGElement, curve: RenderCurveData, palette: VisualPa
     seriesLayer.replaceChildren();
     const visualOffsets = seriesVisualOffsets(pointsToDraw, yScale);
     const segments: LineSegment[] = [];
+    const selectedWeek = numberValue(currentPoint.SemanaProyecto);
+    const limitPvToSac = !options.portfolio && sacWeek !== null
+        && (selectedWeek === null || selectedWeek <= sacWeek);
     series.forEach((item) => {
-        const rawCoordinates = coordinatesFor(pointsToDraw, item.key, xScale, yScale, visualOffsets[item.key]);
+        const rawCoordinates = coordinatesFor(pointsToDraw, item.key, xScale, yScale, visualOffsets[item.key],
+            limitPvToSac && item.key === "PV" ? sacWeek : null);
         const coordinates = options.portfolio && item.key === "PV"
             ? emphasizeSubtlePortfolioPvTrend(rawCoordinates)
             : rawCoordinates;
@@ -218,7 +224,9 @@ function drawCurve(svg: SVGSVGElement, curve: RenderCurveData, palette: VisualPa
         drawEacTimeLine(svg, references, referenceXScale, referenceYScale);
     }
     drawCurrentValueLabels(svg, pointsToDraw, references, xScale, referenceXScale, yScale, referenceYScale, visualOffsets, segments, atWeek, options);
-    drawTimelineMarkerLabels(svg, visibleReferences, referenceXScale, true);
+    drawTimelineMarkerLabels(svg, numberValue(references.Finalizado) === 1
+        ? { ...visibleReferences, EACT: null }
+        : visibleReferences, referenceXScale, true);
     drawVacCost(svg, references, xScale, yScale, referenceYScale);
     if (!options.portfolio) {
         drawVacTime(svg, references, referenceXScale);
@@ -341,10 +349,14 @@ function drawTimelineMarkerLabels(svg: SVGSVGElement, references: CurveReference
     const labelPositions = alignWithReferenceLines
         ? new Map(orderedGroups.map((group) => [group, group[0].x]))
         : timelineLabelPositions(orderedGroups);
+    const atMarker = markers.find((marker) => marker.key === "at");
+    const esMarker = markers.find((marker) => marker.key === "es");
+    const separateEsLabel = atMarker && esMarker && formatWeek(atMarker.week) !== formatWeek(esMarker.week)
+        && Math.abs(atMarker.x - esMarker.x) < 42;
     orderedGroups
         .forEach((group) => {
             const x = labelPositions.get(group) ?? group[0].x;
-            const labelY = plot.top + plot.height + 50;
+            const labelY = plot.top + plot.height + 50 + (separateEsLabel && group.some((marker) => marker.key === "es") ? 40 : 0);
             drawGroupedMarkerLabel(svg, group, x, labelY);
         });
 }
@@ -413,11 +425,11 @@ function drawSacLine(svg: SVGSVGElement, references: CurveReferences, xScale: (w
     drawLine(svg, x, plot.top, x, plot.top + plot.height, "evm-sac-line-vertical");
 }
 
-function coordinatesFor(points: CurveHistoryPoint[], key: SeriesKey, xScale: (week: number) => number, yScale: (value: number) => number, yOffset: number = 0): Array<PointCoordinate | null> {
+function coordinatesFor(points: CurveHistoryPoint[], key: SeriesKey, xScale: (week: number) => number, yScale: (value: number) => number, yOffset: number = 0, maxWeek: number | null = null): Array<PointCoordinate | null> {
     return points.map((point) => {
         const week = numberValue(point.SemanaProyecto);
         const value = numberValue(point[key]);
-        if (week === null || value === null) {
+        if (week === null || value === null || (maxWeek !== null && week > maxWeek)) {
             return null;
         }
         return { x: xScale(week), y: yScale(value) + yOffset, week, value };
@@ -635,8 +647,24 @@ function drawCurrentValueLabels(svg: SVGSVGElement, points: CurveHistoryPoint[],
         })
         .filter((item): item is SeriesCallout => item !== null);
 
+    // Near the left edge there is not enough room for labels on the left.
+    const earlyCallouts = !options.portfolio && callouts.length > 0
+        && callouts.every((item) => item.point.x - plot.left < 160);
+    if (earlyCallouts) {
+        callouts.sort((a, b) => a.point.y - b.point.y);
+        const baseY = Math.max(plot.top + 28, Math.min(...callouts.map((item) => item.point.y)) - 150);
+        callouts.forEach((item, index) => {
+            item.side = "right";
+            item.placement = "above";
+            item.labelY = baseY + index * 38;
+        });
+    }
+
     const bac = numberValue(references.BAC);
-    const bacPoint = lastSeriesPoint(points, "PV", xScale, yScale, visualOffsets.PV);
+    const sacWeek = numberValue(references.SAC);
+    const bacPoint = bac !== null && sacWeek !== null
+        ? { x: referenceXScale(sacWeek), y: yScale(bac), week: sacWeek, value: bac }
+        : null;
     if (bac !== null && bacPoint) {
         callouts.push({
             label: options.portfolio && !options.unit ? `BAC =\n${fullCurrency(bac)}` : `BAC = ${fullCurrency(bac)}`,
@@ -650,7 +678,7 @@ function drawCurrentValueLabels(svg: SVGSVGElement, points: CurveHistoryPoint[],
 
     const eacWeek = options.portfolio ? numberValue(references.SAC) : numberValue(references.EACT);
     const eacCost = numberValue(references.EACC);
-    if (eacWeek !== null && eacCost !== null) {
+    if (eacWeek !== null && eacCost !== null && numberValue(references.Finalizado) !== 1) {
         const eacPoint = { x: referenceXScale(eacWeek), y: referenceYScale(eacCost), week: eacWeek, value: eacCost };
         callouts.push({
             label: `EAC(c) = ${fullCurrency(eacCost)}`,
@@ -661,12 +689,29 @@ function drawCurrentValueLabels(svg: SVGSVGElement, points: CurveHistoryPoint[],
         });
     }
 
+    if (!options.portfolio) {
+        // Keep reference labels above the plot, with their original leader lines.
+        const bacLabel = callouts.find((item) => item.label.startsWith("BAC ="));
+        const eacLabel = callouts.find((item) => item.label.startsWith("EAC(c)"));
+        if (bacLabel) {
+            bacLabel.labelY = plot.top - 60;
+            bacLabel.fixedLabel = true;
+        }
+        if (eacLabel) {
+            eacLabel.label = `EAC(c) =\n${fullCurrency(eacCost)}`;
+            eacLabel.side = "right";
+            eacLabel.lineHeight = 24;
+            eacLabel.labelY = plot.top - 56;
+            eacLabel.fixedLabel = true;
+        }
+    }
+
     applyCoincidentPointOffsets(callouts);
     if (options.unit) {
         distributeUnitReferenceLanes(callouts);
     }
     callouts.sort((a, b) => a.labelY - b.labelY);
-    distributeCalloutLabels(callouts, segments, options.unit ? 34 : 24);
+    distributeCalloutLabels(callouts, segments, earlyCallouts ? 38 : options.unit ? 34 : 24);
     callouts.forEach((item) => drawLeaderLabel(svg, item));
 }
 
@@ -735,6 +780,7 @@ function distributeCalloutLabels(callouts: SeriesCallout[], segments: LineSegmen
     const pointYs = callouts.map((item) => item.labelY);
     const gapCandidates = gapLabelCandidates(pointYs, topLimit, bottomLimit);
     const candidates = callouts.map((item) => {
+        if (item.fixedLabel) return [item.labelY];
         const available = labelCandidates(item.labelY, gapCandidates, topLimit, bottomLimit);
         if (item.placement === "below") {
             const below = available.filter((value) => value >= item.point.y + 24);
@@ -867,7 +913,7 @@ function labelBounds(callout: SeriesCallout, labelY: number): LabelBounds {
         left: callout.side === "right" ? textX - 8 : textX - textWidth - 8,
         right: callout.side === "right" ? textX + textWidth + 8 : textX + 8,
         top: labelY - 19,
-        bottom: labelY + 7 + (lines.length - 1) * 19
+        bottom: labelY + 7 + (lines.length - 1) * (callout.lineHeight ?? 19)
     };
 }
 
@@ -930,7 +976,7 @@ function applyCoincidentPointOffsets(callouts: SeriesCallout[]): void {
 function drawLeaderLabel(svg: SVGSVGElement, callout: SeriesCallout): void {
     const textX = labelTextX(callout);
     const isRight = callout.side === "right";
-    const leaderEndX = callout.point.x + (isRight ? 10 : -10);
+    const leaderEndX = callout.point.x;
     const leaderMidX = isRight
         ? Math.max(textX - 28, leaderEndX + 18)
         : Math.min(textX + 28, leaderEndX - 18);
@@ -941,11 +987,11 @@ function drawLeaderLabel(svg: SVGSVGElement, callout: SeriesCallout): void {
     path.setAttribute("fill", "none");
     svg.appendChild(path);
     drawOverlapDot(svg, callout.point.x, callout.point.y, callout.className);
-    const text = addMultilineText(svg, callout.label, textX, callout.labelY, isRight ? "start" : "end", `evm-final-label ${callout.className}`);
+    const text = addMultilineText(svg, callout.label, textX, callout.labelY, isRight ? "start" : "end", `evm-final-label ${callout.className}`, callout.lineHeight);
     addTextBackground(svg, text, "evm-callout-label-bg", 6, 4);
 }
 
-function addMultilineText(svg: SVGSVGElement, label: string, x: number, y: number, anchor: "start" | "middle" | "end", className: string): SVGTextElement {
+function addMultilineText(svg: SVGSVGElement, label: string, x: number, y: number, anchor: "start" | "middle" | "end", className: string, lineHeight: number = 19): SVGTextElement {
     const item = svgElement("text");
     item.setAttribute("x", String(x));
     item.setAttribute("y", String(y));
@@ -955,7 +1001,7 @@ function addMultilineText(svg: SVGSVGElement, label: string, x: number, y: numbe
     label.split("\n").forEach((line, index) => {
         const span = svgElement("tspan");
         span.setAttribute("x", String(x));
-        span.setAttribute("dy", index === 0 ? "0" : "19");
+        span.setAttribute("dy", index === 0 ? "0" : String(lineHeight));
         span.textContent = line;
         item.appendChild(span);
     });
@@ -1002,8 +1048,12 @@ function drawVacCost(svg: SVGSVGElement, references: CurveReferences, xScale: (w
     drawDoubleArrow(svg, x, y1, y2, `evm-vac-line${statusClass}`, `evm-vac-arrowhead${statusClass}`);
     addText(svg, "VAC(c)", labelX, Math.min(y1, y2) + 16, "start", labelClass);
     addText(svg, projectionLabel, labelX, Math.min(y1, y2) + 39, "start", labelClass);
-    addText(svg, isBreakEven ? "Equilibrio" : "Proyectado", labelX, Math.min(y1, y2) + 59, "start", labelClass);
-    addText(svg, fullCurrency(vacCost === null ? null : Math.abs(vacCost)), labelX, Math.min(y1, y2) + 84, "start", labelClass);
+    const showProjection = numberValue(references.Finalizado) !== 1;
+    if (isBreakEven || showProjection) {
+        addText(svg, isBreakEven ? "Equilibrio" : "Proyectado", labelX, Math.min(y1, y2) + 59, "start", labelClass);
+    }
+    addText(svg, fullCurrency(vacCost === null ? null : Math.abs(vacCost)), labelX,
+        Math.min(y1, y2) + (isBreakEven || showProjection ? 84 : 64), "start", labelClass);
 }
 
 function drawVacTime(svg: SVGSVGElement, references: CurveReferences, xScale: (week: number) => number): void {
@@ -1025,7 +1075,8 @@ function drawVacTime(svg: SVGSVGElement, references: CurveReferences, xScale: (w
     const timeLabel = vacTime === null ? text(null) : Math.abs(vacTime).toLocaleString("en-US", { maximumFractionDigits: 2 });
     drawHorizontalDoubleArrow(svg, x1, x2, y, lineClass, arrowClass);
     addText(svg, "VAC(t)", (x1 + x2) / 2, y - 22, "middle", labelClass);
-    addText(svg, isBreakEven ? "Punto de Equilibrio" : (isAhead ? "Adelanto Proyectado" : "Retraso Proyectado"), (x1 + x2) / 2, y + 28, "middle", labelClass);
+    const projectionSuffix = numberValue(references.Finalizado) === 1 ? "" : " Proyectado";
+    addText(svg, isBreakEven ? "Punto de Equilibrio" : `${isAhead ? "Adelanto" : "Retraso"}${projectionSuffix}`, (x1 + x2) / 2, y + 28, "middle", labelClass);
     addText(svg, `${timeLabel} semanas`, (x1 + x2) / 2, y + 50, "middle", labelClass);
 }
 

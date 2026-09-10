@@ -7,6 +7,7 @@ export interface SidebarOptions {
     expanded: boolean;
     activeLevel: DashboardLevel;
     portfolioViewActive: "summary" | "matrix";
+    unitViewActive: "summary" | "matrix";
     projectViewActive: "summary" | "milestones" | "risks";
     riskViewActive: "summary" | "matrix";
     canOpenUnit: boolean;
@@ -16,6 +17,7 @@ export interface SidebarOptions {
     onOpenUnit: () => void;
     onOpenProject: () => void;
     onPortfolioView: (view: "summary" | "matrix") => void;
+    onUnitView: (view: "summary" | "matrix") => void;
     onProjectView: (view: "summary" | "milestones" | "risks") => void;
     onRiskView: (view: "summary" | "matrix") => void;
     onOpenFilters: () => void;
@@ -42,7 +44,15 @@ export function renderSidebar(options: SidebarOptions): HTMLElement {
         portfolioGroup.appendChild(portfolioSubmenu);
     }
     menu.appendChild(portfolioGroup);
-    menu.appendChild(renderSidebarButton("☷", "Unidad Gerencial", options.activeLevel === "UNIDAD", false, options.onOpenUnit, options.canOpenUnit ? "Abrir Unidad Gerencial" : "Seleccione una unidad"));
+    const unitGroup = createElement("div", `evm-menu-project-group${options.activeLevel === "UNIDAD" ? " active" : ""}`);
+    unitGroup.appendChild(renderSidebarButton("☷", "Unidad Gerencial", options.activeLevel === "UNIDAD", false, options.onOpenUnit, options.canOpenUnit ? "Abrir Unidad Gerencial" : "Seleccione una unidad"));
+    if (options.activeLevel === "UNIDAD") {
+        const submenu = createElement("div", "evm-project-submenu");
+        submenu.appendChild(renderProjectSubtab("Resumen", "summary", options.unitViewActive === "summary", () => options.onUnitView("summary"), "unit"));
+        submenu.appendChild(renderProjectSubtab("Matriz", "matrix", options.unitViewActive === "matrix", () => options.onUnitView("matrix"), "unit"));
+        unitGroup.appendChild(submenu);
+    }
+    menu.appendChild(unitGroup);
     const projectGroup = createElement("div", `evm-menu-project-group${options.activeLevel === "PROYECTO" ? " active" : ""}`);
     projectGroup.appendChild(renderSidebarButton("▣", "Proyectos", options.activeLevel === "PROYECTO", false, options.onOpenProject, options.canOpenProject ? "Abrir Proyectos" : "Seleccione un proyecto"));
     if (options.activeLevel === "PROYECTO") {
@@ -85,13 +95,13 @@ function renderProjectSubtab(
     view: "summary" | "matrix",
     active: boolean,
     onClick: () => void,
-    scope: "project" | "portfolio" | "risk"
+    scope: "project" | "portfolio" | "risk" | "unit"
 ): HTMLButtonElement {
     const item = createElement("button", `evm-project-subtab${active ? " active" : ""}`);
     item.type = "button";
     item.dataset.projectView = view;
     item.dataset.carouselScope = scope;
-    item.setAttribute("aria-label", `Abrir ${label} de ${scope === "project" ? "Proyectos" : scope === "portfolio" ? "Alta Dirección" : "Riesgos"}`);
+    item.setAttribute("aria-label", `Abrir ${label} de ${scope === "project" ? "Proyectos" : scope === "portfolio" ? "Alta Dirección" : scope === "unit" ? "Unidad Gerencial" : "Riesgos"}`);
     item.appendChild(createElement("span", "evm-project-subtab-marker", "•"));
     item.appendChild(createElement("span", undefined, label));
     item.addEventListener("click", (event) => {
@@ -157,14 +167,18 @@ export function renderHeader(header: ProjectHeader, options: { titleLabel?: stri
     project.appendChild(meta);
 
     const stateClass = projectStateClass(header.EstadoProyecto);
+    const stablePortfolio = options.stateLabel === "Estado del Portafolio" && stateClass === "stable";
     const state = createElement("div", `evm-project-state ${stateClass}`);
+    state.classList.toggle("evm-project-state--portfolio", options.stateLabel === "Estado del Portafolio");
     const stateIcon = createElement("div", "evm-project-state-icon");
     stateIcon.appendChild(createElement("span", undefined, stateClass === "stable" ? "✓" : "!"));
     const stateBody = createElement("div", "evm-project-state-body");
     const stateCopy = createElement("div", "evm-project-state-copy");
     stateCopy.appendChild(createElement("span", undefined, options.stateLabel ?? "Estado del Proyecto"));
     stateCopy.appendChild(createElement("strong", undefined, text(header.EstadoProyecto, "Sin estado")));
-    const stateMessage = createElement("small", "evm-project-state-message", text(header.MensajeEjecutivo, ""));
+    const stateMessage = createElement("small", "evm-project-state-message", stablePortfolio
+        ? "Desempeño Institucional dentro de los rangos esperados"
+        : text(header.MensajeEjecutivo, ""));
     state.appendChild(stateIcon);
     stateBody.appendChild(stateCopy);
     stateBody.appendChild(stateMessage);
