@@ -5258,6 +5258,19 @@
     background: #EEF2FF;
     border: 1px solid transparent;
     box-shadow: 0 1px 5px rgba(0, 27, 142, 0.06);
+    cursor: pointer;
+    font-family: inherit;
+    transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+
+.evm-risk-mini:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 18px rgba(0, 27, 142, 0.14);
+}
+
+.evm-risk-mini:focus-visible {
+    outline: 3px solid rgba(23, 105, 232, 0.35);
+    outline-offset: 3px;
 }
 
 .evm-risk-mini strong {
@@ -5365,6 +5378,218 @@
     background: #EEF2FF;
     color: #001B8E;
     font-weight: 950;
+}
+
+.evm-risk-detail-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 999999;
+    display: grid;
+    place-items: center;
+    padding: 6px;
+    background: rgba(5, 18, 54, 0.42);
+}
+
+.evm-risk-detail-modal {
+    width: calc(100vw - 12px);
+    max-width: 1720px;
+    height: auto;
+    min-height: 0;
+    max-height: calc(100vh - 12px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: 12px;
+    background: #FFFFFF;
+    box-shadow: 0 24px 60px rgba(0, 27, 142, 0.24);
+}
+
+.evm-risk-detail-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 22px;
+    border-bottom: 1px solid #DDE3F0;
+    background: #F8FAFF;
+}
+
+.evm-risk-detail-modal-header span {
+    display: block;
+    color: #1769E8;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 0.6px;
+}
+
+.evm-risk-detail-modal-header h2 {
+    margin: 2px 0 0;
+    color: #001B8E;
+    font-size: 32px;
+    font-weight: 950;
+    letter-spacing: 0;
+}
+
+.evm-risk-detail-modal-header strong {
+    display: block;
+    margin-top: 2px;
+    color: #00145C;
+    font-size: 18px;
+    font-weight: 900;
+}
+
+.evm-risk-detail-modal-close {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border: 1px solid #D7DEEC;
+    border-radius: 8px;
+    background: #FFFFFF;
+    color: #001B8E;
+    cursor: pointer;
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.evm-risk-detail-modal-close:hover {
+    background: #EEF2FF;
+}
+
+.evm-risk-detail-modal-body {
+    min-height: 0;
+    padding: 12px 14px 14px;
+    overflow: auto;
+}
+
+.evm-risk-detail-modal-empty {
+    padding: 34px;
+    border: 1px dashed #CBD5E1;
+    border-radius: 10px;
+    color: #00145C;
+    text-align: center;
+    font-size: 18px;
+    font-weight: 800;
+}
+
+.evm-risk-detail-modal-table-wrap {
+    overflow: auto;
+    border: 1px solid #DDE3F0;
+    border-radius: 10px;
+}
+
+.evm-risk-detail-modal-table {
+    width: 100%;
+    min-width: 1540px;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-family: "Segoe UI", Arial, sans-serif;
+    font-size: 16px;
+}
+
+.evm-risk-detail-modal-table th,
+.evm-risk-detail-modal-table td {
+    padding: 12px 13px;
+    border-right: 1px solid #E2E8F4;
+    border-bottom: 1px solid #E2E8F4;
+    color: #00145C;
+    text-align: center;
+    vertical-align: middle;
+    overflow-wrap: anywhere;
+}
+
+.evm-risk-detail-modal-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    height: 54px;
+    background: #F8FAFF;
+    color: #001B8E;
+    font-weight: 900;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.evm-risk-detail-modal-table tr:last-child td {
+    border-bottom: 0;
+}
+
+.evm-risk-detail-total-row td {
+    background: #EEF2FF;
+    color: #001B8E;
+    font-weight: 950;
+}
+
+.evm-risk-detail-modal-table th:last-child,
+.evm-risk-detail-modal-table td:last-child {
+    border-right: 0;
+}
+
+.evm-risk-detail-col-id {
+    width: 6%;
+}
+
+.evm-risk-detail-col-date {
+    width: 7%;
+}
+
+.evm-risk-detail-col-description {
+    width: 21%;
+}
+
+.evm-risk-detail-col-category {
+    width: 11%;
+}
+
+.evm-risk-detail-col-responsible {
+    width: 9%;
+}
+
+.evm-risk-detail-col-response-plan {
+    width: 10%;
+}
+
+.evm-risk-detail-col-impact {
+    width: 7%;
+}
+
+.evm-risk-detail-col-probability {
+    width: 9%;
+}
+
+.evm-risk-detail-col-level {
+    width: 6%;
+}
+
+.evm-risk-detail-col-schedule {
+    width: 8%;
+}
+
+.evm-risk-detail-col-cost {
+    width: 8%;
+}
+
+.evm-risk-detail-col-quantity {
+    width: 7%;
+    text-align: center;
+}
+
+.evm-risk-detail-level {
+    font-weight: 900;
+}
+
+.evm-risk-detail-level.low {
+    color: #16A34A;
+}
+
+.evm-risk-detail-level.medium {
+    color: #FF9800;
+}
+
+.evm-risk-detail-level.high {
+    color: #FF1E1E;
 }
 
 .evm-risk-level {

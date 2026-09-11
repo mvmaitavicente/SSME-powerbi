@@ -107,6 +107,14 @@ export interface PerformanceData {
 }
 
 export interface RiskItem {
+    IdRiesgo?: DataValue;
+    FechaRegistro?: DataValue;
+    Descripcion?: string;
+    Categoria?: string;
+    Responsable?: string;
+    PlanRespuesta?: string;
+    Impacto?: string;
+    Probabilidad?: string;
     NivelRiesgo?: string;
     CantidadRiesgos?: DataValue;
     PorcentajeRiesgos?: DataValue;
@@ -120,6 +128,7 @@ export interface RiskItem {
     IntervencionesRiesgo?: DataValue;
     IntervencionesRiesgoAltoPct?: DataValue;
     TendenciaRiesgosPct?: DataValue;
+    Details?: RiskItem[];
 }
 
 export interface MilestoneItem {

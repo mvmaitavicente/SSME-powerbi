@@ -728,7 +728,8 @@ function parseDashboardPayload(
     const normalizedPortfolioSummary = normalizePortfolioSummary(portfolioSummaryRows[0] ?? null);
     const normalizedProjects = projectSummaryRows.map(normalizeUnitProjectSummary);
 
-    const normalizedRisks = riskRows.map(normalizeJsonRisk).filter((item) => hasAny(item as FieldValueMap, riskFields));
+    const normalizedRiskRows = riskRows.map(normalizeJsonRisk).filter((item) => hasAny(item as FieldValueMap, riskFields));
+    const normalizedRisks = isProject ? aggregateProjectRiskRows(normalizedRiskRows) : normalizedRiskRows;
     const normalizedMilestones = sortIfNeeded(milestoneRows
         .map(normalizeJsonMilestone)
         .filter((item) => hasAny(item as FieldValueMap, milestoneFields)),
@@ -1186,7 +1187,15 @@ function buildNonProjectPlaceholder(context: DashboardContextData): DashboardDat
 
 function normalizeJsonRisk(row: Record<string, unknown>): RiskItem {
     return {
-        NivelRiesgo: textValue(firstKnownValue(row, "NivelRiesgo")),
+        IdRiesgo: textOrNumberValue(firstKnownValue(row, "IdRiesgo", "RiskId")),
+        FechaRegistro: nullableText(firstKnownValue(row, "FechaRegistro", "Fecha")),
+        Descripcion: textValue(firstKnownValue(row, "Descripcion", "DescripcionRiesgo", "Descripción", "Descripción del Riesgo")),
+        Categoria: textValue(firstKnownValue(row, "Categoria", "CategoriaRiesgo", "Categoría", "Fecha")),
+        Responsable: textValue(firstKnownValue(row, "Responsable", "ResponsableRiesgo")),
+        PlanRespuesta: textValue(firstKnownValue(row, "PlanRespuesta", "Plan de Respuesta")),
+        Impacto: textValue(firstKnownValue(row, "Impacto")),
+        Probabilidad: textValue(firstKnownValue(row, "Probabilidad")),
+        NivelRiesgo: textValue(firstKnownValue(row, "NivelRiesgo", "Nivel", "Nivel de Riesgo")),
         CantidadRiesgos: toNullableNumber(firstKnownValue(row, "CantidadRiesgos", "Cantidad")),
         PorcentajeRiesgos: toNullablePercentage(firstKnownValue(
             row,
@@ -1226,6 +1235,63 @@ function normalizeJsonRisk(row: Record<string, unknown>): RiskItem {
             "VariacionRiesgosPct"
         ))
     };
+}
+
+function aggregateProjectRiskRows(risks: RiskItem[]): RiskItem[] {
+    const groups = new Map<string, { label: string; ids: Set<string>; details: RiskItem[]; quantity: number; scheduleImpact: number; costImpact: number; hasIds: boolean; hasQuantity: boolean }>();
+    risks.forEach((risk) => {
+        const label = risk.NivelRiesgo || "";
+        const key = normalizeRiskLevelKey(label);
+        if (!key) {
+            return;
+        }
+        const group = groups.get(key) ?? {
+            label,
+            ids: new Set<string>(),
+            details: [],
+            quantity: 0,
+            scheduleImpact: 0,
+            costImpact: 0,
+            hasIds: false,
+            hasQuantity: false
+        };
+        const id = textValue(risk.IdRiesgo);
+        if (id) {
+            group.ids.add(id);
+            group.hasIds = true;
+        }
+        const quantity = toNullableNumber(risk.CantidadRiesgos);
+        if (quantity !== null) {
+            group.quantity += quantity;
+            group.hasQuantity = true;
+        }
+        group.scheduleImpact += toNullableNumber(risk.ImpactoPlazoSemanas) ?? 0;
+        group.costImpact += toNullableNumber(risk.ImpactoCosto) ?? 0;
+        group.details.push(risk);
+        groups.set(key, group);
+    });
+
+    return Array.from(groups.values()).map((group) => ({
+        NivelRiesgo: group.label,
+        CantidadRiesgos: group.hasIds ? group.ids.size : group.quantity,
+        ImpactoPlazoSemanas: group.scheduleImpact,
+        ImpactoCosto: group.costImpact,
+        Details: group.details
+    }));
+}
+
+function normalizeRiskLevelKey(level: string): string {
+    const value = level.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (value.includes("alto")) {
+        return "alto";
+    }
+    if (value.includes("medio")) {
+        return "medio";
+    }
+    if (value.includes("bajo")) {
+        return "bajo";
+    }
+    return value.trim();
 }
 
 function normalizePortfolioSummary(row: Record<string, unknown> | null): PortfolioSummaryData | null {
