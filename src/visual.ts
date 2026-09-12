@@ -191,6 +191,7 @@ export class Visual implements IVisual {
     private filterLoadingTimer: number | null = null;
     private filterLoadingSafetyTimer: number | null = null;
     private projectCarouselIndex: number = 0;
+    private projectCurveExpanded: boolean = false;
     private portfolioCarouselIndex: number = 0;
     private riskCarouselIndex: number = 0;
     private readonly lazyCarousel = new LazyCarouselView();
@@ -221,6 +222,8 @@ export class Visual implements IVisual {
 
     private selectedProjectWeek: number | null = null;
     private weekFilterProjectId: string | null = null;
+    private selectedUnitWeek: number | null = null;
+    private weekFilterUnit: string | null = null;
     private lastWeekFilterUpdateOptions: VisualUpdateOptions | null = null;
     private forceWeekFilterRender = false;
 
@@ -354,7 +357,7 @@ export class Visual implements IVisual {
                     }
                 }));
                 root.appendChild(this.renderCurrentDashboard(dashboard, options.viewport));
-                if (this.filterPanelOpen && dashboard.context.Level !== "PROYECTO") {
+                if (this.filterPanelOpen && dashboard.context.Level !== "PROYECTO" && dashboard.context.Level !== "UNIDAD") {
                     root.appendChild(this.renderFilterPanel());
                 }
             } else {
@@ -1303,7 +1306,7 @@ export class Visual implements IVisual {
         return section;
     }
 
-    private renderPortfolioRiskSection(risks: RiskItem[]): HTMLElement {
+    private renderPortfolioRiskSection(risks: RiskItem[], mode: "portfolio" | "unit" = "portfolio"): HTMLElement {
         const section = createElement("section", "evm-card evm-portfolio-risk-section");
 
         const matrixRows = risks.filter((risk) => Boolean(risk.UnidadGerencial));
@@ -1337,7 +1340,7 @@ export class Visual implements IVisual {
         matrix.appendChild(createElement("h3", undefined, "MATRIZ DE RIESGOS"));
         const grid = createElement("div", "evm-portfolio-risk-grid");
         [
-            { label: "UNIDAD GERENCIAL", className: "unit" },
+            { label: mode === "unit" ? "PROYECTO" : "UNIDAD GERENCIAL", className: "unit" },
             { label: "BAJO", className: "low" },
             { label: "MEDIO", className: "medium" },
             { label: "ALTO", className: "high" },
@@ -1354,8 +1357,10 @@ export class Visual implements IVisual {
             const isTotal = risk === totalSource;
             const rowLabel = createElement("strong", isTotal ? "row-label total" : "row-label");
             if (!isTotal) {
-                rowLabel.appendChild(this.renderUnitProgressIcon(risk.UnidadGerencial ?? ""));
-                const rawUnitName = risk.UnidadGerencial?.trim() ?? "—";
+                rowLabel.appendChild(this.renderUnitProgressIcon(mode === "unit" ? String(risk.Cui ?? "") : risk.UnidadGerencial ?? ""));
+                const rawUnitName = mode === "unit"
+                    ? `${risk.Cui ? `${risk.Cui} - ` : ""}${risk.NombreIntervencion || risk.UnidadGerencial || "?"}`
+                    : risk.UnidadGerencial?.trim() ?? "?";
                 const separatorIndex = rawUnitName.indexOf(" - ");
                 const unitCode = separatorIndex >= 0 ? rawUnitName.slice(0, separatorIndex) : rawUnitName;
                 const unitName = separatorIndex >= 0 ? rawUnitName.slice(separatorIndex + 3) : "";
@@ -1610,6 +1615,14 @@ export class Visual implements IVisual {
         main.classList.toggle("evm-main--unit-matrix", this.unitMatrixPageActive);
         main.style.minWidth = `${Math.min(780, Math.max(0, viewport.width - 92))}px`;
         const unitName = text(this.resolveUnitForNavigation(dashboard), "UGEO");
+        if (this.weekFilterUnit !== unitName) {
+            this.weekFilterUnit = unitName;
+            this.selectedUnitWeek = null;
+        }
+        const availableWeeks = this.unitFilterWeeks(dashboard);
+        if (this.selectedUnitWeek === null || !availableWeeks.includes(this.selectedUnitWeek)) {
+            this.selectedUnitWeek = availableWeeks[availableWeeks.length - 1] ?? null;
+        }
         const unitHeader = renderHeader(
             this.portfolioHeaderData(`TABLERO UNIDAD GERENCIAL - ${unitName}`, dashboard),
             {
@@ -1619,21 +1632,63 @@ export class Visual implements IVisual {
             }
         );
         unitHeader.classList.add("evm-unit-dashboard-header");
-        const changeUnit = createElement("button", "evm-change-unit-button");
-        changeUnit.type = "button";
-        changeUnit.appendChild(createElement("span", undefined, "⇄"));
-        changeUnit.appendChild(document.createTextNode("Cambiar unidad"));
-        changeUnit.addEventListener("click", () => this.openUnitSelectorModal(dashboard));
-        unitHeader.querySelector(".evm-project-title")?.appendChild(changeUnit);
         main.appendChild(unitHeader);
-        main.appendChild(this.renderPortfolioGaugeSection(dashboard));
+        main.appendChild(this.renderUnitInlineFilterPanel(dashboard, availableWeeks));
+        main.appendChild(this.renderPortfolioGaugeSection(dashboard, this.selectedUnitWeek));
         main.appendChild(this.renderPortfolioBody(
-            this.buildAggregateRenderCurve(dashboard),
+            this.buildAggregateRenderCurve(dashboard, this.selectedUnitWeek),
             renderPortfolioDashboard(dashboard.portfolioSummary, unitName),
             unitName,
-            dashboard.projects
+            dashboard.projects,
+            dashboard.risks
         ));
         return main;
+    }
+
+    private unitFilterWeeks(dashboard: ParsedDashboardData): number[] {
+        const terminalWeek = this.unitTerminalWeek(dashboard.aggregateCurve);
+        return Array.from(new Set(dashboard.aggregateCurve
+            .map((row) => row.OrdenSemana)
+            .filter((week) => Number.isFinite(week) && week >= 1 && (terminalWeek === null || week <= terminalWeek))))
+            .sort((a, b) => a - b);
+    }
+
+    private unitTerminalWeek(rows: AggregateCurveData[]): number | null {
+        for (let index = rows.length - 1; index >= 0; index--) {
+            const marker = numberValue(rows[index].SemanaPortafolio);
+            if (marker === null || Math.abs(marker) < 0.000001) {
+                continue;
+            }
+            return marker > 1 ? marker : rows[index].OrdenSemana;
+        }
+        return null;
+    }
+
+    private renderUnitInlineFilterPanel(dashboard: ParsedDashboardData, weeks: number[]): HTMLElement {
+        const panel = createElement("aside", "evm-filter-panel evm-card evm-filter-panel--project-inline evm-filter-panel--unit-inline");
+        const header = createElement("div", "evm-filter-panel-header");
+        header.appendChild(createElement("strong", undefined, "Filtros"));
+        panel.appendChild(header);
+        panel.appendChild(this.renderFilterSelect("Semana", "unit-week", weeks.map((week) => ({
+            value: String(week), label: String(week)
+        })), this.selectedUnitWeek === null ? null : String(this.selectedUnitWeek), (value) => {
+            this.selectedUnitWeek = value === null ? null : Number(value);
+            if (this.lastWeekFilterUpdateOptions) {
+                this.forceWeekFilterRender = true;
+                try {
+                    this.update(this.lastWeekFilterUpdateOptions);
+                } finally {
+                    this.forceWeekFilterRender = false;
+                }
+            }
+        }, false, weeks.length === 0));
+        const changeUnit = createElement("button", "evm-filter-clear");
+        changeUnit.type = "button";
+        changeUnit.appendChild(createElement("span", "evm-action-icon", "⇄"));
+        changeUnit.appendChild(createElement("span", "evm-action-label", "Cambiar unidad"));
+        changeUnit.addEventListener("click", () => this.openUnitSelectorModal(dashboard));
+        panel.appendChild(changeUnit);
+        return panel;
     }
 
     private openUnitSelectorModal(dashboard: ParsedDashboardData): void {
@@ -1861,7 +1916,7 @@ export class Visual implements IVisual {
     private unitMatrixPageActive = false;
     private activateUnitPage: ((index: number) => void) | null = null;
 
-    private renderPortfolioBody(curve: RenderCurveData, sidePanel: HTMLElement, unitName: string, projects: UnitProjectSummaryData[]): HTMLElement {
+    private renderPortfolioBody(curve: RenderCurveData, sidePanel: HTMLElement, unitName: string, projects: UnitProjectSummaryData[], risks: RiskItem[] = []): HTMLElement {
         const carousel = createElement("section", "evm-body-carousel");
         carousel.classList.add("evm-unit-body-carousel");
         const viewport = createElement("div", "evm-body-carousel-viewport");
@@ -1869,7 +1924,12 @@ export class Visual implements IVisual {
         const left = createElement("div", "evm-left-column");
         const right = createElement("div", "evm-right-column");
 
-        const curveCard = renderCurve(curve, palette, { portfolio: true, unit: true, showYearBracket: true }, this.viewLifecycle);
+            const curveCard = renderCurve(curve, palette, {
+                portfolio: true,
+                unit: true,
+                showYearBracket: true,
+                visibleWeeksBack: numberValue(curve.references.Finalizado) === 1 ? 20 : 6
+            }, this.viewLifecycle);
         curveCard.classList.add("evm-portfolio-curve-card");
         const curveTitle = curveCard.querySelector(".evm-section-title");
         if (curveTitle instanceof HTMLElement) {
@@ -1888,7 +1948,10 @@ export class Visual implements IVisual {
             this.unitMatrixPageActive = index === 1;
             carousel.closest(".evm-main--unit")?.classList.toggle("evm-main--unit-matrix", this.unitMatrixPageActive);
             if (index === 1 && !matrixMounted) {
-                matrixPage.appendChild(this.renderUnitProjectsMatrix(projects));
+                matrixPage.appendChild(this.renderUnitProjectsMatrix(projects, this.selectedUnitWeek));
+                if (risks.length) {
+                    matrixPage.appendChild(this.renderPortfolioRiskSection(risks, "unit"));
+                }
                 matrixMounted = true;
             }
             [page, matrixPage].forEach((item, itemIndex) => {
@@ -1919,10 +1982,11 @@ export class Visual implements IVisual {
         return carousel;
     }
 
-    private renderUnitProjectsMatrix(projects: UnitProjectSummaryData[]): HTMLElement {
+    private renderUnitProjectsMatrix(projects: UnitProjectSummaryData[], selectedWeek: number | null = null): HTMLElement {
         const card = createElement("section", "evm-card evm-project-curve-matrix-card evm-unit-projects-matrix-card");
         card.appendChild(createElement("div", "evm-section-title", "MATRIZ DE EVM - PROYECTOS DE LA UNIDAD"));
-        if (!projects.length) {
+        const rows = this.unitProjectRowsForWeek(projects, selectedWeek);
+        if (!rows.length) {
             card.appendChild(createElement("div", "evm-empty", "No se recibieron proyectos de la unidad."));
             return card;
         }
@@ -1956,7 +2020,7 @@ export class Visual implements IVisual {
         head.appendChild(fieldRow);
         table.appendChild(head);
         const body = document.createElement("tbody");
-        projects.forEach((project) => {
+        rows.forEach((project) => {
             const row = document.createElement("tr");
             groups.forEach((group) => group.fields.forEach((field) => {
                 const keys = aliases[field] ?? [field, field.replace(/\s|[()]/g, "").toUpperCase()];
@@ -1977,6 +2041,14 @@ export class Visual implements IVisual {
         wrap.appendChild(table);
         card.appendChild(wrap);
         return card;
+    }
+
+    private unitProjectRowsForWeek(projects: UnitProjectSummaryData[], selectedWeek: number | null): UnitProjectSummaryData[] {
+        if (selectedWeek === null || !projects.some((project) => numberValue(project.Semana) !== null)) {
+            return projects;
+        }
+        const filtered = projects.filter((project) => numberValue(project.Semana) === selectedWeek);
+        return filtered.length ? filtered : projects;
     }
 
     private renderUnitsPanel(units: UnitSummaryData[]): HTMLElement {
@@ -2152,8 +2224,8 @@ export class Visual implements IVisual {
         return panel;
     }
 
-    private renderPortfolioGaugeSection(dashboard: ParsedDashboardData): HTMLElement {
-        const rows = this.windowAggregateGaugeRows(dashboard);
+    private renderPortfolioGaugeSection(dashboard: ParsedDashboardData, selectedWeek: number | null = null): HTMLElement {
+        const rows = this.windowAggregateGaugeRows(dashboard, selectedWeek);
         const gauges = this.buildAggregateGauges(rows);
         if (!gauges.length) {
             const empty = createElement("section", "evm-card evm-portfolio-empty-section");
@@ -2165,9 +2237,9 @@ export class Visual implements IVisual {
         return renderGaugeGrid(gauges, palette, (key) => this.openGaugeHistoryModal(key), this.viewLifecycle);
     }
 
-    private windowAggregateGaugeRows(dashboard: ParsedDashboardData): AggregateGaugeData[] {
+    private windowAggregateGaugeRows(dashboard: ParsedDashboardData, selectedWeek: number | null = null): AggregateGaugeData[] {
         const orderedRows = dashboard.aggregateGauges;
-        const curve = this.buildAggregateRenderCurve(dashboard);
+        const curve = this.buildAggregateRenderCurve(dashboard, selectedWeek);
         const currentWeek = numberValue(curve.current.SemanaProyecto);
         if (currentWeek === null) {
             return orderedRows;
@@ -2233,30 +2305,42 @@ export class Visual implements IVisual {
         return "Critico";
     }
 
-    private buildAggregateRenderCurve(dashboard: ParsedDashboardData): RenderCurveData {
+    private buildAggregateRenderCurve(dashboard: ParsedDashboardData, selectedWeek: number | null = null): RenderCurveData {
         const orderedRows = dashboard.aggregateCurve;
-        const history: CurveHistoryPoint[] = orderedRows.map((row) => ({
+        const terminalWeek = dashboard.context.Level === "UNIDAD" ? this.unitTerminalWeek(orderedRows) : null;
+        const curveRows = terminalWeek === null
+            ? orderedRows
+            : orderedRows.filter((row) => row.OrdenSemana <= terminalWeek);
+        const history: CurveHistoryPoint[] = curveRows.map((row) => ({
             SemanaProyecto: row.OrdenSemana,
             PV: row.PV,
-            EV: row.EV,
-            AC: row.AC
+            EV: selectedWeek === null || row.OrdenSemana <= selectedWeek ? row.EV : null,
+            AC: selectedWeek === null || row.OrdenSemana <= selectedWeek ? row.AC : null
         }));
-        const at = this.lastAggregateValue(orderedRows, (row) => row.AT);
+        const selectedRow = selectedWeek === null ? null : curveRows.find((row) => row.OrdenSemana === selectedWeek) ?? null;
+        const at = selectedWeek ?? this.lastAggregateValue(orderedRows, (row) => row.AT);
         const eacCostAt = this.aggregateValueAtWeek(orderedRows, at, (row) => row.EACC);
         const eacTimeAt = this.aggregateValueAtWeek(orderedRows, at, (row) => row.EACT);
         const vacCostAt = this.aggregateValueAtWeek(orderedRows, at, (row) => row.VACC);
         const vacTimeAt = this.aggregateValueAtWeek(orderedRows, at, (row) => row.VACT);
+        const isUnitFinalWeek = dashboard.context.Level === "UNIDAD"
+            && terminalWeek !== null
+            && at !== null
+            && Math.abs(at - terminalWeek) < 0.000001;
         const references: CurveReferences = {
             BAC: this.lastAggregateValue(orderedRows, (row) => row.BAC),
-            SAC: this.lastAggregateValue(orderedRows, (row) => row.SAC),
+            SAC: terminalWeek ?? this.lastAggregateValue(orderedRows, (row) => row.SAC),
             AT: at,
-            ES: this.lastAggregateValue(orderedRows, (row) => row.ES),
+            ES: selectedRow?.ES ?? this.lastAggregateValue(orderedRows, (row) => row.ES),
             EACC: eacCostAt,
             EACT: eacTimeAt,
             VACC: vacCostAt,
             VACT: vacTimeAt,
-            SPIT: this.lastAggregateValue(orderedRows, (row) => numberValue(row["SPI (t)"] as DataValue) ?? numberValue(row.SPIT as DataValue)),
-            TSPIT: this.lastAggregateValue(orderedRows, (row) => row.TSPIT),
+            Finalizado: isUnitFinalWeek ? 1 : null,
+            SPIT: selectedRow === null
+                ? this.lastAggregateValue(orderedRows, (row) => numberValue(row["SPI (t)"] as DataValue) ?? numberValue(row.SPIT as DataValue))
+                : numberValue(selectedRow["SPI (t)"] as DataValue) ?? numberValue(selectedRow.SPIT as DataValue),
+            TSPIT: selectedRow?.TSPIT ?? this.lastAggregateValue(orderedRows, (row) => row.TSPIT),
             FechaEstado: dashboard.context.CutoffDate
         };
         const current = this.currentAggregateCurvePoint(orderedRows, references, dashboard.context.CutoffDate);
@@ -2524,6 +2608,7 @@ export class Visual implements IVisual {
             const evmRight = createElement("div", "evm-right-column");
             evmRight.appendChild(renderPerformance(dashboard.performance));
             page.append(evmLeft, evmRight);
+            this.attachProjectCurveExpansion(page, curveCard, evmRight);
         });
 
         const riskPage = this.createLazyCarouselPage("evm-body-carousel-page evm-body-carousel-page--risk", this.projectCarouselIndex === 1, (page) => {
@@ -2549,6 +2634,40 @@ export class Visual implements IVisual {
         carousel.appendChild(next);
         this.updateCarouselButtons(carousel);
         return carousel;
+    }
+
+    private attachProjectCurveExpansion(page: HTMLElement, curveCard: HTMLElement, performance: HTMLElement): void {
+        curveCard.classList.add("evm-curve-card--expandable");
+        const edge = createElement("div", "evm-curve-expand-edge");
+        const button = createElement("button", "evm-curve-expand-button");
+        button.type = "button";
+        const sync = (): void => {
+            const expanded = this.projectCurveExpanded;
+            page.classList.toggle("evm-body-carousel-page--curve-expanded", expanded);
+            performance.hidden = expanded;
+            performance.setAttribute("aria-hidden", String(expanded));
+            button.setAttribute("aria-expanded", String(expanded));
+            button.setAttribute("aria-label", expanded ? "Contraer Curva S" : "Expandir Curva S a todo el ancho");
+            button.title = expanded ? "Contraer Curva S" : "Expandir Curva S";
+            button.textContent = expanded ? "↤" : "↦";
+        };
+        button.addEventListener("click", (event) => {
+            event.stopPropagation();
+            this.projectCurveExpanded = !this.projectCurveExpanded;
+            sync();
+        });
+        page.addEventListener("keydown", (event) => {
+            if (event.key === "Escape" && this.projectCurveExpanded) {
+                event.preventDefault();
+                event.stopPropagation();
+                this.projectCurveExpanded = false;
+                sync();
+                button.focus();
+            }
+        });
+        edge.appendChild(button);
+        curveCard.appendChild(edge);
+        sync();
     }
 
     private renderProjectCurveMatrix(curveRows: CurveData[]): HTMLElement {
@@ -3548,6 +3667,17 @@ export class Visual implements IVisual {
     }
 
     private openFilterPanel(focus: "unit" | "project" | null = null): void {
+        if (this.currentDashboardData?.context.Level === "UNIDAD") {
+            this.filterPanelOpen = false;
+            this.filterFocus = focus;
+            this.rootElement?.querySelectorAll(".evm-filter-panel:not(.evm-filter-panel--unit-inline)")
+                .forEach((panel) => panel.remove());
+            const selector = this.rootElement?.querySelector('[data-filter-key="unit-week"]');
+            if (selector instanceof HTMLSelectElement) {
+                selector.focus();
+            }
+            return;
+        }
         this.filterPanelOpen = true;
         this.filterFocus = focus;
         this.renderFilterPanelIntoRoot();
@@ -3628,6 +3758,11 @@ export class Visual implements IVisual {
 
     private renderFilterPanelIntoRoot(): void {
         if (!this.rootElement || !this.currentDashboardData) {
+            return;
+        }
+        if (this.currentDashboardData.context.Level === "UNIDAD") {
+            this.rootElement.querySelectorAll(".evm-filter-panel:not(.evm-filter-panel--unit-inline)")
+                .forEach((panel) => panel.remove());
             return;
         }
         this.rootElement.querySelector(".evm-filter-panel")?.remove();

@@ -1,7 +1,7 @@
 "use strict";
 
 import { DataValue, PerformanceData } from "../types";
-import { createElement, currency, date, decimalUpTo, numberValue, percent, percentRatio, svgElement } from "../utils/format";
+import { createElement, currency, date, decimalUpTo, numberValue, percent, svgElement } from "../utils/format";
 
 type PerformanceIcon = "clock" | "calendar" | "check" | "money" | "coins" | "chart";
 
@@ -29,10 +29,10 @@ export function renderPerformance(data: PerformanceData): HTMLElement {
         : (projectedTime < 0 ? "Retraso Proyectado" : "Sin Variación de Plazo");
     card.appendChild(createElement("div", "evm-section-title", "Desempeno del Proyecto"));
 
-    card.appendChild(progressRow("clock", "Plazo Consumido", data.PlazoConsumidoPct, `${percent(data.PlazoConsumidoPct)}`, "Plazo Restante", `${decimalUpTo(data.PlazoRestanteSemanas)} sem.`));
+    card.appendChild(progressRow("clock", "Plazo Consumido", data.PlazoConsumidoPct, progressPercentText(data.PlazoConsumidoPct), "Plazo Restante", `${decimalUpTo(data.PlazoRestanteSemanas)} sem.`));
     card.appendChild(metricPair("calendar", "Plazo Programado Total", `${decimalUpTo(data.PlazoProgramadoTotalSemanas)} semanas`, "Plazo Proyectado", `${decimalUpTo(data.PlazoProyectadoSemanas)} semanas`));
     card.appendChild(metricPair("check", projectedTimeLabel, `${decimalUpTo(data.RetrasoProyectadoSemanas)} semanas`, "Termino Proyectado", projectedEnd, projectedTime > 0 ? "favorable" : (projectedTime < 0 ? "alert" : null)));
-    card.appendChild(progressRow("money", "Presupuesto Consumido", data.PresupuestoConsumidoPct, `${percent(data.PresupuestoConsumidoPct)}`, "Presupuesto Restante", currency(data.PresupuestoRestante)));
+    card.appendChild(progressRow("money", "Presupuesto Consumido", data.PresupuestoConsumidoPct, progressPercentText(data.PresupuestoConsumidoPct), "Presupuesto Restante", currency(data.PresupuestoRestante)));
     card.appendChild(metricPair("coins", "Presupuesto Programado (BAC)", currency(data.PresupuestoProgramadoBAC), "Costo Estimado al Termino (EAC)", currency(data.CostoEstimadoTerminoEAC)));
     const projectedCostPct = numberValue(data.SobreCostoProyectadoPct);
     card.appendChild(metricSingle(
@@ -51,7 +51,10 @@ function progressRow(icon: PerformanceIcon, leftLabel: string, pctValue: DataVal
     progressBlock.appendChild(createElement("span", "performance-label", leftLabel));
     const progress = createElement("div", `evm-progress ${icon}`);
     const fill = createElement("i");
-    fill.style.width = `${percentRatio(pctValue)}%`;
+    if (isProgressOverrun(pctValue)) {
+        progress.classList.add("overrun");
+    }
+    fill.style.width = `${progressWidthPct(pctValue)}%`;
     progress.appendChild(fill);
     progressBlock.appendChild(progress);
     progressBlock.appendChild(createElement("strong", undefined, pctText));
@@ -63,6 +66,27 @@ function progressRow(icon: PerformanceIcon, leftLabel: string, pctValue: DataVal
     row.appendChild(progressBlock);
     row.appendChild(right);
     return row;
+}
+
+function progressPercentText(value: DataValue): string {
+    const parsed = numberValue(value);
+    if (parsed === null) {
+        return "—";
+    }
+    return `${(parsed * 100).toLocaleString("en-US", { maximumFractionDigits: 0 })}%`;
+}
+
+function progressWidthPct(value: DataValue): number {
+    const parsed = numberValue(value);
+    if (parsed === null) {
+        return 0;
+    }
+    return Math.max(0, Math.min(100, parsed * 100));
+}
+
+function isProgressOverrun(value: DataValue): boolean {
+    const parsed = numberValue(value);
+    return parsed !== null && parsed > 1;
 }
 
 function metricPair(icon: PerformanceIcon, leftLabel: string, leftValue: string, rightLabel: string, rightValue: string, tone: "alert" | "favorable" | null = null): HTMLElement {

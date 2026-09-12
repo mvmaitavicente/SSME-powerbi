@@ -683,7 +683,7 @@ function parseDashboardPayload(
         ? jsonTableToObjects<Record<string, unknown>>(payload.criticalInterventionsDetail).map(normalizeCriticalIntervention)
         : [];
     const projectSummaryRows = context.Level === "UNIDAD" && payload.projects ? jsonTableToObjects<Record<string, unknown>>(payload.projects) : [];
-    const riskRows = (isProject || context.Level === "PRONIED") && payload.risks ? jsonTableToObjects<Record<string, unknown>>(payload.risks) : [];
+    const riskRows = (isProject || isAggregate) && payload.risks ? jsonTableToObjects<Record<string, unknown>>(payload.risks) : [];
     const milestoneRows = isProject && (payload.milestone || payload.milestones)
         ? jsonTableToObjects<Record<string, unknown>>((payload.milestone || payload.milestones) as JsonTablePayload)
         : [];
@@ -921,6 +921,7 @@ function normalizeJsonCurve(row: Record<string, unknown>): CurveData {
         Semana: readFiniteNumber(row, ["Semana", "OrdenSemana", "OrdenSemanaEV"], 0),
         BAC: readNullableNumber(row, ["BAC"]),
         SAC: readNullableNumber(row, ["SAC"]),
+        SemanaPortafolio: readNullableNumber(row, ["SemanaPortafolio", "Semana Portafolio"]),
         ES: readNullableNumber(row, ["ES"]),
         AT: readNullableNumber(row, ["AT"]),
         AT_Matriz: readNullableNumber(row, ["AT_Matriz", "AT_matriz"]),
@@ -1021,6 +1022,7 @@ function normalizeAggregateCurve(row: Record<string, unknown>): AggregateCurveDa
         LabelSemana: textValue(firstKnownValue(row, "LabelSemana", "SemanaLabel", "Semana")),
         BAC: readNullableNumber(row, ["BAC"]),
         SAC: readNullableNumber(row, ["SAC"]),
+        SemanaPortafolio: readNullableNumber(row, ["SemanaPortafolio", "Semana Portafolio"]),
         ES: readNullableNumber(row, ["ES"]),
         AT: readNullableNumber(row, ["AT"]),
         PV: readNullableNumber(row, ["PV"]),
@@ -1078,6 +1080,7 @@ function normalizeUnitProjectSummary(row: Record<string, unknown>): UnitProjectS
         Provincia: textValue(firstKnownValue(row, "Provincia", "Province")),
         Distrito: textValue(firstKnownValue(row, "Distrito", "District")),
         EstadoProyecto: textValue(firstKnownValue(row, "EstadoProyecto", "Estado", "Status")),
+        Semana: readNullableNumber(row, ["OrdenSemana", "OrdenSemanaEV", "SemanaEV", "SemanaEv", "Semana", "SemanaProyecto"]),
         BAC: readNullableNumber(row, ["BAC"]),
         PV: readNullableNumber(row, ["PV"]),
         EV: readNullableNumber(row, ["EV"]),
@@ -1188,6 +1191,8 @@ function buildNonProjectPlaceholder(context: DashboardContextData): DashboardDat
 function normalizeJsonRisk(row: Record<string, unknown>): RiskItem {
     return {
         IdRiesgo: textOrNumberValue(firstKnownValue(row, "IdRiesgo", "RiskId")),
+        Cui: textOrNumberValue(firstKnownValue(row, "Cui", "CUI", "Dim_Intervenciones[Cui]")),
+        NombreIntervencion: textValue(firstKnownValue(row, "NombreIntervencion", "Proyecto", "Dim_Intervenciones[NombreIntervencion]")),
         FechaRegistro: nullableText(firstKnownValue(row, "FechaRegistro", "Fecha")),
         Descripcion: textValue(firstKnownValue(row, "Descripcion", "DescripcionRiesgo", "Descripción", "Descripción del Riesgo")),
         Categoria: textValue(firstKnownValue(row, "Categoria", "CategoriaRiesgo", "Categoría", "Fecha")),
@@ -1344,6 +1349,7 @@ function buildJsonCurrentSnapshot(project: ProjectData | null, currentRow: Curve
     const pv = currentRow?.PV ?? null;
     const ev = currentRow?.EV ?? null;
     const ac = currentRow?.AC ?? null;
+    const at = currentProjectWeek(currentRow);
     const spiT = currentRow?.["SPI (t)"] ?? null;
     const tspiT = currentRow?.["TSPI (t)"] ?? null;
     const eacC = currentRow?.["EAC (c)"] ?? null;
@@ -1375,8 +1381,8 @@ function buildJsonCurrentSnapshot(project: ProjectData | null, currentRow: Curve
         TSPI: currentGaugeRow?.["TSPI (w)"] ?? null,
         TSPIEstado: currentGaugeRow?.TSPIEstado,
         TSPIT: tspiT,
-        PlazoConsumidoPct: ratio(currentRow?.AT ?? null, currentRow?.SAC ?? null),
-        PlazoRestanteSemanas: difference(currentRow?.SAC ?? null, currentRow?.AT ?? null),
+        PlazoConsumidoPct: ratio(at, currentRow?.SAC ?? null),
+        PlazoRestanteSemanas: difference(currentRow?.SAC ?? null, at),
         PlazoProgramadoTotalSemanas: currentRow?.SAC ?? null,
         PlazoProyectadoSemanas: eacT,
         RetrasoProyectadoSemanas: vacT,
@@ -1393,14 +1399,15 @@ function buildJsonCurrentSnapshot(project: ProjectData | null, currentRow: Curve
 function buildJsonPerformance(currentRow: CurveData | null): PerformanceData {
     const bac = currentRow?.BAC ?? null;
     const ac = currentRow?.AC ?? null;
+    const at = currentProjectWeek(currentRow);
     const eacC = currentRow?.["EAC (c)"] ?? null;
     const eacT = currentRow?.["EAC (t)"] ?? null;
     const vacC = currentRow?.["VAC (c)"] ?? null;
     const vacT = currentRow?.["VAC (t)"] ?? null;
 
     return {
-        PlazoConsumidoPct: ratio(currentRow?.AT ?? null, currentRow?.SAC ?? null),
-        PlazoRestanteSemanas: difference(currentRow?.SAC ?? null, currentRow?.AT ?? null),
+        PlazoConsumidoPct: ratio(at, currentRow?.SAC ?? null),
+        PlazoRestanteSemanas: difference(currentRow?.SAC ?? null, at),
         PlazoProgramadoTotalSemanas: currentRow?.SAC ?? null,
         PlazoProyectadoSemanas: eacT,
         RetrasoProyectadoSemanas: vacT,
@@ -1412,6 +1419,10 @@ function buildJsonPerformance(currentRow: CurveData | null): PerformanceData {
         SobreCostoProyectadoVAC: vacC,
         SobreCostoProyectadoPct: ratio(vacC, bac)
     };
+}
+
+function currentProjectWeek(currentRow: CurveData | null): number | null {
+    return currentRow?.AT_Matriz ?? currentRow?.AT ?? currentRow?.Semana ?? null;
 }
 
 function getCurrentCurveRow(curve: CurveData[]): CurveData | null {

@@ -14,7 +14,14 @@ function iconBlock(icon: PortfolioIconName): HTMLElement {
 function mainMetric(value: string, label: string, note?: string): HTMLElement {
     const main = createElement("div", portfolioClasses.main);
     main.appendChild(createElement("strong", undefined, value));
-    main.appendChild(createElement("span", undefined, label));
+    const labelElement = createElement("span");
+    label.split("\n").forEach((line, index) => {
+        if (index > 0) {
+            labelElement.appendChild(document.createElement("br"));
+        }
+        labelElement.appendChild(document.createTextNode(line));
+    });
+    main.appendChild(labelElement);
     if (note) {
         main.appendChild(createElement("small", undefined, note));
     }

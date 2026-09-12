@@ -96,6 +96,8 @@ export interface PerformanceData {
 }
 export interface RiskItem {
     IdRiesgo?: DataValue;
+    Cui?: DataValue;
+    NombreIntervencion?: string;
     FechaRegistro?: DataValue;
     Descripcion?: string;
     Categoria?: string;
@@ -334,6 +336,7 @@ export interface UnitProjectSummaryData extends Record<string, unknown> {
     Provincia: string;
     Distrito: string;
     EstadoProyecto: string;
+    Semana?: number | null;
     BAC: number | null;
     PV: number | null;
     EV: number | null;
@@ -349,6 +352,7 @@ export interface AggregateCurveData extends Record<string, unknown> {
     LabelSemana: string;
     BAC: number | null;
     SAC: number | null;
+    SemanaPortafolio?: number | null;
     ES: number | null;
     AT: number | null;
     PV: number | null;

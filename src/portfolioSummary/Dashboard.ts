@@ -62,7 +62,7 @@ export function renderPortfolioDashboard(
     deviations.appendChild(renderHorizontalCard("orange", "cost", percentage(summary.DesviacionCostoPct, true), "Desviación del Portafolio", "(Costo)"));
     grid.appendChild(deviations);
     const bottom = createElement("div", portfolioClasses.bottom);
-    const criticalCard = renderCompactCard("orange", "critical", integer(summary.IntervencionesCriticas), "Intervenciones Críticas");
+    const criticalCard = renderCompactCard("orange", "critical", integer(summary.IntervencionesCriticas), "Intervenciones\nCr�ticas");
     if (onCriticalInterventionsClick) {
         criticalCard.classList.add("evm-critical-interventions-trigger");
         criticalCard.setAttribute("role", "button");
@@ -81,7 +81,7 @@ export function renderPortfolioDashboard(
         });
     }
     bottom.appendChild(criticalCard);
-    bottom.appendChild(renderCompactCard("red", "risk", percentage(summary.RiesgoPortafolioPct, false), "Riesgo del Portafolio"));
+    bottom.appendChild(renderCompactCard("red", "risk", percentage(summary.RiesgoPortafolioPct, false), "Riesgo del\nPortafolio"));
     grid.appendChild(bottom);
     panel.appendChild(grid);
     return panel;

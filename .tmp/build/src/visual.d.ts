@@ -31,6 +31,7 @@ export declare class Visual implements IVisual {
     private filterLoadingTimer;
     private filterLoadingSafetyTimer;
     private projectCarouselIndex;
+    private projectCurveExpanded;
     private portfolioCarouselIndex;
     private riskCarouselIndex;
     private readonly lazyCarousel;
@@ -43,6 +44,8 @@ export declare class Visual implements IVisual {
     constructor(options: VisualConstructorOptions);
     private selectedProjectWeek;
     private weekFilterProjectId;
+    private selectedUnitWeek;
+    private weekFilterUnit;
     private lastWeekFilterUpdateOptions;
     private forceWeekFilterRender;
     update(options: VisualUpdateOptions): void;
@@ -73,6 +76,9 @@ export declare class Visual implements IVisual {
     private renderUnitProgressHeader;
     private renderUnitProgressIcon;
     private renderUnitDashboard;
+    private unitFilterWeeks;
+    private unitTerminalWeek;
+    private renderUnitInlineFilterPanel;
     private openUnitSelectorModal;
     private renderDashboardError;
     private renderPortfolioHeader;
@@ -86,6 +92,7 @@ export declare class Visual implements IVisual {
     private activateUnitPage;
     private renderPortfolioBody;
     private renderUnitProjectsMatrix;
+    private unitProjectRowsForWeek;
     private renderUnitsPanel;
     private renderPortfolioSummary;
     private portfolioCompositeCard;
@@ -111,6 +118,7 @@ export declare class Visual implements IVisual {
     private renderProjectsSection;
     private entityMetric;
     private renderBodyCarousel;
+    private attachProjectCurveExpansion;
     private renderProjectCurveMatrix;
     private renderCarouselButton;
     private createLazyCarouselPage;
