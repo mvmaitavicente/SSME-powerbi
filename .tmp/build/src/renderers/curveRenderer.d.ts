@@ -5,6 +5,7 @@ interface CurveRenderOptions {
     unit?: boolean;
     showYearBracket?: boolean;
     visibleWeeksBack?: number;
+    showSummary?: boolean;
 }
 export declare function renderCurve(curve: RenderCurveData, palette: VisualPalette, options?: CurveRenderOptions, lifecycle?: LifecycleSink): HTMLElement;
 export {};

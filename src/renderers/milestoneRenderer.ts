@@ -27,7 +27,7 @@ export function renderMilestones(milestones: MilestoneItem[]): HTMLElement {
 
     const ordered = milestones;
     const wrap = createElement("div", "milestone-svg-wrap");
-    const pageSize = 4;
+    const pageSize = 5;
     const pageCount = Math.max(1, Math.ceil(ordered.length / pageSize));
     let pageIndex = 0;
     const renderPage = (): void => {
@@ -220,7 +220,7 @@ function drawCircleMarker(svg: SVGSVGElement, x: number, y: number, stateClass: 
 
 function drawMilestoneLabel(svg: SVGSVGElement, milestone: MilestoneItem, position: TimelinePosition, stateClass: string): void {
     const fullName = text(milestone.NombreHito);
-    const title = addWrappedText(svg, fullName, position.x, position.y + timeline.nameOffset, `evm-milestone-name ${stateClass}`, 15, 2);
+    const title = addWrappedText(svg, fullName, position.x, position.y + timeline.nameOffset, `evm-milestone-name ${stateClass}`, 13, 2);
     title.appendChild(document.createElementNS("http://www.w3.org/2000/svg", "title")).textContent = fullName;
     drawNameDateConnector(svg, position, stateClass, title.querySelectorAll("tspan").length);
     addDateBadge(svg, date(milestone.FechaHitoReal || milestone.FechaHitoPlan), position.x, position.y + timeline.dateOffset, stateClass);

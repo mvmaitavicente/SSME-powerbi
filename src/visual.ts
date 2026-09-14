@@ -20,6 +20,7 @@ import { NavigatorProjectIndex } from "./controllers/NavigatorProjectIndex";
 import { InternalFilterController } from "./controllers/InternalFilterController";
 import { ViewLifecycle } from "./controllers/ViewLifecycle";
 import { LazyCarouselView } from "./views/LazyCarouselView";
+import { basicFilter } from "./controllers/filterFactory";
 import VisualConstructorOptions = powerbi.extensibility.visual.VisualConstructorOptions;
 import VisualUpdateOptions = powerbi.extensibility.visual.VisualUpdateOptions;
 import IVisual = powerbi.extensibility.visual.IVisual;
@@ -95,6 +96,18 @@ const gaugeMetricColors: Record<GaugeMetricKey, string> = {
     "TSPI (w)": "#DC2626"
 };
 
+const DASHBOARD_FIELD_BY_LEVEL: Record<DashboardLevel, string> = {
+    PROYECTO: "'Indicadores'[17. JSON Dashboard Proyecto]",
+    UNIDAD: "'Indicadores'[18. JSON Dashboard Unidad]",
+    PRONIED: "'Indicadores'[19. JSON Dashboard PRONIED]",
+    RIESGOS: "'Indicadores'[20. JSON Dashboard Riesgos]"
+};
+
+const DASHBOARD_PARAMETER_TARGET = {
+    table: "ParametroDashboard",
+    column: "ParametroDashboard Fields"
+};
+
 export class Visual implements IVisual {
     private readonly host: powerbi.extensibility.visual.IVisualHost;
     private readonly events: IVisualEventService;
@@ -133,6 +146,7 @@ export class Visual implements IVisual {
     private readonly navigationDebugPanelEnabled: boolean = false;
     private pendingNavigationLevel: DashboardLevel | null = null;
     private pendingProjectSelectionId: string | null = null;
+    private dashboardParameterSignature: string | null = null;
     private defaultProjectId: string | null = null;
     private preferredProjectInitialized: boolean = false;
     private readonly preferredProjectCui: string = "254895";
@@ -2603,7 +2617,7 @@ export class Visual implements IVisual {
 
         const evmPage = this.createLazyCarouselPage("evm-body-carousel-page evm-body-carousel-page--evm", this.projectCarouselIndex === 0, (page) => {
             const evmLeft = createElement("div", "evm-left-column");
-            const curveCard = renderCurve(dashboard.curve, palette, {}, this.viewLifecycle);
+            const curveCard = renderCurve(dashboard.curve, palette, { showSummary: false }, this.viewLifecycle);
             evmLeft.appendChild(curveCard);
             const evmRight = createElement("div", "evm-right-column");
             evmRight.appendChild(renderPerformance(dashboard.performance));
@@ -3574,6 +3588,7 @@ export class Visual implements IVisual {
 
         this.clearInternalFilter("projectFilter", true);
         this.clearInternalFilter("unitFilter", true);
+        this.applyDashboardLevel("UNIDAD");
 
         this.navigationFilters.applyTuple(
             `unit:${cleanUnit}`,
@@ -4462,12 +4477,14 @@ export class Visual implements IVisual {
     }
 
     private applyLevelFilter(level: DashboardLevel, force: boolean = false): void {
+        this.applyDashboardLevel(level);
         this.navigationFilters.applyBasic(`level:${level}`, { table: "Dim_NivelDashboard", column: "Nivel" }, [level], force);
     }
 
     private applyProjectDashboardFilters(projectId: string): void {
         const cleanProjectId = projectId.trim();
         if (!cleanProjectId) return;
+        this.applyDashboardLevel("PROYECTO");
         this.navigationFilters.applyTuple(
             `project-dashboard:${cleanProjectId}`,
             [
@@ -4480,6 +4497,19 @@ export class Visual implements IVisual {
 
     private clearGeneralNavigationFilters(force: boolean = false): void {
         this.navigationFilters.clear(force);
+    }
+
+    private applyDashboardLevel(level: DashboardLevel, force: boolean = false): void {
+        const fieldValue = DASHBOARD_FIELD_BY_LEVEL[level];
+        const signature = `dashboard-parameter:${fieldValue}`;
+        if (!force && this.dashboardParameterSignature === signature) return;
+
+        this.beginFilterLoading();
+
+        const filter = basicFilter(DASHBOARD_PARAMETER_TARGET, [fieldValue]);
+        this.host.applyJsonFilter(filter, "internalFilters", "dashboardParameterFilter", powerbi.FilterAction.merge);
+        this.host.applyJsonFilter(filter, "internalFilters", "dashboardParameterSelfFilter", powerbi.FilterAction.merge);
+        this.dashboardParameterSignature = signature;
     }
 
     private applyProjectFilter(projectId: string): void {
@@ -4596,6 +4626,7 @@ export class Visual implements IVisual {
         this.pendingProjectSelectionId = projectId;
         ["unitFilter", "regionFilter", "provinceFilter", "districtFilter", "statusFilter"]
             .forEach((property) => this.clearInternalFilter(property));
+        this.applyDashboardLevel("PROYECTO");
         this.applyProjectFilter(projectId);
         this.renderFilterPanelIntoRoot();
     }
@@ -4604,6 +4635,7 @@ export class Visual implements IVisual {
         this.navigationFilters.clear(true);
         ["unitFilter", "regionFilter", "provinceFilter", "districtFilter", "statusFilter", "projectFilter"]
             .forEach((property) => this.clearInternalFilter(property));
+        this.applyDashboardLevel("PRONIED", true);
         this.filterState.level = "PRONIED";
         this.filterState.selectedUnit = null;
         this.filterState.selectedProjectId = null;

@@ -2503,6 +2503,12 @@
   min-height: 0;
   overflow: hidden;
 }
+.evm-curve-card--no-summary {
+  gap: 6px;
+}
+.evm-curve-card--no-summary .evm-curve-svg-wrap {
+  flex: 1 1 auto;
+}
 .evm-body-carousel-page.evm-body-carousel-page--curve-expanded {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -7884,7 +7890,7 @@
 .evm-project-details-lower-row .evm-milestone-legend-copy > span {
   padding-left: 38px;
 }
-/* Milestone carousel: four items per page, controls beside the title and a clean legend. */
+/* Milestone carousel: controls beside the title and a clean legend. */
 .evm-project-details-lower-row .evm-milestone-heading {
   justify-content: center;
   gap: 16px;

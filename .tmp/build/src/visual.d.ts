@@ -21,6 +21,7 @@ export declare class Visual implements IVisual {
     private readonly navigationDebugPanelEnabled;
     private pendingNavigationLevel;
     private pendingProjectSelectionId;
+    private dashboardParameterSignature;
     private defaultProjectId;
     private preferredProjectInitialized;
     private readonly preferredProjectCui;
@@ -181,6 +182,7 @@ export declare class Visual implements IVisual {
     private applyLevelFilter;
     private applyProjectDashboardFilters;
     private clearGeneralNavigationFilters;
+    private applyDashboardLevel;
     private applyProjectFilter;
     private testProjectNavigationFilter;
     private readUpdateJsonFilters;

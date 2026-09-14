@@ -8,7 +8,7 @@
     {
       "displayName": "JSON Dashboard",
       "name": "jsonDashboard",
-      "kind": "Measure"
+      "kind": "GroupingOrMeasure"
     }
   ],
   "objects": {
@@ -46,6 +46,18 @@
           }
         },
         "levelSelfFilter": {
+          "type": {
+            "filter": {
+              "selfFilter": true
+            }
+          }
+        },
+        "dashboardParameterFilter": {
+          "type": {
+            "filter": true
+          }
+        },
+        "dashboardParameterSelfFilter": {
           "type": {
             "filter": {
               "selfFilter": true

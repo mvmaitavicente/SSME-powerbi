@@ -37,6 +37,7 @@ interface CurveRenderOptions {
     unit?: boolean;
     showYearBracket?: boolean;
     visibleWeeksBack?: number;
+    showSummary?: boolean;
 }
 
 interface LineSegment {
@@ -102,7 +103,11 @@ export function renderCurve(curve: RenderCurveData, palette: VisualPalette, opti
     wrap.appendChild(svg);
     card.appendChild(title);
     card.appendChild(wrap);
-    card.appendChild(renderCurveSummary(curve, options));
+    if (options.showSummary !== false) {
+        card.appendChild(renderCurveSummary(curve, options));
+    } else {
+        card.classList.add("evm-curve-card--no-summary");
+    }
     let animationFrame: number | null = null;
     let lastWidth = -1;
     let lastHeight = -1;
