@@ -176,7 +176,7 @@ function renderHistoryVariation(data: GaugeData): HTMLElement {
     const variation = numberValue(data.variation);
     const value = createElement("span", `gauge-history-variation-value ${variation === null ? "neutral" : variation >= 0 ? "positive" : "negative"}`);
     value.appendChild(createElement("i", undefined, variation === null ? "–" : variation >= 0 ? "↗" : "↘"));
-    value.appendChild(document.createTextNode(variation === null ? "—" : signedDecimal(variation)));
+    value.appendChild(document.createTextNode(variation === null ? "—" : normalizeGaugeZero(signedDecimal(variation))));
     wrapper.appendChild(value);
     wrapper.appendChild(createElement("span", "gauge-history-variation-label", "vs semana anterior"));
     return wrapper;
@@ -524,14 +524,20 @@ function valueToAngle(value: DataValue, min: number, max: number, target: number
 }
 
 function displayDecimal(value: DataValue): string {
-    return numberValue(value) === null ? "\u2014" : decimal(value);
+    return normalizeGaugeZero(decimal(value));
+}
+
+function normalizeGaugeZero(formatted: string): string {
+    return formatted === "-0.00" || formatted === "+0.00" ? "0.00" : formatted;
 }
 
 function gaugeRangeColor(data: GaugeData): string {
-    const value = numberValue(data.value);
-    if (value === null) {
+    const realValue = numberValue(data.value);
+    if (realValue === null) {
         return mainGaugeRangePalette.blue;
     }
+    // Match the visual label without changing the original metric.
+    const value = Math.round((realValue + Number.EPSILON) * 100) / 100;
     if (data.key === "CPI" || data.key === "SPIW") {
         if (value < 0.9) {
             return mainGaugeRangePalette.red;
@@ -554,10 +560,12 @@ function gaugeRangeColor(data: GaugeData): string {
 }
 
 function gaugeRangeLabel(data: GaugeData): string {
-    const value = numberValue(data.value);
-    if (value === null) {
+    const realValue = numberValue(data.value);
+    if (realValue === null) {
         return "Sin dato";
     }
+    // Round only for the visual label; retain the original metric for all other uses.
+    const value = Math.round((realValue + Number.EPSILON) * 100) / 100;
     if (data.key === "CPI" || data.key === "SPIW") {
         if (value < 0.9) {
             return "Crítico";
@@ -607,7 +615,7 @@ function svgText(label: string, x: number, y: number, anchor: "start" | "middle"
 }
 
 function formatScale(value: number): string {
-    return value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return displayDecimal(value);
 }
 
 function statusClass(status?: string): string {

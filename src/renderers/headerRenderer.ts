@@ -72,9 +72,6 @@ export function renderSidebar(options: SidebarOptions): HTMLElement {
     }
     menu.appendChild(riskGroup);
 
-    const footer = createElement("div", "evm-menu-footer");
-    footer.appendChild(renderSidebarButton("⚙", "Filtros", false, false, options.onOpenFilters, "Abrir filtros"));
-
     const toggleSidebar = (): void => {
         const expanded = options.onToggle();
         sidebar.classList.toggle("expanded", expanded);
@@ -86,7 +83,6 @@ export function renderSidebar(options: SidebarOptions): HTMLElement {
 
     sidebar.appendChild(brand);
     sidebar.appendChild(menu);
-    sidebar.appendChild(footer);
     return sidebar;
 }
 
@@ -215,3 +211,4 @@ function projectStateClass(status?: string): string {
     }
     return "neutral";
 }
+

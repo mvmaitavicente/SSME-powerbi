@@ -91,8 +91,8 @@ function renderMilestoneLegend(): HTMLElement {
     const items = [
         { className: "done", title: "Completado", description: "Hito finalizado correctamente." },
         { className: "active", title: "En ejecución", description: "Hito en desarrollo." },
-        { className: "late", title: "Retrasado", description: "Hito no cumplido a la fecha programada." },
-        { className: "pending", title: "Pendiente", description: "Hito aún no iniciado." }
+        { className: "late", title: "Atrasado", description: "Hito no cumplido a la fecha programada." },
+        { className: "pending", title: "Programado", description: "Hito aún no iniciado." }
     ];
 
     const grid = createElement("div", "evm-milestone-legend-grid");
@@ -325,3 +325,4 @@ function milestoneClass(status?: string): string {
     }
     return "pending";
 }
+

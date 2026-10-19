@@ -92,6 +92,18 @@ export interface GaugeHistory {
 }
 
 export interface PerformanceData {
+    SAC?: DataValue;
+    ETCT?: DataValue;
+    VACT?: DataValue;
+    SPIT?: DataValue;
+    SVT?: DataValue;
+    SVW?: DataValue;
+    TSPIT?: DataValue;
+    IETCT?: DataValue;
+    BAC?: DataValue;
+    CV?: DataValue;
+    ETCC?: DataValue;
+    VACC?: DataValue;
     PlazoConsumidoPct?: DataValue;
     PlazoRestanteSemanas?: DataValue;
     PlazoProgramadoTotalSemanas?: DataValue;
@@ -218,6 +230,8 @@ export interface NavigatorJsonPayload {
 export interface NavigatorProject extends Record<string, unknown> {
     IdIntervencion?: string | number | null;
     NombreIntervencion?: string | null;
+    Cui?: string | number | null;
+    CUI?: string | number | null;
     UnidadGerencial?: string | null;
     Region?: string | null;
     Provincia?: string | null;
@@ -322,6 +336,13 @@ export interface SummaryData {
     EACT?: number | null;
     VACC?: number | null;
     VACT?: number | null;
+    SAC?: number | null;
+    ETCT?: number | null;
+    SVT?: number | null;
+    SVW?: number | null;
+    IETCT?: number | null;
+    CV?: number | null;
+    ETCC?: number | null;
 }
 
 export interface UnitSummaryData extends Record<string, unknown> {
@@ -379,6 +400,10 @@ export interface UnitProjectSummaryData extends Record<string, unknown> {
 }
 
 export interface AggregateCurveData extends Record<string, unknown> {
+    DesviacionCosto?: number | null;
+    DesviacionPlazo?: number | null;
+    Estado?: string | null;
+    Mensaje?: string | null;
     OrdenSemana: number;
     FechaInicioSemana: string | null;
     FechaFinSemana: string | null;
@@ -422,17 +447,20 @@ export interface ProjectData extends Record<string, unknown> {
     EstadoProyecto?: string;
     MensajeEjecutivo?: string;
     FechaEstado: string | null;
+    FechaInicio?: string | null;
     SemanaActual: string | number | null;
 }
 
 export interface CurveData extends Record<string, unknown> {
+    FechaCorte?: string | null;
     Semana: number;
     BAC: number | null;
     SAC: number | null;
     ES: number | null;
     AT: number | null;
     AT_Matriz: number | null;
-    SemanaEstado: number | null;
+    SemanaEstado: string | number | null;
+    SemanaMensaje?: string | null;
     PV: number | null;
     EV: number | null;
     AC: number | null;

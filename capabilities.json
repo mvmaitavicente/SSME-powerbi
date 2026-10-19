@@ -167,6 +167,11 @@
   ],
   "privileges": [
     {
+      "name": "WebAccess",
+      "essential": false,
+      "parameters": ["https://ssme-reporteria-pdf-hagnhydjfkh4cshs.centralus-01.azurewebsites.net"]
+    },
+    {
       "name": "ExportContent",
       "essential": true
     }

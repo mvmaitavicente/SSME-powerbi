@@ -14,6 +14,10 @@ export class NavigatorProjectIndex {
 
     public add(projects: NavigatorProject[]): void {
         if (projects === this.lastSource) return;
+        // A new query defines the available catalog; do not retain filtered-out IDs.
+        this.projectsById.clear();
+        this.dirty = true;
+        this.revisionValue += 1;
         this.lastSource = projects;
         let changed = false;
         projects.forEach((project) => {

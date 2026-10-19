@@ -62,7 +62,7 @@ export function renderPortfolioDashboard(
     deviations.appendChild(renderHorizontalCard("orange", "cost", percentage(summary.DesviacionCostoPct, true), "DesviaciÃ³n del Portafolio", "(Costo)"));
     grid.appendChild(deviations);
     const bottom = createElement("div", portfolioClasses.bottom);
-    const criticalCard = renderCompactCard("orange", "critical", integer(summary.IntervencionesCriticas), "Intervenciones\nCríticas");
+    const criticalCard = renderCompactCard("orange", "critical", integer(summary.IntervencionesCriticas), "Intervenciones\nCr\u00edticas");
     if (onCriticalInterventionsClick) {
         criticalCard.classList.add("evm-critical-interventions-trigger");
         criticalCard.setAttribute("role", "button");

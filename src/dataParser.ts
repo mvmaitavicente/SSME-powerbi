@@ -679,8 +679,14 @@ function parseDashboardPayload(
     const portfolioSummaryRows = isAggregate && summaryDashboardPayload
         ? jsonTableToObjects<Record<string, unknown>>(summaryDashboardPayload)
         : [];
-    const criticalInterventionRows = context.Level === "PRONIED" && payload.criticalInterventionsDetail
-        ? jsonTableToObjects<Record<string, unknown>>(payload.criticalInterventionsDetail).map(normalizeCriticalIntervention)
+    const selectedUnitCode = (context.Unit ?? "").trim().split(/\s|-/)[0].toUpperCase();
+    const criticalInterventionRows = isAggregate && payload.criticalInterventionsDetail
+        ? jsonTableToObjects<Record<string, unknown>>(payload.criticalInterventionsDetail)
+            .map(normalizeCriticalIntervention)
+            .filter((intervention) => context.Level !== "UNIDAD" || (
+                selectedUnitCode !== ""
+                && intervention.ManagementUnit.trim().split(/\s|-/)[0].toUpperCase() === selectedUnitCode
+            ))
         : [];
     const projectSummaryRows = context.Level === "UNIDAD" && payload.projects ? jsonTableToObjects<Record<string, unknown>>(payload.projects) : [];
     const riskRows = (isProject || isAggregate) && payload.risks ? jsonTableToObjects<Record<string, unknown>>(payload.risks) : [];
@@ -867,7 +873,14 @@ function normalizeSummary(row: Record<string, unknown> | null): SummaryData | nu
         EACC: readNullableNumber(row, ["EACC", "EAC (c)"]),
         EACT: readNullableNumber(row, ["EACT", "EAC (t)"]),
         VACC: readNullableNumber(row, ["VACC", "VAC (c)"]),
-        VACT: readNullableNumber(row, ["VACT", "VAC (t)"])
+        VACT: readNullableNumber(row, ["VACT", "VAC (t)"]),
+        SAC: readNullableNumber(row, ["SAC"]),
+        ETCT: readNullableNumber(row, ["ETC (t)", "ETCT"]),
+        SVT: readNullableNumber(row, ["SV (t)", "SVT"]),
+        SVW: readNullableNumber(row, ["SV (w)", "SVW"]),
+        IETCT: readNullableNumber(row, ["IETC (t)", "IETCT", "IETC"]),
+        CV: readNullableNumber(row, ["CV"]),
+        ETCC: readNullableNumber(row, ["ETC (c)", "ETCC"])
     };
 }
 
@@ -918,6 +931,7 @@ function normalizeJsonGauge(row: Record<string, unknown>): GaugeHistoryRow {
 function normalizeJsonCurve(row: Record<string, unknown>): CurveData {
     return {
         ...row,
+        FechaCorte: nullableText(firstKnownValue(row, "FechaCorte")),
         Semana: readFiniteNumber(row, ["Semana", "OrdenSemana", "OrdenSemanaEV"], 0),
         BAC: readNullableNumber(row, ["BAC"]),
         SAC: readNullableNumber(row, ["SAC"]),
@@ -925,7 +939,8 @@ function normalizeJsonCurve(row: Record<string, unknown>): CurveData {
         ES: readNullableNumber(row, ["ES"]),
         AT: readNullableNumber(row, ["AT"]),
         AT_Matriz: readNullableNumber(row, ["AT_Matriz", "AT_matriz"]),
-        SemanaEstado: readNullableNumber(row, ["SemanaEstado"]),
+        SemanaEstado: textOrNumberValue(firstKnownValue(row, "SemanaEstado")),
+        SemanaMensaje: nullableText(firstKnownValue(row, "SemanaMensaje")),
         PV: readNullableNumber(row, ["PV"]),
         EV: readNullableNumber(row, ["EV"]),
         AC: readNullableNumber(row, ["AC"]),
@@ -1016,6 +1031,10 @@ function normalizeAggregateGauge(row: Record<string, unknown>): AggregateGaugeDa
 function normalizeAggregateCurve(row: Record<string, unknown>): AggregateCurveData {
     return {
         ...row,
+        DesviacionCosto: readNullableNumber(row, ["DesviacionCosto"]),
+        DesviacionPlazo: readNullableNumber(row, ["DesviacionPlazo"]),
+        Estado: nullableText(firstKnownValue(row, "Estado", "estado", "ESTADO")),
+        Mensaje: nullableText(firstKnownValue(row, "mensaje", "Mensaje", "MENSAJE")),
         OrdenSemana: readFiniteNumber(row, ["OrdenSemana", "OrdenSemanaEV", "Semana"], 0),
         FechaInicioSemana: nullableText(firstKnownValue(row, "FechaInicioSemana")),
         FechaFinSemana: nullableText(firstKnownValue(row, "FechaFinSemana")),
@@ -1048,7 +1067,7 @@ function normalizeUnitSummary(row: Record<string, unknown>): UnitSummaryData {
             "UnidadGerencial",
             "Unidad"
         )),
-        Semana: readNullableNumber(row, ["OrdenSemana", "OrdenSemanaEV", "Semana", "SemanaProyecto"]),
+        Semana: readNullableNumber(row, ["OrdenSemana", "OrdenSemanaEV", "SemanaEV", "SemanaEv", "Semana", "SemanaProyecto"]),
         AT: readNullableNumber(row, ["AT"]),
         CantidadProyectos: readNullableNumber(row, ["CantidadProyectos", "Cantidad Proyectos", "Proyectos"]),
         BAC: readNullableNumber(row, ["BAC"]),
@@ -1109,6 +1128,7 @@ function normalizeProjectData(project: ProjectData | null): ProjectData | null {
         EstadoProyecto: textValue(project.EstadoProyecto),
         MensajeEjecutivo: textValue(firstKnownValue(projectRow, "EstadoMensaje", "MensajeEjecutivo")),
         FechaEstado: nullableText(project.FechaEstado),
+        FechaInicio: nullableText(project.FechaInicio),
         SemanaActual: textOrNumberValue(project.SemanaActual)
     };
 }
@@ -1146,16 +1166,24 @@ export function adaptJsonDashboardData(parsed: ParsedDashboardData, selectedWeek
             VACT: currentRow?.["VAC (t)"],
             SPIT: currentRow?.["SPI (t)"],
             TSPIT: currentRow?.["TSPI (t)"],
-            FechaEstado: project?.FechaEstado
+            FechaEstado: currentRow?.FechaCorte
         }
     };
 
     return {
-        header: { ...buildJsonHeader(project), ...(selectedWeek === null ? {} : { SemanaActual: selectedWeek }) },
+        header: {
+            ...buildJsonHeader(project),
+            ...(selectedWeek === null ? {} : { SemanaActual: selectedWeek }),
+            ...(parsed.context.Level === "PROYECTO" ? {
+                FechaEstado: currentRow?.FechaCorte ?? null,
+                EstadoProyecto: typeof currentRow?.SemanaEstado === "string" ? currentRow.SemanaEstado : undefined,
+                MensajeEjecutivo: currentRow?.SemanaMensaje ?? undefined
+            } : {})
+        },
         current,
         gauges: buildJsonGauges(gaugeRows),
         curve,
-        performance: buildJsonPerformance(currentRow),
+        performance: buildJsonPerformance(parsed.summary, currentRow),
         risks: parsed.risks,
         milestones: parsed.milestones,
         hasData: parsed.project !== null && parsed.gauges.length > 0 && parsed.curve.length > 0
@@ -1396,7 +1424,7 @@ function buildJsonCurrentSnapshot(project: ProjectData | null, currentRow: Curve
     };
 }
 
-function buildJsonPerformance(currentRow: CurveData | null): PerformanceData {
+function buildJsonPerformance(summary: SummaryData | null, currentRow: CurveData | null): PerformanceData {
     const bac = currentRow?.BAC ?? null;
     const ac = currentRow?.AC ?? null;
     const at = currentProjectWeek(currentRow);
@@ -1406,6 +1434,18 @@ function buildJsonPerformance(currentRow: CurveData | null): PerformanceData {
     const vacT = currentRow?.["VAC (t)"] ?? null;
 
     return {
+        SAC: currentRow?.SAC ?? summary?.SAC ?? null,
+        ETCT: currentRow?.["ETC (t)"] ?? summary?.ETCT ?? null,
+        VACT: currentRow?.["VAC (t)"] ?? summary?.VACT ?? null,
+        SPIT: currentRow?.["SPI (t)"] ?? summary?.SPIT ?? null,
+        SVT: currentRow?.["SV (t)"] ?? summary?.SVT ?? null,
+        SVW: currentRow?.["SV (w)"] ?? summary?.SVW ?? null,
+        TSPIT: currentRow?.["TSPI (t)"] ?? summary?.TSPIT ?? null,
+        IETCT: currentRow?.IETC ?? summary?.IETCT ?? null,
+        BAC: bac ?? summary?.BAC ?? null,
+        CV: currentRow?.CV ?? summary?.CV ?? null,
+        ETCC: currentRow?.["ETC (c)"] ?? summary?.ETCC ?? null,
+        VACC: vacC ?? summary?.VACC ?? null,
         PlazoConsumidoPct: ratio(at, currentRow?.SAC ?? null),
         PlazoRestanteSemanas: difference(currentRow?.SAC ?? null, at),
         PlazoProgramadoTotalSemanas: currentRow?.SAC ?? null,
@@ -1933,3 +1973,4 @@ function toNumber(value: DataValue): number | null {
 function hasRealValue(value: DataValue): boolean {
     return value !== null && value !== undefined && value !== "";
 }
+

@@ -5,6 +5,24 @@
   padding: 0 !important;
   border: 0 !important;
 }
+.evm-main.evm-main--empty {
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+.evm-main.evm-main--empty > .evm-header,
+.evm-main.evm-main--empty > .evm-filter-panel {
+  flex-shrink: 0;
+}
+.evm-main.evm-main--empty .evm-empty-selection {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+}
 .evm-visual-host {
   display: block;
   overflow: hidden;
@@ -221,6 +239,10 @@
 .evm-main--project-details {
   grid-template-rows: 98px minmax(0, 1fr);
 }
+.evm-main--pronied {
+  grid-template-rows: 98px 94px 349px minmax(0, 1fr);
+  gap: 12px;
+}
 .evm-main--project-details .evm-project-gauge-grid {
   display: none;
 }
@@ -232,7 +254,7 @@
   grid-template-rows: 98px 94px minmax(0, 1fr);
 }
 .evm-main--portfolio-details {
-  grid-template-rows: 98px minmax(0, 1fr);
+  grid-template-rows: 98px 94px minmax(0, 1fr);
 }
 .evm-main--portfolio-details .evm-portfolio-gauge-grid {
   display: none;
@@ -262,10 +284,10 @@
   overflow: visible;
 }
 .evm-main--pronied:not(.evm-main--portfolio-details) .evm-carousel-button {
-  top: calc(50% - 242px);
+  top: calc(50% - 195px);
 }
 .evm-main--pronied.evm-main--portfolio-details .evm-carousel-button {
-  top: calc(50% - 58px);
+  top: calc(50% - 11px);
 }
 .evm-portfolio-main {
   grid-template-rows: 96px 88px 300px minmax(0, 1fr);
@@ -441,7 +463,7 @@
 .evm-entity-section {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 10px;
+  gap: 12px;
 }
 .evm-unit-grid {
   display: grid;
@@ -596,7 +618,7 @@
   display: grid;
   width: 100%;
   height: 94px;
-  grid-template-columns: minmax(150px, 1.2fr) minmax(100px, 0.75fr) repeat(3, minmax(110px, 1fr)) minmax(80px, 0.55fr) 240px;
+  grid-template-columns: minmax(120px, 0.9fr) minmax(100px, 0.75fr) repeat(3, minmax(110px, 1fr)) minmax(170px, 1.25fr) minmax(110px, 0.85fr) 240px;
   grid-template-rows: minmax(0, 1fr);
   align-items: end;
   gap: 10px;
@@ -676,11 +698,169 @@
   justify-content: stretch;
   align-items: end;
 }
+.evm-filter-panel--unit-inline .evm-pdf-controls {
+  grid-column: 2 / 6;
+}
 .evm-filter-panel--unit-inline .evm-filter-field {
   grid-column: 6;
 }
 .evm-filter-panel--unit-inline .evm-filter-clear {
   grid-column: 7;
+}
+.evm-filter-panel--project-inline .evm-filter-field--project-start-date > span {
+  white-space: normal;
+  line-height: 1.1;
+}
+.evm-filter-panel.evm-filter-panel--project-inline.evm-filter-panel--project-level {
+  grid-template-columns: minmax(120px, 0.9fr) minmax(100px, 0.75fr) minmax(110px, 1fr) minmax(170px, 1.25fr) minmax(190px, 1.1fr) minmax(110px, 0.85fr) 240px;
+}
+.evm-filter-panel--project-level .evm-pdf-controls {
+  grid-column: auto;
+  grid-row: auto;
+  justify-content: center;
+  align-self: end;
+  flex-wrap: wrap;
+}
+.evm-week-filter {
+  position: relative;
+  min-width: 0;
+}
+.evm-week-filter-trigger {
+  width: 100%;
+  min-height: 45px;
+  padding: 8px 10px;
+  border: 1px solid #C7D1E4;
+  border-radius: 6px;
+  color: #00145C;
+  background: #FFFFFF;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 850;
+  text-align: left;
+  cursor: pointer;
+}
+.evm-week-filter-trigger::after {
+  content: "▾";
+  float: right;
+}
+.evm-week-filter-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  overflow: hidden;
+  border: 1px solid #C7D1E4;
+  border-radius: 6px;
+  background: #FFFFFF;
+  box-shadow: 0 6px 18px #00145C26;
+}
+.evm-week-filter-menu[hidden] {
+  display: none;
+}
+.evm-week-filter-search {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 0;
+  border-bottom: 1px solid #C7D1E4;
+  color: #00145C;
+  background: #FFFFFF;
+  font: inherit;
+  font-size: 18px;
+}
+.evm-week-filter-list {
+  position: relative;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.evm-week-filter-empty {
+  padding: 10px;
+  font-size: 18px;
+  color: #667085;
+}
+.evm-week-filter-option[hidden] {
+  display: none;
+}
+.evm-week-filter-option {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  background: #FFFFFF;
+  color: #00145C;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 850;
+  text-align: left;
+  cursor: pointer;
+}
+.evm-week-filter-option:hover,
+.evm-week-filter-option:focus,
+.evm-week-filter-option[aria-pressed="true"] {
+  background: #EEF4FF;
+}
+.evm-filter-panel.evm-filter-panel--pronied-inline {
+  height: 94px;
+  grid-template-columns: minmax(150px, 1.2fr) minmax(100px, 0.75fr) repeat(3, minmax(110px, 1fr)) minmax(80px, 0.55fr) 240px;
+  justify-content: stretch;
+  align-items: end;
+}
+.evm-filter-panel--pronied-inline .evm-filter-field {
+  grid-column: 7;
+}
+.evm-pdf-controls {
+  grid-column: 1 / 7;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  min-width: 0;
+}
+.evm-pdf-button {
+  padding: 10px 16px;
+  border: 1px solid #001B8E;
+  border-radius: 6px;
+  background: #001B8E;
+  color: #FFFFFF;
+  font: inherit;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.evm-pdf-button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+.evm-pdf-button--loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.evm-pdf-button--loading::before {
+  content: "";
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #FFFFFF;
+  border-radius: 50%;
+  animation: evm-filter-loading-spin 0.8s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .evm-pdf-button--loading::before {
+    animation: none;
+  }
+}
+.evm-pdf-error {
+  color: #B42318;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.evm-pdf-error:empty {
+  display: none;
 }
 .evm-unit-project-filter {
   position: relative;
@@ -774,7 +954,7 @@
 .evm-unit-project-group-header {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr);
-  align-items: center;
+  align-items: end;
 }
 .evm-unit-project-toggle,
 .evm-unit-project-unit,
@@ -844,7 +1024,7 @@
 .evm-advanced-search-modal {
   display: flex;
   width: min(1280px, 98%);
-  height: min(790px, 93%);
+  height: 100%;
   min-height: 0;
   flex-direction: column;
   gap: 14px;
@@ -892,7 +1072,7 @@
 }
 .evm-advanced-search-filters {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
 }
 .evm-advanced-search-filters label {
@@ -1092,7 +1272,7 @@
 .evm-advanced-search-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 12px;
 }
 .evm-advanced-search-footer button {
   padding: 10px 18px;
@@ -2040,9 +2220,14 @@
 }
 .evm-cpi-help {
   position: absolute;
-  z-index: 10010;
+  z-index: 10;
   top: 25px;
   right: 28px;
+}
+.evm-cpi-help:hover,
+.evm-cpi-help:focus-within,
+.evm-cpi-help.open {
+  z-index: 10010;
 }
 .evm-cpi-help-button {
   display: grid;
@@ -2326,6 +2511,13 @@
   border-bottom: 1px solid #E0E7F1;
   border-right-color: #EEF1F6;
 }
+.evm-unit-projects-matrix-card .evm-unit-projects-matrix-row {
+  cursor: pointer;
+}
+.evm-unit-projects-matrix-card .evm-unit-projects-matrix-row:hover td,
+.evm-unit-projects-matrix-card .evm-unit-projects-matrix-row:focus-visible td {
+  background: #EEF5FF;
+}
 .evm-body-carousel {
   position: relative;
   min-height: 0;
@@ -2358,7 +2550,7 @@
   position: absolute;
   inset: 0;
   display: grid;
-  grid-template-columns: minmax(0, 70fr) minmax(360px, 30fr);
+  grid-template-columns: minmax(0, 75fr) minmax(320px, 25fr);
   gap: 10px;
   align-items: stretch;
   min-height: 0;
@@ -2600,6 +2792,12 @@
 .evm-line.ev {
   stroke: #16A34A;
 }
+.evm-line.ev.evm-ev-projection {
+  stroke-width: 2.5;
+  stroke-dasharray: none;
+  stroke-linecap: butt;
+  pointer-events: none;
+}
 .evm-dot.ev {
   stroke: #16A34A;
   fill: #16A34A;
@@ -2766,6 +2964,10 @@
   stroke: #98A2B3;
   stroke-width: 2.2;
 }
+.evm-es-line {
+  stroke: #001B8E;
+  pointer-events: none;
+}
 .evm-eac-cost-line,
 .evm-eac-time-line,
 .evm-eac-cost-guide {
@@ -2828,12 +3030,15 @@
   font-size: 16px;
   font-weight: 900;
 }
+.evm-curve-svg .evm-current-week-label.evm-current-week-label--sac {
+  fill: #001B8E;
+}
 .evm-curve-svg .evm-timeline-group-label {
   font-size: 16px;
   font-weight: 900;
 }
 .evm-curve-svg .evm-es-label {
-  fill: #5B21B6;
+  fill: #001B8E;
   font-size: 16px;
   font-weight: 900;
 }
@@ -3178,7 +3383,7 @@
   grid-template-columns: 62px minmax(105px, 1fr) minmax(120px, 0.9fr);
   grid-template-rows: minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 .evm-portfolio-summary-primary-left {
   display: grid;
@@ -3227,7 +3432,7 @@
 .evm-portfolio-summary-card--primary.is-green .evm-portfolio-summary-detail {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-rows: minmax(0, 1fr);
-  gap: 10px;
+  gap: 12px;
 }
 .evm-portfolio-summary-card--primary.is-blue .evm-portfolio-summary-mini,
 .evm-portfolio-summary-card--primary.is-green .evm-portfolio-summary-mini {
@@ -3347,7 +3552,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 16px;
-  align-items: center;
+  align-items: end;
 }
 .evm-critical-meta-item {
   display: flex;
@@ -3687,7 +3892,7 @@
 .evm-main--unit .evm-portfolio-summary-card.evm-portfolio-summary-card--primary:has(.evm-portfolio-summary-detail),
 .evm-main--unit .evm-portfolio-summary-card.evm-portfolio-summary-card--primary.is-blue:has(.evm-portfolio-summary-detail),
 .evm-main--unit .evm-portfolio-summary-card.evm-portfolio-summary-card--primary.is-green:has(.evm-portfolio-summary-detail) {
-  grid-template-columns: 50px minmax(0, 1fr) 46%;
+  grid-template-columns: 50px minmax(0, 1fr) 50%;
   gap: 8px;
   padding: 10px;
 }
@@ -4004,7 +4209,7 @@
 .evm-unit-progress-row > span,
 .evm-unit-progress-row > strong {
   display: flex;
-  align-items: center;
+  align-items: end;
 }
 .evm-unit-progress-header {
   min-height: 54px;
@@ -4579,6 +4784,7 @@
 }
 .evm-unit-progress-body .evm-unit-progress-table {
   align-self: stretch;
+  grid-template-rows: repeat(var(--portfolio-row-slots, 7), minmax(60px, 1fr));
   overflow-x: auto;
 }
 .evm-unit-progress-body .evm-unit-progress-range-legend {
@@ -4598,7 +4804,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
 }
 .evm-unit-progress-body .evm-unit-progress-range-item {
   grid-template-columns: 72px minmax(0, 1fr) auto;
@@ -4922,6 +5128,7 @@
 }
 .evm-performance-row span {
   font-size: 16px;
+  text-transform: none;
 }
 .evm-performance-row .performance-label {
   white-space: normal;
@@ -4942,6 +5149,92 @@
   margin-top: 6px;
   font-size: 18px;
   line-height: 1.14;
+}
+.evm-performance-metric {
+  position: relative;
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: 6px;
+  outline: none;
+  transition: background-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+.evm-performance-metric--with-icon {
+  padding-left: 36px;
+}
+.evm-performance-metric--with-icon > .evm-performance-icon {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.evm-performance-row.evm-performance-row--pair {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 18px;
+  row-gap: 6px;
+  padding: 8px 24px;
+}
+.evm-performance-row--pair .evm-performance-icon {
+  width: 28px;
+  height: 28px;
+}
+.evm-performance-row--pair .evm-performance-icon svg {
+  width: 25px;
+  height: 25px;
+}
+.evm-performance-metric:hover,
+.evm-performance-metric:focus-visible {
+  background: #EEF4FF;
+  box-shadow: inset 0 0 0 1px #BFD0FF;
+}
+.evm-performance-tooltip {
+  position: absolute;
+  z-index: 40;
+  bottom: calc(100% + 10px);
+  left: 0;
+  display: block;
+  width: max-content;
+  max-width: 270px;
+  padding: 10px 12px;
+  border: 1px solid #BFD0FF;
+  border-radius: 8px;
+  background: #FFFFFF;
+  box-shadow: 0 10px 26px rgba(0, 27, 142, 0.18);
+  color: #001B72;
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1.25;
+  letter-spacing: 0.05px;
+  opacity: 0;
+  pointer-events: none;
+  text-transform: none;
+  transform: translateY(4px);
+  transition: opacity 130ms ease, transform 130ms ease;
+  white-space: normal;
+}
+.evm-performance-tooltip::after {
+  position: absolute;
+  bottom: -6px;
+  left: 18px;
+  width: 10px;
+  height: 10px;
+  border-right: 1px solid #BFD0FF;
+  border-bottom: 1px solid #BFD0FF;
+  background: #FFFFFF;
+  content: "";
+  transform: rotate(45deg);
+}
+.evm-performance-row > div:last-child .evm-performance-tooltip {
+  right: 0;
+  left: auto;
+}
+.evm-performance-row > div:last-child .evm-performance-tooltip::after {
+  right: 18px;
+  left: auto;
+}
+.evm-performance-metric:hover .evm-performance-tooltip,
+.evm-performance-metric:focus-visible .evm-performance-tooltip {
+  opacity: 1;
+  transform: translateY(0);
 }
 .evm-progress-block {
   display: grid;
@@ -5339,7 +5632,7 @@
   gap: 14px;
   width: min(100%, 760px);
   margin: 0 auto;
-  align-items: center;
+  align-items: end;
 }
 .evm-risk-legend-item {
   display: flex;
@@ -5633,7 +5926,7 @@
   gap: 4px;
   width: 100%;
   margin: 0;
-  align-items: center;
+  align-items: end;
 }
 .evm-milestone-legend-item {
   display: flex;
@@ -6928,7 +7221,7 @@
 }
 .evm-project-details-lower-row .evm-risk-card {
   grid-template-rows: auto auto minmax(0, 1fr) auto;
-  gap: 10px;
+  gap: 12px;
 }
 .evm-project-details-lower-row .evm-risk-table {
   align-self: stretch;
@@ -7111,6 +7404,16 @@
 .evm-project-curve-matrix tbody tr.current td {
   box-shadow: inset 0 1px 0 #9DBCF2, inset 0 -1px 0 #9DBCF2;
 }
+.evm-project-curve-matrix thead th.evm-matrix-soft-highlight {
+  background: #EDF4FF;
+}
+.evm-project-curve-matrix tbody td.evm-matrix-soft-highlight {
+  background: #F3F7FF;
+  box-shadow: inset 1px 0 0 rgba(23, 105, 232, 0.12), inset -1px 0 0 rgba(23, 105, 232, 0.08);
+}
+.evm-project-curve-matrix tbody tr.current td.evm-matrix-soft-highlight {
+  background: #E8F1FF;
+}
 /* Two-level hover: highlight the active row and emphasize its exact cell. */
 .evm-project-curve-matrix tbody tr {
   transition: background-color 140ms ease;
@@ -7172,7 +7475,41 @@
   overflow-x: auto;
   overflow-y: auto;
   scrollbar-color: #AFC3E3 #F2F5FA;
-  scrollbar-width: thin;
+  scrollbar-width: auto;
+}
+@supports selector(::-webkit-scrollbar) {
+  .evm-project-curve-matrix-wrap {
+    scrollbar-color: auto;
+  }
+  .evm-project-curve-matrix-wrap::-webkit-scrollbar {
+    height: 22px;
+    width: 18px;
+  }
+  .evm-project-curve-matrix-wrap::-webkit-scrollbar-track:horizontal {
+    background: #F2F5FA;
+    border-radius: 9px;
+  }
+  .evm-project-curve-matrix-wrap::-webkit-scrollbar-thumb:horizontal {
+    background: #AFC3E3;
+    border: 2px solid #F2F5FA;
+    border-radius: 9px;
+  }
+  .evm-project-curve-matrix-wrap::-webkit-scrollbar-thumb:horizontal:hover {
+    background: #7D9FCE;
+  }
+  .evm-project-curve-matrix-wrap::-webkit-scrollbar-track:vertical {
+    background: #F2F5FA;
+    border-radius: 9px;
+  }
+  .evm-project-curve-matrix-wrap::-webkit-scrollbar-thumb:vertical {
+    background: #7D9FCE;
+    border: 2px solid #F2F5FA;
+    border-radius: 9px;
+    min-height: 32px;
+  }
+  .evm-project-curve-matrix-wrap::-webkit-scrollbar-thumb:vertical:hover {
+    background: #527DB7;
+  }
 }
 .evm-project-curve-matrix {
   width: max-content;
@@ -7844,7 +8181,7 @@
   font-size: 17px;
 }
 .evm-project-details-lower-row .evm-milestone-legend-item {
-  align-items: center;
+  align-items: flex-start;
 }
 .evm-project-details-lower-row .evm-milestone-legend-copy strong {
   font-size: 17px;
@@ -9221,5 +9558,21 @@
 .evm-dashboard input[type="text"],
 .evm-dashboard input[type="search"] {
   cursor: text;
+}
+/* PRONIED portfolio matrix: keep row values vertically centered. */
+.evm-unit-progress-body .evm-unit-progress-row:not(.evm-unit-progress-header) > *,
+.evm-unit-progress-body .evm-unit-progress-row:not(.evm-unit-progress-header) > span,
+.evm-unit-progress-body .evm-unit-progress-row:not(.evm-unit-progress-header) > strong,
+.evm-unit-progress-body .evm-unit-progress-value,
+.evm-unit-progress-body .evm-unit-progress-money,
+.evm-unit-progress-body .evm-unit-progress-index {
+  display: flex;
+  align-items: center;
+}
+.evm-unit-progress-body .evm-unit-progress-row:not(.evm-unit-progress-header) > :not(.evm-unit-progress-unit):not(.evm-unit-progress-value) {
+  justify-content: center;
+}
+.evm-unit-progress-body .evm-unit-progress-value {
+  justify-content: center;
 }
 

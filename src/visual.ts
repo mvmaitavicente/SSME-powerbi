@@ -15,6 +15,7 @@ import { renderPortfolioDashboard } from "./portfolioSummary/Dashboard";
 import { AggregateCurveData, AggregateGaugeData, CriticalIntervention, CurveData, CurveHistoryPoint, CurveReferences, DashboardData, DashboardLevel, DataValue, GaugeChartPoint, GaugeChartSeries, GaugeData, GaugeHistoryRow, GaugeMetricKey, NavigatorProject, ParsedDashboardData, PortfolioSummaryData, ProjectHeader, RenderCurveData, RiskItem, SummaryData, UnitProjectSummaryData, UnitSummaryData, VisualPalette } from "./types";
 import { createElement, currency, date, decimal, numberValue, shortCurrency, text } from "./utils/format";
 import { debounceInput } from "./utils/interaction";
+import { captureReportPage, generateReportPdf } from "./utils/pdfReport";
 import { NavigationFilterController } from "./controllers/NavigationFilterController";
 import { NavigatorProjectIndex } from "./controllers/NavigatorProjectIndex";
 import { InternalFilterController } from "./controllers/InternalFilterController";
@@ -25,6 +26,7 @@ import VisualConstructorOptions = powerbi.extensibility.visual.VisualConstructor
 import VisualUpdateOptions = powerbi.extensibility.visual.VisualUpdateOptions;
 import IVisual = powerbi.extensibility.visual.IVisual;
 import IVisualEventService = powerbi.extensibility.IVisualEventService;
+
 
 interface NavigationDebugState {
     clickCount: number;
@@ -109,6 +111,9 @@ const DASHBOARD_PARAMETER_TARGET = {
 };
 
 export class Visual implements IVisual {
+    private pdfError = "";
+    private reportExportBusy = false;
+    private reportExportLabel = "Preparando capturas...";
     private readonly host: powerbi.extensibility.visual.IVisualHost;
     private readonly events: IVisualEventService;
     private readonly target: HTMLElement;
@@ -149,7 +154,9 @@ export class Visual implements IVisual {
     private dashboardParameterSignature: string | null = null;
     private defaultProjectId: string | null = null;
     private preferredProjectInitialized: boolean = false;
-    private readonly preferredProjectCui: string = "254895";
+    private dashboardHasData = true;
+    private startupRecoveryAttempted = false;
+    private readonly preferredProjectId: string = "WP-18";
     private navigationDebug: NavigationDebugState = {
         clickCount: 0,
         updateCount: 0,
@@ -236,6 +243,7 @@ export class Visual implements IVisual {
 
     private selectedProjectWeek: number | null = null;
     private weekFilterProjectId: string | null = null;
+    private selectedProniedWeek: number | null = null;
     private selectedUnitWeek: number | null = null;
     private weekFilterUnit: string | null = null;
     private lastWeekFilterUpdateOptions: VisualUpdateOptions | null = null;
@@ -269,8 +277,29 @@ export class Visual implements IVisual {
 
         try {
             const dataView = options.dataViews?.[0];
-            const dashboard = parseDashboardJsonData(dataView);
-            if (!this.forceWeekFilterRender && dashboard && dashboard === this.currentDashboardData && this.rootElement) {
+            const parsedDashboard = parseDashboardJsonData(dataView);
+            const dashboardColumn = dataView?.table?.columns.findIndex((column) => column.roles?.jsonDashboard) ?? -1;
+            if (!parsedDashboard && !this.currentDashboardData && dashboardColumn >= 0 && !this.startupRecoveryAttempted) {
+                this.startupRecoveryAttempted = true;
+                this.resetPersistedStartupFilters();
+            }
+            const previouslyHadData = this.dashboardHasData;
+            this.dashboardHasData = parsedDashboard !== null;
+            // Retain navigation context when page and visual filters have no intersection.
+            // The retained dashboard must never be rendered as current report data.
+            const retainedDashboard = this.currentDashboardData ?? (dashboardColumn >= 0 ? this.createEmptyNavigationDashboard() : null);
+            const dashboard = parsedDashboard ?? (retainedDashboard && this.pendingNavigationLevel
+                ? {
+                    ...retainedDashboard,
+                    context: {
+                        ...retainedDashboard.context,
+                        Level: this.pendingNavigationLevel,
+                        Unit: this.filterState.selectedUnit,
+                        ProjectId: this.filterState.selectedProjectId
+                    }
+                }
+                : retainedDashboard);
+            if (!this.forceWeekFilterRender && this.dashboardHasData && previouslyHadData && dashboard && dashboard === this.currentDashboardData && this.rootElement) {
                 this.rootElement.style.width = `${options.viewport.width}px`;
                 this.rootElement.style.height = `${options.viewport.height}px`;
                 this.finishFilterLoading();
@@ -280,7 +309,7 @@ export class Visual implements IVisual {
             this.closeCriticalInterventionsModal();
             this.viewLifecycle.reset();
             this.target.replaceChildren();
-            if (dashboard?.context?.Level === this.pendingNavigationLevel) {
+            if (parsedDashboard?.context?.Level === this.pendingNavigationLevel) {
                 this.pendingNavigationLevel = null;
             }
             if (this.navigationDebugPanelEnabled) {
@@ -316,7 +345,7 @@ export class Visual implements IVisual {
                 this.navigationDebug.timestamp = new Date().toISOString();
             }
             this.currentDashboardData = dashboard;
-            if (dashboard) {
+            if (parsedDashboard) {
                 this.rememberNavigatorProjects(dashboard.navigator?.projects ?? dashboard.projects);
             }
             const root = document.createElement("div");
@@ -331,7 +360,7 @@ export class Visual implements IVisual {
                 const receivedProjectId = dashboard.context.ProjectId
                     ?? this.navigatorText(dashboard.project?.IdIntervencion)
                     ?? null;
-                if (!this.pendingProjectSelectionId || receivedProjectId === this.pendingProjectSelectionId) {
+                if (this.dashboardHasData && (!this.pendingProjectSelectionId || receivedProjectId === this.pendingProjectSelectionId)) {
                     this.pendingProjectSelectionId = null;
                     this.syncFilterStateFromDashboard(dashboard);
                 }
@@ -348,11 +377,18 @@ export class Visual implements IVisual {
                     canOpenProject: Boolean(sidebarProject),
                     onOpenPronied: () => this.openProniedDashboard(),
                     onOpenRisks: () => this.openRiskDashboard(),
-                    onOpenUnit: () => this.openUnitDashboard(sidebarUnit ?? undefined),
+                    onOpenUnit: () => this.openUnitDashboard(),
                     onOpenProject: () => {
                         const sidebarProjectItem = sidebarProject ? this.findNavigatorProjectById(sidebarProject) : null;
                         if (sidebarProjectItem) {
                             this.openProjectDashboard(sidebarProjectItem);
+                            return;
+                        }
+                        const fallbackProject = dashboard.projects.length
+                            ? this.resolveNavigatorProjectForClick(dashboard.projects[0] as unknown as NavigatorProject)
+                            : this.findNavigatorProjectById(this.firstNavigatorProject() ?? "");
+                        if (fallbackProject && this.getProjectId(fallbackProject)) {
+                            this.openProjectDashboard(fallbackProject);
                             return;
                         }
                         this.disableProjectNavigation(sidebarProject ?? null);
@@ -370,22 +406,26 @@ export class Visual implements IVisual {
                         return this.sidebarExpanded;
                     }
                 }));
-                root.appendChild(this.renderCurrentDashboard(dashboard, options.viewport));
-                if (this.filterPanelOpen && dashboard.context.Level !== "PROYECTO" && dashboard.context.Level !== "UNIDAD") {
+                root.appendChild(this.dashboardHasData
+                    ? this.renderCurrentDashboard(dashboard, options.viewport)
+                    : this.renderEmptyDashboard(dashboard));
+                if (this.filterPanelOpen && dashboard.context.Level !== "PROYECTO" && dashboard.context.Level !== "UNIDAD" && dashboard.context.Level !== "PRONIED") {
                     root.appendChild(this.renderFilterPanel());
                 }
             } else {
                 const empty = document.createElement("div");
                 empty.className = "evm-no-data";
-                empty.textContent = "Asigne columnas o medidas al visual para ver el dashboard EVM.";
+                empty.textContent = dashboardColumn >= 0
+                    ? "No hay datos disponibles con los filtros actuales."
+                    : "Asigne columnas o medidas al visual para ver el dashboard EVM.";
                 root.appendChild(empty);
             }
 
             this.renderNavigationDebugPanel();
             this.target.appendChild(root);
             this.finishFilterLoading();
-            this.initializePreferredProject(dashboard);
-            if (this.isGaugeHistoryModalOpen) {
+            if (this.dashboardHasData) this.initializePreferredProject(dashboard);
+            if (this.dashboardHasData && this.isGaugeHistoryModalOpen) {
                 this.renderGaugeHistoryModal();
             }
             this.events.renderingFinished(options);
@@ -983,6 +1023,72 @@ export class Visual implements IVisual {
         this.renderNavigationDebugPanel();
     }
 
+    private resetPersistedStartupFilters(): void {
+        // A new controller has no in-memory entries, but Power BI may restore saved filters.
+        this.navigationFilters.clear(true);
+        const properties = [
+            "combinedFilter", "combinedSelfFilter", "levelFilter", "levelSelfFilter",
+            "unitFilter", "unitSelfFilter", "regionFilter", "regionSelfFilter",
+            "provinceFilter", "provinceSelfFilter", "districtFilter", "districtSelfFilter",
+            "statusFilter", "statusSelfFilter", "projectFilter", "selfProjectFilter"
+        ];
+        properties.forEach((property) => this.host.applyJsonFilter(
+            null as unknown as powerbi.IFilter, "internalFilters", property, powerbi.FilterAction.remove
+        ));
+        this.pendingProjectSelectionId = null;
+        this.pendingNavigationLevel = "PRONIED";
+        this.filterState.level = "PRONIED";
+        this.applyLevelFilter("PRONIED", true);
+    }
+
+    private createEmptyNavigationDashboard(): ParsedDashboardData {
+        return {
+            idIntervencion: "",
+            context: {
+                Level: this.pendingNavigationLevel ?? this.filterState.level,
+                Unit: null, ProjectId: null, Region: null, Province: null,
+                District: null, Status: null, CutoffDate: null
+            },
+            summary: null, project: null, portfolioSummary: null, riskDashboard: null,
+            gauges: [], curve: [], aggregateGauges: [], aggregateCurve: [], units: [],
+            criticalInterventions: [], projects: [], risks: [], milestones: []
+        };
+    }
+
+    private renderEmptyDashboard(dashboard: ParsedDashboardData): HTMLElement {
+        const main = createElement("main", "evm-main evm-main--empty");
+        const isProject = dashboard.context.Level === "PROYECTO";
+        const isUnit = dashboard.context.Level === "UNIDAD";
+        if (isProject) main.classList.add("evm-main--project", "evm-main--project-filters-open");
+        if (isUnit) main.classList.add("evm-main--unit");
+        const header = createElement("header", "evm-header");
+        const titles: Record<DashboardLevel, string> = {
+            PROYECTO: "TABLERO PROYECTOS", UNIDAD: "TABLERO UNIDAD GERENCIAL",
+            PRONIED: "TABLERO ALTA DIRECCIÓN", RIESGOS: "TABLERO RIESGOS"
+        };
+        header.appendChild(createElement("h2", undefined, titles[dashboard.context.Level]));
+        main.appendChild(header);
+        if (isProject) {
+            const panel = this.renderFilterPanel();
+            panel.classList.add("evm-filter-panel--project-inline");
+            main.appendChild(panel);
+        }
+        if (isUnit) main.appendChild(this.renderUnitInlineFilterPanel(dashboard, []));
+        const message = createElement("section", "evm-card evm-empty-selection");
+        message.setAttribute("role", "status");
+        message.appendChild(createElement("h2", undefined, "No hay datos con los filtros actuales"));
+        message.appendChild(createElement("p", undefined, isUnit
+            ? "Seleccione otra unidad compatible con los filtros de la página o ajuste esos filtros."
+            : isProject ? "Seleccione otro proyecto compatible con los filtros de la página o ajuste esos filtros."
+                : "Ajuste los filtros de la página para consultar este tablero."));
+        const change = createElement("button", "evm-filter-clear", isUnit ? "Cambiar unidad" : "Cambiar proyecto");
+        change.type = "button";
+        change.addEventListener("click", () => isUnit ? this.openUnitSelectorModal(dashboard) : this.openAdvancedProjectSearch());
+        if (isProject || isUnit) message.appendChild(change);
+        main.appendChild(message);
+        return main;
+    }
+
     private renderCurrentDashboard(dashboard: ParsedDashboardData, viewport: powerbi.IViewport): HTMLElement {
         if (this.navigationDebugPanelEnabled) this.navigationDebug.renderedLevel = dashboard.context.Level;
         switch (dashboard.context.Level) {
@@ -1040,20 +1146,141 @@ export class Visual implements IVisual {
         const main = createElement("main", "evm-main evm-main--pronied");
         main.classList.toggle("evm-main--portfolio-details", this.portfolioCarouselIndex === 1);
         main.style.minWidth = `${Math.min(780, Math.max(0, viewport.width - 92))}px`;
+        const availableWeeks = this.proniedFilterWeeks(dashboard);
+        if (this.selectedProniedWeek === null || !availableWeeks.includes(this.selectedProniedWeek)) {
+            this.selectedProniedWeek = availableWeeks[availableWeeks.length - 1] ?? null;
+        }
+        const currentCurveRow = dashboard.aggregateCurve.find((row) => row.OrdenSemana === this.selectedProniedWeek);
         main.appendChild(renderHeader(
-            this.portfolioHeaderData("TABLERO EJECUTIVO - PORTAFOLIO INSTITUCIONAL", dashboard),
+            {
+                ...this.portfolioHeaderData("TABLERO EJECUTIVO - PORTAFOLIO INSTITUCIONAL DEL PRONIED", dashboard),
+                FechaEstado: currentCurveRow?.FechaFinSemana ?? null,
+                SemanaActual: currentCurveRow?.LabelSemana || null
+            },
             {
                 titleLabel: null,
                 subtitle: "Sistema de Seguimiento, Monitoreo y Evaluación - SSME",
-                stateLabel: "Estado del Portafolio",
-                weekOverride: 44
+                stateLabel: "Estado del Portafolio"
             }
         ));
-        const gaugeSection = this.renderPortfolioGaugeSection(dashboard);
+        main.appendChild(this.renderProniedInlineFilterPanel(availableWeeks));
+        const gaugeSection = this.renderPortfolioGaugeSection(dashboard, this.selectedProniedWeek);
         gaugeSection.classList.add("evm-portfolio-gauge-grid");
         main.appendChild(gaugeSection);
         main.appendChild(this.renderProniedBodyCarousel(dashboard));
         return main;
+    }
+
+    private proniedFilterWeeks(dashboard: ParsedDashboardData): number[] {
+        return Array.from(new Set(dashboard.aggregateCurve
+            .map((row) => row.OrdenSemana)
+            .filter((week) => Number.isFinite(week) && week >= 1)))
+            .sort((a, b) => a - b);
+    }
+
+    private renderPdfControls(): HTMLElement {
+        const controls = createElement("div", "evm-pdf-controls");
+        const button = createElement("button", "evm-pdf-button");
+        button.type = "button";
+        button.textContent = this.reportExportBusy ? this.reportExportLabel : "Descargar Reporteria";
+        button.classList.toggle("evm-pdf-button--loading", this.reportExportBusy);
+        button.setAttribute("aria-busy", String(this.reportExportBusy));
+        button.disabled = this.reportExportBusy || this.selectedReportWeek() === null;
+        button.setAttribute("aria-live", "polite");
+        button.addEventListener("click", () => { void this.downloadReportPdf(); });
+        const error = createElement("span", "evm-pdf-error", this.pdfError);
+        error.setAttribute("role", "alert");
+        controls.append(button, error);
+        return controls;
+    }
+
+    private selectedReportWeek(): number | null {
+        const level = this.currentDashboardData?.context.Level;
+        if (level === "UNIDAD") return this.selectedUnitWeek;
+        return level === "PROYECTO" ? this.selectedProjectWeek : this.selectedProniedWeek;
+    }
+
+    private renderProniedInlineFilterPanel(weeks: number[]): HTMLElement {
+        const panel = createElement("aside", "evm-filter-panel evm-card evm-filter-panel--project-inline evm-filter-panel--pronied-inline");
+        panel.appendChild(this.renderPdfControls());
+        panel.appendChild(this.renderFilterSelect("Semana", "pronied-week", weeks.map((week) => ({
+            value: String(week), label: String(week)
+        })), this.selectedProniedWeek === null ? null : String(this.selectedProniedWeek), (value) => {
+            this.selectedProniedWeek = value === null ? null : Number(value);
+            if (this.lastWeekFilterUpdateOptions) {
+                this.forceWeekFilterRender = true;
+                try {
+                    this.update(this.lastWeekFilterUpdateOptions);
+                } finally {
+                    this.forceWeekFilterRender = false;
+                }
+            }
+        }, false, weeks.length === 0));
+        return panel;
+    }
+
+    private updatePdfControls(): void {
+        this.target.querySelectorAll<HTMLButtonElement>(".evm-pdf-button").forEach((button) => {
+            button.disabled = this.reportExportBusy || this.selectedReportWeek() === null;
+            button.textContent = this.reportExportBusy ? this.reportExportLabel : "Descargar Reporteria";
+            button.classList.toggle("evm-pdf-button--loading", this.reportExportBusy);
+            button.setAttribute("aria-busy", String(this.reportExportBusy));
+        });
+        this.target.querySelectorAll<HTMLElement>(".evm-pdf-error").forEach((error) => { error.textContent = this.pdfError; });
+    }
+
+    private async downloadReportPdf(): Promise<void> {
+        const level = this.currentDashboardData?.context.Level;
+        const isUnit = level === "UNIDAD";
+        const isProject = level === "PROYECTO";
+        const mainSelector = isUnit ? ".evm-main--unit" : isProject ? ".evm-main--project" : ".evm-main--pronied";
+        const main = this.target.querySelector<HTMLElement>(mainSelector);
+        const week = this.selectedReportWeek();
+        if (!main || week === null || this.reportExportBusy) return;
+        this.reportExportLabel = "Preparando capturas...";
+        this.reportExportBusy = true;
+        this.pdfError = "";
+        this.updatePdfControls();
+        try {
+            // Continue in a later task so the busy label paints before the expensive snapshots.
+            await new Promise<void>((resolve) => {
+                requestAnimationFrame(() => setTimeout(resolve, 0));
+            });
+            if (main !== this.target.querySelector(mainSelector) || week !== this.selectedReportWeek()) return;
+            if (isUnit) {
+                const activate = this.activateUnitPage;
+                if (!activate || main.querySelectorAll(".evm-unit-body-carousel > .evm-body-carousel-viewport > .evm-body-carousel-page").length !== 2) {
+                    throw new Error("No se encontraron las pantallas Resumen y Matriz.");
+                }
+                // Mount the lazy matrix page, then restore the page the user was viewing.
+                const currentIndex = this.unitMatrixPageActive ? 1 : 0;
+                activate(1);
+                activate(currentIndex);
+            } else {
+                const carouselSelector = isProject ? ".evm-body-carousel" : ".evm-body-carousel--portfolio";
+                const pages = Array.from(main.querySelectorAll<HTMLElement>(
+                    `${carouselSelector} > .evm-body-carousel-viewport > .evm-body-carousel-page`
+                ));
+                if (pages.length !== 2) throw new Error("No se encontraron las pantallas Resumen y Matriz.");
+                pages.forEach((page) => this.mountCarouselPage(page));
+            }
+            // Both snapshots are cloned before yielding, preserving the same week's data.
+            const images = await Promise.all([
+                captureReportPage(main, 0),
+                captureReportPage(main, 1, { expandMatrix: isProject })
+            ]);
+            this.reportExportLabel = "Generando PDF...";
+            this.updatePdfControls();
+            const url = await generateReportPdf(images);
+            this.reportExportLabel = "Abriendo descarga...";
+            this.updatePdfControls();
+            this.host.launchUrl(url);
+        } catch (error) {
+            this.pdfError = error instanceof Error ? error.message : "No se pudo generar el reporte PDF.";
+        } finally {
+            this.reportExportBusy = false;
+            this.updatePdfControls();
+        }
     }
 
     private renderProniedBodyCarousel(dashboard: ParsedDashboardData): HTMLElement {
@@ -1062,12 +1289,11 @@ export class Visual implements IVisual {
 
         const summaryPage = this.createLazyCarouselPage("evm-body-carousel-page evm-body-carousel-page--evm", this.portfolioCarouselIndex === 0, (page) => {
             const left = createElement("div", "evm-left-column");
-            const curveCard = renderCurve(this.buildAggregateRenderCurve(dashboard), palette, { portfolio: true, showYearBracket: true }, this.viewLifecycle);
+            const curveCard = renderCurve(this.buildAggregateRenderCurve(dashboard, this.selectedProniedWeek), palette, { portfolio: true, showYearBracket: true, visibleWeeksBack: 12 }, this.viewLifecycle);
             curveCard.classList.add("evm-portfolio-curve-card");
             const curveTitle = curveCard.querySelector(".evm-section-title");
             if (curveTitle instanceof HTMLElement) {
                 curveTitle.textContent = "CURVA S - PORTAFOLIO INSTITUCIONAL";
-                curveTitle.insertAdjacentElement("afterend", this.renderPortfolioCurveLegend());
             }
             left.appendChild(curveCard);
             const right = createElement("div", "evm-right-column");
@@ -1080,7 +1306,7 @@ export class Visual implements IVisual {
         });
 
         const unitsPage = this.createLazyCarouselPage("evm-body-carousel-page evm-body-carousel-page--portfolio-units", this.portfolioCarouselIndex === 1, (page) => {
-            const portfolioAt = this.lastAggregateValue(dashboard.aggregateCurve, (row) => row.AT);
+            const portfolioAt = this.selectedProniedWeek ?? this.lastAggregateValue(dashboard.aggregateCurve, (row) => row.AT);
             page.appendChild(this.renderUnitProgressPanel(this.unitsAtWeek(dashboard.units, portfolioAt)));
             page.appendChild(this.renderPortfolioRiskSection(dashboard.risks));
         });
@@ -1093,9 +1319,6 @@ export class Visual implements IVisual {
         });
 
         carousel.appendChild(viewport);
-        carousel.appendChild(this.renderCarouselButton("prev", "‹", "Ver pantalla anterior", pages));
-        carousel.appendChild(this.renderCarouselButton("next", "›", "Ver pantalla siguiente", pages));
-        this.updateCarouselButtons(carousel);
         return carousel;
     }
 
@@ -1218,6 +1441,8 @@ export class Visual implements IVisual {
             const advancePct = Math.round(unit.Avance ?? calculatedAdvance * 100);
             return { unit, advancePct };
         });
+        // Reserve the full portfolio layout (header, five units and total) after filtering.
+        table.style.setProperty("--portfolio-row-slots", String(Math.max(7, progressRows.length + 1)));
         progressRows.forEach(({ unit, advancePct }) => {
             const normalizedUnit = unit.UnidadGerencial.trim().toLowerCase();
             const isTotal = normalizedUnit === "portafolio" || normalizedUnit === "portafolio pronied";
@@ -1637,12 +1862,34 @@ export class Visual implements IVisual {
         if (this.selectedUnitWeek === null || !availableWeeks.includes(this.selectedUnitWeek)) {
             this.selectedUnitWeek = availableWeeks[availableWeeks.length - 1] ?? null;
         }
+        const selectedUnitCurveRow = dashboard.aggregateCurve.find((row) => row.OrdenSemana === this.selectedUnitWeek);
+        const unitCode = unitName.trim().split(/\s|-/)[0].toUpperCase();
+        const budgetIsInterventions = unitCode === "UGM" || unitCode === "UGME";
+        const unitSummary: PortfolioSummaryData | null = dashboard.portfolioSummary || selectedUnitCurveRow ? {
+            ProyectosActivos: null,
+            CantidadProyectos: null,
+            CantidadIntervenciones: null,
+            IntervencionesCriticas: null,
+            RiesgoPortafolioPct: null,
+            ...dashboard.portfolioSummary,
+            PresupuestoProyectos: budgetIsInterventions ? 0 : selectedUnitCurveRow?.BAC ?? null,
+            PresupuestoIntervenciones: budgetIsInterventions ? selectedUnitCurveRow?.BAC ?? null : 0,
+            PresupuestoInstitucional: selectedUnitCurveRow?.BAC ?? null,
+            DesviacionCostoPct: selectedUnitCurveRow?.DesviacionCosto ?? null,
+            DesviacionPlazoPct: selectedUnitCurveRow?.DesviacionPlazo ?? null
+        } : null;
         const unitHeader = renderHeader(
-            this.portfolioHeaderData(`TABLERO UNIDAD GERENCIAL - ${unitName}`, dashboard),
+            {
+                ...this.portfolioHeaderData(`TABLERO UNIDAD GERENCIAL - ${unitName}`, dashboard),
+                FechaEstado: selectedUnitCurveRow?.FechaFinSemana ?? null,
+                SemanaActual: selectedUnitCurveRow?.LabelSemana || null,
+                EstadoProyecto: selectedUnitCurveRow?.Estado ?? "",
+                MensajeEjecutivo: selectedUnitCurveRow?.Mensaje ?? ""
+            },
             {
                 titleLabel: null,
-                subtitle: "Sistema de Seguimiento, Monitoreo y Evaluación - SSME",
-                weekOverride: 44
+                stateLabel: "Estado de la Unidad",
+                subtitle: "Sistema de Seguimiento, Monitoreo y Evaluación - SSME"
             }
         );
         unitHeader.classList.add("evm-unit-dashboard-header");
@@ -1651,7 +1898,11 @@ export class Visual implements IVisual {
         main.appendChild(this.renderPortfolioGaugeSection(dashboard, this.selectedUnitWeek));
         main.appendChild(this.renderPortfolioBody(
             this.buildAggregateRenderCurve(dashboard, this.selectedUnitWeek),
-            renderPortfolioDashboard(dashboard.portfolioSummary, unitName),
+            renderPortfolioDashboard(
+                unitSummary,
+                unitName,
+                () => this.openCriticalInterventionsModal(dashboard.criticalInterventions)
+            ),
             unitName,
             dashboard.projects,
             dashboard.risks
@@ -1683,6 +1934,7 @@ export class Visual implements IVisual {
         const header = createElement("div", "evm-filter-panel-header");
         header.appendChild(createElement("strong", undefined, "Filtros"));
         panel.appendChild(header);
+        if (this.dashboardHasData) panel.appendChild(this.renderPdfControls());
         panel.appendChild(this.renderFilterSelect("Semana", "unit-week", weeks.map((week) => ({
             value: String(week), label: String(week)
         })), this.selectedUnitWeek === null ? null : String(this.selectedUnitWeek), (value) => {
@@ -1948,7 +2200,6 @@ export class Visual implements IVisual {
         const curveTitle = curveCard.querySelector(".evm-section-title");
         if (curveTitle instanceof HTMLElement) {
             curveTitle.textContent = `CURVA S - ${unitName}`;
-            curveTitle.insertAdjacentElement("afterend", this.renderPortfolioCurveLegend());
         }
         left.appendChild(curveCard);
         right.appendChild(sidePanel);
@@ -1977,20 +2228,8 @@ export class Visual implements IVisual {
             this.rootElement?.querySelectorAll<HTMLElement>('.evm-project-subtab[data-carousel-scope="unit"]').forEach((tab) => {
                 tab.classList.toggle("active", tab.dataset.projectView === (index === 0 ? "summary" : "matrix"));
             });
-            carousel.querySelectorAll<HTMLElement>(".evm-carousel-button").forEach((button) => {
-                const label = index === 0 ? "Ver matriz de proyectos de la unidad" : "Volver al resumen de la unidad";
-                button.setAttribute("aria-label", label);
-                button.setAttribute("title", label);
-                button.dataset.tooltip = label;
-            });
         };
         carousel.appendChild(viewport);
-        (["prev", "next"] as const).forEach((direction) => {
-            const arrow = createElement("button", `evm-carousel-button evm-carousel-button--${direction}`, direction === "prev" ? "‹" : "›");
-            arrow.type = "button";
-            arrow.addEventListener("click", () => activate(this.unitMatrixPageActive ? 0 : 1));
-            carousel.appendChild(arrow);
-        });
         this.activateUnitPage = activate;
         activate(this.unitMatrixPageActive ? 1 : 0);
         return carousel;
@@ -2036,6 +2275,17 @@ export class Visual implements IVisual {
         const body = document.createElement("tbody");
         rows.forEach((project) => {
             const row = document.createElement("tr");
+            row.classList.add("evm-unit-projects-matrix-row");
+            row.tabIndex = 0;
+            row.setAttribute("role", "button");
+            row.setAttribute("aria-label", `Ver proyecto ${project.NombreIntervencion || project.Cui || ""}`);
+            row.addEventListener("click", (event) => this.handleProjectClick(event, project));
+            row.addEventListener("keydown", (event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    this.handleProjectClick(event, project);
+                }
+            });
             groups.forEach((group) => group.fields.forEach((field) => {
                 const keys = aliases[field] ?? [field, field.replace(/\s|[()]/g, "").toUpperCase()];
                 const raw = keys.map((key) => project[key]).find((value) => value !== null && value !== undefined && value !== "");
@@ -2640,13 +2890,7 @@ export class Visual implements IVisual {
             viewport.appendChild(page);
         });
 
-        const previous = this.renderCarouselButton("prev", "‹", "Ver pantalla anterior", pages);
-        const next = this.renderCarouselButton("next", "›", "Ver pantalla siguiente", pages);
-
         carousel.appendChild(viewport);
-        carousel.appendChild(previous);
-        carousel.appendChild(next);
-        this.updateCarouselButtons(carousel);
         return carousel;
     }
 
@@ -2985,11 +3229,13 @@ export class Visual implements IVisual {
                 const week = numberValue(row.Semana);
                 return week !== null
                     && week >= 1
+                    && (this.selectedProjectWeek === null || week <= this.selectedProjectWeek)
                     && (cutoffWeek === null || week <= cutoffWeek);
             });
         const table = createElement("table", "evm-project-curve-matrix");
         table.classList.add(`evm-matrix-projection-method-${this.matrixCostProjectionMethod}`);
         const visibleFields = [weekField, ...groups.flatMap((group) => group.fields.filter(isColumnVisible))];
+        const softlyHighlightedFields = new Set<keyof CurveData>(["BAC", "SAC", "ES", "AT", "PV", "EV", "AC"]);
         const sectionStartFields = new Set(groups.flatMap((group) => {
             const firstVisible = group.fields.find(isColumnVisible);
             return firstVisible ? [firstVisible.key] : [];
@@ -3095,6 +3341,7 @@ export class Visual implements IVisual {
                 }
                 const th = createElement("th");
                 styleProjectionGroup(th, field);
+                if (softlyHighlightedFields.has(field.key)) th.classList.add("evm-matrix-soft-highlight");
                 if (sectionStartFields.has(field.key)) th.classList.add("evm-matrix-section-start");
                 if (field.key === "VAC (c)") th.classList.add("evm-matrix-header-vac-cost");
                 if (field.key === "VAC (t)" || field.key === "EAC (t)" || field.key === "ETC (t)") th.classList.add("evm-matrix-header-time-projection");
@@ -3123,6 +3370,7 @@ export class Visual implements IVisual {
                     td.textContent = cell.formatted;
                     td.className = "";
                     styleProjectionGroup(td, cell.field);
+                    if (softlyHighlightedFields.has(cell.field.key)) td.classList.add("evm-matrix-soft-highlight");
                     if (sectionStartFields.has(cell.field.key)) td.classList.add("evm-matrix-section-start");
                     if (rowIndex === preparedRows.length - 1 && td.classList.contains("evm-matrix-projection-group-cell")) {
                         td.classList.add("evm-matrix-projection-group-bottom");
@@ -3294,21 +3542,6 @@ export class Visual implements IVisual {
         return card;
     }
 
-    private renderCarouselButton(direction: "prev" | "next", label: string, ariaLabel: string, pages: HTMLElement[]): HTMLButtonElement {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = `evm-carousel-button evm-carousel-button--${direction}`;
-        button.setAttribute("aria-label", ariaLabel);
-        button.textContent = label;
-        button.addEventListener("click", () => {
-            const step = direction === "next" ? 1 : -1;
-            const nextIndex = (this.getCarouselIndex(pages) + step + pages.length) % pages.length;
-            this.setCarouselIndex(pages, nextIndex);
-            this.updateCarouselPages(pages);
-        });
-        return button;
-    }
-
     private createLazyCarouselPage(className: string, active: boolean, render: (page: HTMLElement) => void): HTMLElement {
         return this.lazyCarousel.create(className, active, render);
     }
@@ -3419,17 +3652,22 @@ export class Visual implements IVisual {
 
     private resolveUnitForNavigation(dashboard: ParsedDashboardData | null = this.currentDashboardData): string | null {
         if (!dashboard) {
-            return this.filterState.selectedUnit ?? this.filterState.lastNavigableUnit;
+            return this.filterState.selectedUnit ?? this.filterState.lastNavigableUnit ?? this.firstNavigatorUnit(false);
         }
 
-        return dashboard.context.Unit
-            ?? dashboard.project?.UnidadGerencial
-            ?? this.filterState.selectedUnit
-            ?? this.filterState.lastNavigableUnit
-            ?? dashboard.units.find((unit) => unit.UnidadGerencial)?.UnidadGerencial
-            ?? this.firstNavigatorUnit();
-    }
+        if (dashboard.context.Level === "UNIDAD") {
+            return dashboard.context.Unit
+                ?? this.filterState.selectedUnit
+                ?? this.filterState.lastNavigableUnit
+                ?? dashboard.units.find((unit) => unit.UnidadGerencial)?.UnidadGerencial
+                ?? this.firstNavigatorUnit(false);
+        }
 
+        return this.filterState.lastNavigableUnit
+            ?? this.filterState.selectedUnit
+            ?? dashboard.units.find((unit) => unit.UnidadGerencial)?.UnidadGerencial
+            ?? this.firstNavigatorUnit(false);
+    }
     private resolveProjectForNavigation(dashboard: ParsedDashboardData | null = this.currentDashboardData): string | null {
         if (!dashboard) {
             return this.filterState.selectedProjectId ?? this.filterState.lastNavigableProjectId;
@@ -3440,19 +3678,70 @@ export class Visual implements IVisual {
             ?? this.filterState.selectedProjectId
             ?? this.filterState.lastNavigableProjectId
             ?? dashboard.projects.find((project) => project.IdIntervencion)?.IdIntervencion
+            ?? this.firstResolvedProjectFromUnitRows(dashboard)
             ?? this.firstNavigatorProject();
     }
 
-    private firstNavigatorUnit(): string | null {
-        const project = this.filteredNavigatorProjects().find((item) => this.navigatorText(item.UnidadGerencial));
-        return project ? this.navigatorText(project.UnidadGerencial) : null;
+    private firstResolvedProjectFromUnitRows(dashboard: ParsedDashboardData): string | null {
+        for (const project of dashboard.projects) {
+            const resolvedProject = this.resolveNavigatorProjectForClick(project as unknown as NavigatorProject);
+            const projectId = this.getProjectId(resolvedProject);
+            if (projectId) {
+                return projectId;
+            }
+        }
+        return null;
     }
 
-    private firstNavigatorProject(): string | null {
-        const project = this.filteredNavigatorProjects().find((item) => this.navigatorText(item.IdIntervencion));
-        return project ? this.navigatorText(project.IdIntervencion) : null;
+    private firstDashboardUnit(): string | null {
+        const units = (this.currentDashboardData?.units ?? [])
+            .map((item) => this.navigatorText(item.UnidadGerencial).trim())
+            .filter((name, index, source) => Boolean(name)
+                && !["portafolio", "portafolio pronied", "total"].includes(name.toLowerCase())
+                && source.findIndex((other) => other.toLowerCase() === name.toLowerCase()) === index)
+            .sort((a, b) => a.localeCompare(b, "es", { numeric: true, sensitivity: "base" }));
+        return units[0] ?? null;
     }
 
+    private firstDashboardProject(): NavigatorProject | null {
+        const project = [...(this.currentDashboardData?.projects ?? [])]
+            .filter((item) => Boolean(this.getProjectId(item as unknown as NavigatorProject)))
+            .sort((a, b) => this.compareNavigatorProjects(a as unknown as NavigatorProject, b as unknown as NavigatorProject))[0];
+        return project ? this.resolveNavigatorProjectForClick(project as unknown as NavigatorProject) : null;
+    }
+
+    private firstNavigatorUnit(useActiveFilters: boolean = true): string | null {
+        const source = useActiveFilters
+            ? this.filteredNavigatorProjects()
+            : [
+                ...(this.currentDashboardData?.navigator?.projects ?? []),
+                ...this.navigatorProjectCatalog
+            ];
+        const units = source
+            .map((item) => this.navigatorText(item.UnidadGerencial).trim())
+            .filter((name, index, values) => Boolean(name)
+                && values.findIndex((other) => other.toLowerCase() === name.toLowerCase()) === index)
+            .sort((a, b) => a.localeCompare(b, "es", { numeric: true, sensitivity: "base" }));
+        return units[0] ?? null;
+    }
+
+    private firstNavigatorProject(_useActiveFilters: boolean = true): string | null {
+        const project = [
+            ...(this.currentDashboardData?.navigator?.projects ?? []),
+            ...this.navigatorProjectCatalog
+        ]
+            .filter((item) => Boolean(this.getProjectId(item)))
+            .sort((a, b) => this.compareNavigatorProjects(a, b))[0];
+        return project ? this.getProjectId(project) : null;
+    }
+
+    private compareNavigatorProjects(a: NavigatorProject, b: NavigatorProject): number {
+        const nameCompare = this.navigatorText(a.NombreIntervencion).localeCompare(this.navigatorText(b.NombreIntervencion), "es", { numeric: true, sensitivity: "base" });
+        if (nameCompare !== 0) return nameCompare;
+        const cuiCompare = this.navigatorText(a.Cui ?? a.CUI).localeCompare(this.navigatorText(b.Cui ?? b.CUI), "es", { numeric: true, sensitivity: "base" });
+        if (cuiCompare !== 0) return cuiCompare;
+        return this.navigatorText(this.getProjectId(a)).localeCompare(this.navigatorText(this.getProjectId(b)), "es", { numeric: true, sensitivity: "base" });
+    }
     private unitForProject(projectId: string): string | null {
         const indexedProject = this.navigatorIndex.get(projectId);
         const indexedUnit = this.navigatorText(indexedProject?.UnidadGerencial);
@@ -3500,6 +3789,30 @@ export class Visual implements IVisual {
         return null;
     }
 
+    private resolveNavigatorProjectForClick(project: NavigatorProject): NavigatorProject {
+        if (this.getProjectId(project)) {
+            return project;
+        }
+
+        const projectCui = this.navigatorText(project.Cui ?? project.CUI).trim().toLowerCase();
+        const projectName = this.navigatorText(project.NombreIntervencion).trim().toLowerCase();
+        const candidates = [
+            ...(this.currentDashboardData?.navigator?.projects ?? []),
+            ...this.navigatorProjectCatalog
+        ];
+        const byCui = projectCui
+            ? candidates.find((candidate) => this.navigatorText(candidate.Cui ?? candidate.CUI).trim().toLowerCase() === projectCui)
+            : null;
+        if (byCui) {
+            return byCui;
+        }
+
+        const byName = projectName
+            ? candidates.find((candidate) => this.navigatorText(candidate.NombreIntervencion).trim().toLowerCase() === projectName)
+            : null;
+        return byName ?? project;
+    }
+
     private getProjectUnit(project: NavigatorProject): string | null {
         const unit = this.navigatorText(project.UnidadGerencial);
         if (unit) {
@@ -3514,7 +3827,7 @@ export class Visual implements IVisual {
         event.preventDefault();
         event.stopPropagation();
 
-        const navigatorProject = project as unknown as NavigatorProject;
+        const navigatorProject = this.resolveNavigatorProjectForClick(project as unknown as NavigatorProject);
         const projectRecord = navigatorProject as Record<string, unknown>;
         const projectId = this.getProjectId(navigatorProject);
         if (this.navigationDebugPanelEnabled) {
@@ -3586,9 +3899,12 @@ export class Visual implements IVisual {
         const cleanUnit = unit.trim().split(/\s|-/)[0].toUpperCase();
         if (!cleanUnit) return;
 
+        this.pendingProjectSelectionId = null;
+        this.filterState.selectedProjectId = null;
         this.clearInternalFilter("projectFilter", true);
         this.clearInternalFilter("unitFilter", true);
-        this.applyDashboardLevel("UNIDAD");
+        this.clearGeneralNavigationFilters(true);
+        this.applyDashboardLevel("UNIDAD", true);
 
         this.navigationFilters.applyTuple(
             `unit:${cleanUnit}`,
@@ -3599,7 +3915,6 @@ export class Visual implements IVisual {
             [["UNIDAD", cleanUnit]]
         );
     }
-
     private disableProjectNavigation(projectId: string | null): void {
         this.navigationDebug.requestedLevel = "PROYECTO";
         this.navigationDebug.requestedProjectId = projectId;
@@ -3682,13 +3997,24 @@ export class Visual implements IVisual {
     }
 
     private openFilterPanel(focus: "unit" | "project" | null = null): void {
+        if (this.currentDashboardData?.context.Level === "PRONIED") {
+            this.filterPanelOpen = false;
+            this.filterFocus = null;
+            this.rootElement?.querySelectorAll(".evm-filter-panel:not(.evm-filter-panel--pronied-inline)")
+                .forEach((panel) => panel.remove());
+            const selector = this.rootElement?.querySelector('[data-filter-key="pronied-week"]');
+            if (selector instanceof HTMLElement) {
+                selector.focus();
+            }
+            return;
+        }
         if (this.currentDashboardData?.context.Level === "UNIDAD") {
             this.filterPanelOpen = false;
             this.filterFocus = focus;
             this.rootElement?.querySelectorAll(".evm-filter-panel:not(.evm-filter-panel--unit-inline)")
                 .forEach((panel) => panel.remove());
             const selector = this.rootElement?.querySelector('[data-filter-key="unit-week"]');
-            if (selector instanceof HTMLSelectElement) {
+            if (selector instanceof HTMLElement) {
                 selector.focus();
             }
             return;
@@ -3701,7 +4027,7 @@ export class Visual implements IVisual {
     private closeFilterPanel(): void {
         this.filterPanelOpen = false;
         this.filterFocus = null;
-        this.rootElement?.querySelector(".evm-filter-panel")?.remove();
+        this.rootElement?.querySelector(".evm-filter-panel:not(.evm-filter-panel--unit-inline):not(.evm-filter-panel--pronied-inline)")?.remove();
         this.rootElement?.querySelector(".evm-main--project")?.classList.remove("evm-main--project-filters-open");
     }
 
@@ -3713,7 +4039,7 @@ export class Visual implements IVisual {
             ? this.navigatorProjectCatalog
             : dashboard.navigator?.projects ?? dashboard.projects;
         const preferredProject = projects.find((project) => (
-            this.navigatorText(project.Cui ?? project.CUI).trim() === this.preferredProjectCui
+            this.getProjectId(project) === this.preferredProjectId
         ));
         if (!preferredProject) {
             return;
@@ -3775,12 +4101,18 @@ export class Visual implements IVisual {
         if (!this.rootElement || !this.currentDashboardData) {
             return;
         }
+        if (this.currentDashboardData.context.Level === "PRONIED") {
+            this.filterPanelOpen = false;
+            this.rootElement.querySelectorAll(".evm-filter-panel:not(.evm-filter-panel--pronied-inline)")
+                .forEach((panel) => panel.remove());
+            return;
+        }
         if (this.currentDashboardData.context.Level === "UNIDAD") {
             this.rootElement.querySelectorAll(".evm-filter-panel:not(.evm-filter-panel--unit-inline)")
                 .forEach((panel) => panel.remove());
             return;
         }
-        this.rootElement.querySelector(".evm-filter-panel")?.remove();
+        this.rootElement.querySelector(".evm-filter-panel:not(.evm-filter-panel--unit-inline):not(.evm-filter-panel--pronied-inline)")?.remove();
         if (this.currentDashboardData.context.Level === "PROYECTO") {
             const main = this.rootElement.querySelector(".evm-main--project");
             const header = main?.querySelector(":scope > .evm-header");
@@ -3827,18 +4159,30 @@ export class Visual implements IVisual {
             value ? this.applyBasicFilter("Dim_Intervenciones", "Region", [value], "regionFilter") : this.clearInternalFilter("regionFilter");
             this.reconcileProjectSelection();
         }, true, true));
-        panel.appendChild(this.renderFilterSelect("Provincia", "province", this.uniqueFromProjects(this.navigatorProjectsForOptions("province"), "Provincia"), this.filterState.province, (value) => {
-            this.filterState.province = value;
-            value ? this.applyBasicFilter("Dim_Intervenciones", "Provincia", [value], "provinceFilter") : this.clearInternalFilter("provinceFilter");
-            this.reconcileProjectSelection();
-        }, true, true));
-        panel.appendChild(this.renderFilterSelect("Distrito", "district", this.uniqueFromProjects(this.navigatorProjectsForOptions("district"), "Distrito"), this.filterState.district, (value) => {
-            this.filterState.district = value;
-            value ? this.applyBasicFilter("Dim_Intervenciones", "Distrito", [value], "districtFilter") : this.clearInternalFilter("districtFilter");
-            this.reconcileProjectSelection();
-        }, true, true));
-        if (this.currentDashboardData?.context.Level === "PROYECTO") {
-            const weeks = this.projectFilterWeeks(this.currentDashboardData);
+        const isProjectLevel = this.currentDashboardData?.context.Level === "PROYECTO";
+        if (!isProjectLevel) {
+            panel.appendChild(this.renderFilterSelect("Provincia", "province", this.uniqueFromProjects(this.navigatorProjectsForOptions("province"), "Provincia"), this.filterState.province, (value) => {
+                this.filterState.province = value;
+                value ? this.applyBasicFilter("Dim_Intervenciones", "Provincia", [value], "provinceFilter") : this.clearInternalFilter("provinceFilter");
+                this.reconcileProjectSelection();
+            }, true, true));
+            panel.appendChild(this.renderFilterSelect("Distrito", "district", this.uniqueFromProjects(this.navigatorProjectsForOptions("district"), "Distrito"), this.filterState.district, (value) => {
+                this.filterState.district = value;
+                value ? this.applyBasicFilter("Dim_Intervenciones", "Distrito", [value], "districtFilter") : this.clearInternalFilter("districtFilter");
+                this.reconcileProjectSelection();
+            }, true, true));
+        }
+        if (isProjectLevel) {
+            panel.classList.add("evm-filter-panel--project-level");
+            const weeks = this.dashboardHasData ? this.projectFilterWeeks(this.currentDashboardData) : [];
+            const startDate = (this.dashboardHasData && this.currentDashboardData.project?.FechaInicio) || "Sin dato";
+            const startDateField = this.renderFilterSelect(
+                "Fecha de Inicio del Proyecto", "project-start-date",
+                [{ value: startDate, label: startDate }], startDate, () => {}, false, true
+            );
+            startDateField.classList.add("evm-filter-field--project-start-date");
+            panel.appendChild(startDateField);
+            if (this.dashboardHasData) panel.appendChild(this.renderPdfControls());
             const weekField = this.renderFilterSelect("Semana", "week", weeks.map((week) => ({
                 value: String(week), label: String(week)
             })), this.selectedProjectWeek === null ? null : String(this.selectedProjectWeek), (value) => {
@@ -4144,13 +4488,11 @@ export class Visual implements IVisual {
         addFilter("Región", "region", "Region");
         addFilter("Provincia", "province", "Provincia");
         addFilter("Distrito", "district", "Distrito");
-        addFilter("Estado", "status", "EstadoProyecto");
         const filterDefinitions: Array<{ key: string; field: keyof NavigatorProject; allLabel: string }> = [
             { key: "unit", field: "UnidadGerencial", allLabel: "Todas" },
             { key: "region", field: "Region", allLabel: "Todos" },
             { key: "province", field: "Provincia", allLabel: "Todos" },
-            { key: "district", field: "Distrito", allLabel: "Todos" },
-            { key: "status", field: "EstadoProyecto", allLabel: "Todos" }
+            { key: "district", field: "Distrito", allLabel: "Todos" }
         ];
         modal.appendChild(filterGrid);
 
@@ -4166,7 +4508,7 @@ export class Visual implements IVisual {
         const table = createElement("table");
         const head = document.createElement("thead");
         const headRow = document.createElement("tr");
-        ["", "UNIDAD GERENCIAL", "CUI", "PROYECTO", "UBICACIÓN", "ESTADO"].forEach((label) => headRow.appendChild(createElement("th", undefined, label)));
+        ["", "UNIDAD GERENCIAL", "CUI", "PROYECTO", "UBICACIÓN"].forEach((label) => headRow.appendChild(createElement("th", undefined, label)));
         head.appendChild(headRow);
         table.appendChild(head);
         const body = document.createElement("tbody");
@@ -4193,8 +4535,7 @@ export class Visual implements IVisual {
                     && this.matchesFilter(project.UnidadGerencial, selectors.unit.value || null)
                     && this.matchesFilter(project.Region, selectors.region.value || null)
                     && this.matchesFilter(project.Provincia, selectors.province.value || null)
-                    && this.matchesFilter(project.Distrito, selectors.district.value || null)
-                    && this.matchesFilter(project.EstadoProyecto, selectors.status.value || null);
+                    && this.matchesFilter(project.Distrito, selectors.district.value || null);
             });
             count.textContent = `${filtered.length} proyecto${filtered.length === 1 ? "" : "s"} encontrado${filtered.length === 1 ? "" : "s"}`;
             body.replaceChildren();
@@ -4214,18 +4555,6 @@ export class Visual implements IVisual {
                 row.appendChild(createElement("td", undefined, this.navigatorText(project.Cui ?? project.CUI) || "—"));
                 row.appendChild(createElement("td", undefined, this.navigatorText(project.NombreIntervencion) || projectId));
                 row.appendChild(createElement("td", undefined, [project.Region, project.Provincia, project.Distrito].map((value) => this.navigatorText(value)).filter(Boolean).join(" / ")));
-                const statusCell = document.createElement("td");
-                const statusLabel = this.navigatorText(project.EstadoProyecto) || "Sin estado";
-                const normalizedStatus = statusLabel.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es");
-                const statusTone = normalizedStatus.includes("critic")
-                    ? "critical"
-                    : normalizedStatus.includes("riesgo")
-                        ? "risk"
-                        : normalizedStatus.includes("estable")
-                            ? "stable"
-                            : "neutral";
-                statusCell.appendChild(createElement("span", `evm-advanced-search-status ${statusTone}`, statusLabel));
-                row.appendChild(statusCell);
                 const selectRow = (): void => {
                     selectedProjectId = projectId;
                     renderResults();
@@ -4317,6 +4646,9 @@ export class Visual implements IVisual {
         allowAll: boolean = true,
         disabled: boolean = false
     ): HTMLElement {
+        if (key === "week" || key === "unit-week" || key === "pronied-week") {
+            return this.renderWeekFilter(label, key, options, selectedValue, onChange);
+        }
         const field = createElement("label", "evm-filter-field");
         field.appendChild(createElement("span", undefined, label));
         const select = createElement("select");
@@ -4336,6 +4668,104 @@ export class Visual implements IVisual {
             this.renderFilterPanelIntoRoot();
         });
         field.appendChild(select);
+        return field;
+    }
+
+    private renderWeekFilter(
+        label: string,
+        key: string,
+        options: Array<{ value: string; label: string }>,
+        selectedValue: string | null,
+        onChange: (value: string | null) => void
+    ): HTMLElement {
+        const field = createElement("div", "evm-filter-field evm-week-filter");
+        field.appendChild(createElement("span", undefined, label));
+        const selected = options.find((option) => option.value === selectedValue) ?? options[0];
+        const trigger = createElement("button", "evm-week-filter-trigger", selected?.label ?? "Sin semanas");
+        trigger.type = "button";
+        trigger.dataset.filterKey = key;
+        trigger.disabled = options.length === 0;
+        trigger.setAttribute("aria-label", `${label}: ${selected?.label ?? "Sin semanas disponibles"}`);
+        trigger.setAttribute("aria-expanded", "false");
+        const menu = createElement("div", "evm-week-filter-menu");
+        menu.hidden = true;
+        const search = createElement("input", "evm-week-filter-search");
+        search.type = "search";
+        search.placeholder = "Buscar semana…";
+        search.setAttribute("aria-label", "Buscar semana");
+        const list = createElement("div", "evm-week-filter-list");
+        const empty = createElement("div", "evm-week-filter-empty", "Sin resultados");
+        empty.setAttribute("role", "status");
+        empty.hidden = true;
+        menu.append(search, list, empty);
+        const filterOptions = (): void => {
+            const query = search.value.trim();
+            const buttons = Array.from(list.querySelectorAll("button"));
+            buttons.forEach((button) => { button.hidden = !button.textContent?.includes(query); });
+            empty.hidden = buttons.some((button) => !button.hidden);
+            list.scrollTop = 0;
+        };
+        search.addEventListener("input", filterOptions);
+        const setOpen = (open: boolean): void => {
+            const opening = open && menu.hidden;
+            if (opening) {
+                search.value = "";
+                filterOptions();
+            }
+            menu.hidden = !open;
+            trigger.setAttribute("aria-expanded", String(open));
+            if (opening) {
+                const selectedOption = list.querySelector<HTMLButtonElement>('[aria-pressed="true"]');
+                if (selectedOption) {
+                    list.scrollTop = selectedOption.offsetTop - (list.clientHeight - selectedOption.offsetHeight) / 2;
+                }
+            }
+        };
+        options.forEach((option) => {
+            const button = createElement("button", "evm-week-filter-option", option.label);
+            button.type = "button";
+            button.setAttribute("aria-pressed", String(option.value === selected?.value));
+            button.addEventListener("click", (event) => {
+                event.stopPropagation();
+                setOpen(false);
+                onChange(option.value);
+                this.renderFilterPanelIntoRoot();
+                const nextTrigger = this.rootElement?.querySelector(`[data-filter-key="${key}"]`);
+                if (nextTrigger instanceof HTMLElement) nextTrigger.focus();
+            });
+            list.appendChild(button);
+        });
+        trigger.addEventListener("click", (event) => {
+            event.stopPropagation();
+            setOpen(menu.hidden);
+            if (!menu.hidden) {
+                search.focus({ preventScroll: true });
+            }
+        });
+        field.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                setOpen(false);
+                trigger.focus();
+            }
+            if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                event.preventDefault();
+                setOpen(true);
+                const buttons = Array.from(list.querySelectorAll("button")).filter((button) => !button.hidden);
+                const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+                const selectedIndex = buttons.findIndex((button) => button.getAttribute("aria-pressed") === "true");
+                const next = index < 0
+                    ? (selectedIndex >= 0 ? selectedIndex : event.key === "ArrowDown" ? 0 : buttons.length - 1)
+                    : (index + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length;
+                buttons[next]?.focus();
+            }
+        });
+        field.addEventListener("focusout", (event) => {
+            if (!(event.relatedTarget instanceof Node) || !field.contains(event.relatedTarget)) setOpen(false);
+        });
+        field.appendChild(trigger);
+        field.appendChild(menu);
         return field;
     }
 
@@ -4387,12 +4817,15 @@ export class Visual implements IVisual {
 
         const nextProject = availableProjects[0]?.value ?? null;
         this.filterState.selectedProjectId = nextProject;
-        this.filterState.lastNavigableProjectId = nextProject ?? this.filterState.lastNavigableProjectId;
+        this.filterState.lastNavigableProjectId = nextProject;
+        this.pendingProjectSelectionId = nextProject;
+        this.selectedProjectWeek = null;
+        this.clearInternalFilter("projectFilter");
         if (nextProject) {
             this.applyProjectFilter(nextProject);
-            this.applyBasicFilter("Dim_Intervenciones", "IdIntervencion", [nextProject], "projectFilter");
         } else {
-            this.clearInternalFilter("projectFilter");
+            this.clearGeneralNavigationFilters(true);
+            this.applyLevelFilter("PRONIED");
         }
     }
 
@@ -4522,6 +4955,7 @@ export class Visual implements IVisual {
             }
             return;
         }
+        this.clearInternalFilter("projectFilter");
         this.navigationFilters.applyBasic(
             `project:${cleanProjectId}`,
             { table: "Dim_Intervenciones", column: "IdIntervencion" },
@@ -4718,7 +5152,8 @@ export class Visual implements IVisual {
 
     private openCriticalInterventionsModal(interventions: CriticalIntervention[]): void {
         const host = this.rootElement;
-        if (!host || this.currentDashboardData?.context.Level !== "PRONIED") {
+        const level = this.currentDashboardData?.context.Level;
+        if (!host || (level !== "PRONIED" && level !== "UNIDAD")) {
             return;
         }
 
@@ -5436,3 +5871,12 @@ export class Visual implements IVisual {
         return `${sign}${this.formatDecimal(value)}`;
     }
 }
+
+
+
+
+
+
+
+
+

@@ -4,6 +4,9 @@ import VisualConstructorOptions = powerbi.extensibility.visual.VisualConstructor
 import VisualUpdateOptions = powerbi.extensibility.visual.VisualUpdateOptions;
 import IVisual = powerbi.extensibility.visual.IVisual;
 export declare class Visual implements IVisual {
+    private pdfError;
+    private reportExportBusy;
+    private reportExportLabel;
     private readonly host;
     private readonly events;
     private readonly target;
@@ -24,7 +27,9 @@ export declare class Visual implements IVisual {
     private dashboardParameterSignature;
     private defaultProjectId;
     private preferredProjectInitialized;
-    private readonly preferredProjectCui;
+    private dashboardHasData;
+    private startupRecoveryAttempted;
+    private readonly preferredProjectId;
     private navigationDebug;
     private isGaugeHistoryModalOpen;
     private sidebarExpanded;
@@ -45,6 +50,7 @@ export declare class Visual implements IVisual {
     constructor(options: VisualConstructorOptions);
     private selectedProjectWeek;
     private weekFilterProjectId;
+    private selectedProniedWeek;
     private selectedUnitWeek;
     private weekFilterUnit;
     private lastWeekFilterUpdateOptions;
@@ -64,10 +70,19 @@ export declare class Visual implements IVisual {
     private copyNavigationDebug;
     private showNavigationDebugTextarea;
     private resetNavigationDebug;
+    private resetPersistedStartupFilters;
+    private createEmptyNavigationDashboard;
+    private renderEmptyDashboard;
     private renderCurrentDashboard;
     private projectFilterWeeks;
     private renderProjectDashboard;
     private renderProniedDashboard;
+    private proniedFilterWeeks;
+    private renderPdfControls;
+    private selectedReportWeek;
+    private renderProniedInlineFilterPanel;
+    private updatePdfControls;
+    private downloadReportPdf;
     private renderProniedBodyCarousel;
     private renderPortfolioCurveLegend;
     private renderUnitProgressPanel;
@@ -121,7 +136,6 @@ export declare class Visual implements IVisual {
     private renderBodyCarousel;
     private attachProjectCurveExpansion;
     private renderProjectCurveMatrix;
-    private renderCarouselButton;
     private createLazyCarouselPage;
     private mountCarouselPage;
     private renderCarouselDots;
@@ -134,11 +148,16 @@ export declare class Visual implements IVisual {
     private syncFilterStateFromDashboard;
     private resolveUnitForNavigation;
     private resolveProjectForNavigation;
+    private firstResolvedProjectFromUnitRows;
+    private firstDashboardUnit;
+    private firstDashboardProject;
     private firstNavigatorUnit;
     private firstNavigatorProject;
+    private compareNavigatorProjects;
     private unitForProject;
     private findNavigatorProjectById;
     private getProjectId;
+    private resolveNavigatorProjectForClick;
     private getProjectUnit;
     private handleProjectClick;
     private openProniedDashboard;
@@ -167,6 +186,7 @@ export declare class Visual implements IVisual {
     private openAdvancedProjectSearch;
     private applyProjectFromAdvancedSearch;
     private renderFilterSelect;
+    private renderWeekFilter;
     private filteredNavigatorProjects;
     private navigatorProjectsForOptions;
     private reconcileProjectSelection;

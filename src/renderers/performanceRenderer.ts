@@ -1,9 +1,10 @@
 "use strict";
 
 import { DataValue, PerformanceData } from "../types";
-import { createElement, currency, date, decimalUpTo, numberValue, percent, svgElement } from "../utils/format";
+import { createElement, currency, date, decimalUpTo, numberValue, svgElement } from "../utils/format";
 
-type PerformanceIcon = "clock" | "calendar" | "check" | "money" | "coins" | "chart";
+type PerformanceIcon = "clock" | "calendar" | "check" | "money" | "coins" | "chart"
+    | "hourglass" | "speed" | "balance" | "calendarArrow" | "costChange" | "target";
 
 const iconColors: Record<PerformanceIcon, string> = {
     clock: "#1D4DFF",
@@ -11,36 +12,25 @@ const iconColors: Record<PerformanceIcon, string> = {
     check: "#8B4BEF",
     money: "#FF7A00",
     coins: "#FF7A00",
-    chart: "#001B8E"
+    chart: "#001B8E",
+    hourglass: "#1D4DFF",
+    speed: "#18A64A",
+    balance: "#8B4BEF",
+    calendarArrow: "#001B8E",
+    costChange: "#FF7A00",
+    target: "#FF7A00"
 };
 
 export function renderPerformance(data: PerformanceData): HTMLElement {
     const card = createElement("section", "evm-card evm-performance-card");
-    const projectedCost = numberValue(data.SobreCostoProyectadoVAC) ?? 0;
-    const projectedTime = numberValue(data.RetrasoProyectadoSemanas) ?? 0;
-    const projectedEnd = typeof data.TerminoProyectado === "string" && data.TerminoProyectado !== ""
-        ? data.TerminoProyectado
-        : date(data.TerminoProyectado);
-    const projectedCostLabel = projectedCost > 0
-        ? "Ahorro Proyectado"
-        : (projectedCost < 0 ? "Sobre Costo Proyectado" : "Sin Variación de Costo");
-    const projectedTimeLabel = projectedTime > 0
-        ? "Adelanto Proyectado"
-        : (projectedTime < 0 ? "Retraso Proyectado" : "Sin Variación de Plazo");
     card.appendChild(createElement("div", "evm-section-title", "Desempeno del Proyecto"));
 
-    card.appendChild(progressRow("clock", "Plazo Consumido", data.PlazoConsumidoPct, progressPercentText(data.PlazoConsumidoPct), "Plazo Restante", `${decimalUpTo(data.PlazoRestanteSemanas)} sem.`));
-    card.appendChild(metricPair("calendar", "Plazo Programado Total", `${decimalUpTo(data.PlazoProgramadoTotalSemanas)} semanas`, "Plazo Proyectado", `${decimalUpTo(data.PlazoProyectadoSemanas)} semanas`));
-    card.appendChild(metricPair("check", projectedTimeLabel, `${decimalUpTo(data.RetrasoProyectadoSemanas)} semanas`, "Termino Proyectado", projectedEnd, projectedTime > 0 ? "favorable" : (projectedTime < 0 ? "alert" : null)));
-    card.appendChild(progressRow("money", "Presupuesto Consumido", data.PresupuestoConsumidoPct, progressPercentText(data.PresupuestoConsumidoPct), "Presupuesto Restante", currency(data.PresupuestoRestante)));
-    card.appendChild(metricPair("coins", "Presupuesto Programado (BAC)", currency(data.PresupuestoProgramadoBAC), "Costo Estimado al Termino (EAC)", currency(data.CostoEstimadoTerminoEAC)));
-    const projectedCostPct = numberValue(data.SobreCostoProyectadoPct);
-    card.appendChild(metricSingle(
-        "chart",
-        projectedCostLabel,
-        `${currency(Math.abs(projectedCost))} (${percent(projectedCostPct === null ? null : Math.abs(projectedCostPct))})`,
-        projectedCost > 0 ? "favorable" : (projectedCost < 0 ? "alert" : null)
-    ));
+    card.appendChild(metricPair("clock", "SAC", weeks(data.SAC), "ETC (t)", weeks(data.ETCT)));
+    card.appendChild(metricPair("calendar", "VAC (t)", weeks(data.VACT), "SPI (t)", ratioValue(data.SPIT)));
+    card.appendChild(metricPair("check", "SV (t)", weeks(data.SVT), "SV (w)", currency(data.SVW)));
+    card.appendChild(metricPair("chart", "TSPI (t)", ratioValue(data.TSPIT), "IETC (t)", date(data.IETCT)));
+    card.appendChild(metricPair("money", "BAC", currency(data.BAC), "CV", currency(data.CV)));
+    card.appendChild(metricPair("coins", "ETC (c)", currency(data.ETCC), "VAC (c)", currency(data.VACC)));
 
     return card;
 }
@@ -89,11 +79,34 @@ function isProgressOverrun(value: DataValue): boolean {
     return parsed !== null && parsed > 1;
 }
 
+function weeks(value: DataValue): string {
+    return `${decimalUpTo(value)} sem.`;
+}
+
+function ratioValue(value: DataValue): string {
+    const parsed = numberValue(value);
+    return parsed === null ? "—" : parsed.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function metricPair(icon: PerformanceIcon, leftLabel: string, leftValue: string, rightLabel: string, rightValue: string, tone: "alert" | "favorable" | null = null): HTMLElement {
     const row = createElement("div", `evm-performance-row${tone ? ` ${tone}` : ""}`);
-    row.appendChild(renderPerformanceIcon(icon));
-    row.appendChild(metric(leftLabel, leftValue));
-    row.appendChild(metric(rightLabel, rightValue));
+    row.classList.add("evm-performance-row--pair");
+    const leftMetric = metric(leftLabel, leftValue);
+    leftMetric.classList.add("evm-performance-metric--with-icon");
+    leftMetric.prepend(renderPerformanceIcon(icon));
+    row.appendChild(leftMetric);
+    const rightIcons: Record<string, PerformanceIcon> = {
+        "ETC (t)": "hourglass",
+        "SPI (t)": "speed",
+        "SV (w)": "balance",
+        "IETC (t)": "calendarArrow",
+        "CV": "costChange",
+        "VAC (c)": "target"
+    };
+    const rightMetric = metric(rightLabel, rightValue);
+    rightMetric.classList.add("evm-performance-metric--with-icon");
+    rightMetric.prepend(renderPerformanceIcon(rightIcons[rightLabel] ?? icon));
+    row.appendChild(rightMetric);
     return row;
 }
 
@@ -107,10 +120,38 @@ function metricSingle(icon: PerformanceIcon, label: string, value: string, tone:
 }
 
 function metric(label: string, value: string): HTMLElement {
-    const wrapper = createElement("div");
+    const wrapper = createElement("div", "evm-performance-metric");
+    const tooltip = performanceTooltip(label);
+    if (tooltip) {
+        wrapper.setAttribute("aria-label", tooltip);
+        wrapper.tabIndex = 0;
+    }
     wrapper.appendChild(metricLabel(label));
     wrapper.appendChild(createElement("strong", undefined, value));
+    if (tooltip) {
+        const tooltipNode = createElement("span", "evm-performance-tooltip", tooltip);
+        tooltipNode.setAttribute("role", "tooltip");
+        wrapper.appendChild(tooltipNode);
+    }
     return wrapper;
+}
+
+function performanceTooltip(label: string): string | null {
+    const tooltips: Record<string, string> = {
+        "SAC": "CRONOGRAMA APROBADO - (SAC)",
+        "ETC (t)": "ESTIMACION PARA COMPLETAR DE TIEMPO - ETC (t)",
+        "VAC (t)": "VARIACION A LA CONCLUSION DE TIEMPO - VAC (t)",
+        "SPI (t)": "INDICE DE RENDIMIENTO DEL TIEMPO - SPI (t)",
+        "SV (t)": "VARIACION DEL CRONOGRAMA DE TIEMPO - SV (t)",
+        "SV (w)": "VARIACION DEL CRONOGRAMA DE TRABAJO - SV (w)",
+        "TSPI (t)": "INDICE DE RENDIMIENTO DEL TIEMPO POR COMPLETAR - TSPI (t)",
+        "IETC (t)": "ESTIMACION INDEPENDIENTE DEL TIEMPO PARA COMPLETAR - IETC (t)",
+        "BAC": "PRESUPUESTO APROBADO - (BAC)",
+        "CV": "VARIACION DE COSTOS - CV",
+        "ETC (c)": "ESTIMACION PARA COMPLETAR - ETC (c)",
+        "VAC (c)": "VARIACION A LA CONCLUSION DE COSTO - VAC (c)"
+    };
+    return tooltips[label] ?? null;
 }
 
 function metricLabel(label: string): HTMLElement {
@@ -142,7 +183,19 @@ function renderPerformanceIcon(icon: PerformanceIcon): HTMLElement {
     svg.setAttribute("stroke-linecap", "round");
     svg.setAttribute("stroke-linejoin", "round");
 
-    if (icon === "clock") {
+    if (icon === "hourglass") {
+        appendSvg(svg, path("M6 3h12M6 21h12M7 3v4l5 5-5 5v4M17 3v4l-5 5 5 5v4M9 18h6"));
+    } else if (icon === "speed") {
+        appendSvg(svg, path("M4 18a9 9 0 1 1 16 0M12 12l5-5M5 12H3M12 5V3M19 12h2"), circle(12, 12, 2));
+    } else if (icon === "balance") {
+        appendSvg(svg, path("M12 3v18M8 21h8M4 7h16M5 7l-3 7h6L5 7M19 7l-3 7h6l-3-7M2 14q3 5 6 0M16 14q3 5 6 0"));
+    } else if (icon === "calendarArrow") {
+        appendSvg(svg, rect(3, 5, 18, 16, 2), path("M7 3v4M17 3v4M3 10h18M8 15h8M13 12l3 3-3 3"));
+    } else if (icon === "costChange") {
+        appendSvg(svg, path("M4 7h15l-3-3M20 17H5l3 3M12 8v8M15 10h-4a2 2 0 0 0 0 4h2a2 2 0 0 0 0-4"));
+    } else if (icon === "target") {
+        appendSvg(svg, circle(11, 13, 8), circle(11, 13, 4), path("M11 13l9-9M16 4h4v4"));
+    } else if (icon === "clock") {
         appendSvg(svg, circle(12, 12, 9), path("M12 7v5l3 2"));
     } else if (icon === "calendar") {
         appendSvg(svg, rect(4, 5, 16, 15, 2), path("M8 3v4M16 3v4M4 10h16"), path("M8 14h2M12 14h2M16 14h.01M8 17h2M12 17h2M16 17h.01"));
